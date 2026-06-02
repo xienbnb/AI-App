@@ -298,6 +298,8 @@ export default function WorksScreen() {
 
   // 长按弹窗
   const [longPressBook, setLongPressBook] = useState<Book | null>(null);
+  // 删除确认弹窗
+  const [confirmDeleteBook, setConfirmDeleteBook] = useState<Book | null>(null);
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -410,25 +412,17 @@ export default function WorksScreen() {
   };
 
   // 删除书籍
-  const handleDeleteBook = (book: Book) => {
-    Alert.alert("删除确认", `确定删除《${book.title}》？所有章节将不可恢复。`, [
-      { text: "取消", style: "cancel" },
-      {
-        text: "删除", style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, { method: "DELETE" });
-            const json = await res.json();
-            if (json.success) {
-              setLongPressBook(null);
-              await fetchBooks();
-            }
-          } catch (e) {
-            Alert.alert("错误", "删除失败");
-          }
-        },
-      },
-    ]);
+  const executeDeleteBook = async (book: Book) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) {
+        setConfirmDeleteBook(null);
+        await fetchBooks();
+      }
+    } catch (e) {
+      setConfirmDeleteBook(null);
+    }
   };
 
   const sortOptions = [
@@ -696,7 +690,7 @@ export default function WorksScreen() {
                   { icon: "trash-can", label: "删除书籍", color: "#EF4444", action: () => {
                     const b = longPressBook!;
                     setLongPressBook(null);
-                    setTimeout(() => handleDeleteBook(b), 300);
+                    setTimeout(() => setConfirmDeleteBook(b), 300);
                   }},
                   { icon: "file-export", label: "导出书籍", color: "#10B981", action: () => {
                     Alert.alert("提示", "导出功能开发中");
@@ -718,6 +712,39 @@ export default function WorksScreen() {
                     <Text className="text-sm font-medium text-gray-800">{item.label}</Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ======== 删除确认弹窗 ======== */}
+      <Modal visible={!!confirmDeleteBook} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setConfirmDeleteBook(null)}>
+          <View className="flex-1 justify-center px-6 bg-black/40">
+            <TouchableWithoutFeedback>
+              <View className="bg-white rounded-[28px] py-6 px-6">
+                <Text className="text-lg font-bold text-gray-900 text-center mb-2">确认删除</Text>
+                <Text className="text-sm text-gray-500 text-center mb-1">
+                  确定删除《{confirmDeleteBook?.title}》？
+                </Text>
+                <Text className="text-xs text-red-400 text-center mb-6">
+                  所有章节将不可恢复
+                </Text>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={() => setConfirmDeleteBook(null)}
+                    className="flex-1 py-3 rounded-2xl bg-gray-100 items-center"
+                  >
+                    <Text className="text-sm font-medium text-gray-700">取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => confirmDeleteBook && executeDeleteBook(confirmDeleteBook)}
+                    className="flex-1 py-3 rounded-2xl bg-red-500 items-center"
+                  >
+                    <Text className="text-sm font-medium text-white">确认删除</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableWithoutFeedback>
           </View>
