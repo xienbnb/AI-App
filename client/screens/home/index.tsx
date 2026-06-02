@@ -63,21 +63,6 @@ interface Book {
 }
 
 // ===== Static Data =====
-const SKILLS = [
-  { label: "赛道分析", icon: "bullseye", color: "bg-rose-50 text-rose-600" },
-  { label: "篇幅规划", icon: "calendar", color: "bg-blue-50 text-blue-600" },
-  { label: "世界观", icon: "globe", color: "bg-emerald-50 text-emerald-600" },
-  { label: "人物设定", icon: "user", color: "bg-amber-50 text-amber-600" },
-  { label: "关系网", icon: "share-nodes", color: "bg-purple-50 text-purple-600" },
-  { label: "分卷大纲", icon: "layer-group", color: "bg-indigo-50 text-indigo-600" },
-  { label: "单章大纲", icon: "file-lines", color: "bg-cyan-50 text-cyan-600" },
-  { label: "正文生成", icon: "pen", color: "bg-orange-50 text-orange-600" },
-  { label: "场景优化", icon: "bolt", color: "bg-red-50 text-red-600" },
-  { label: "逻辑校验", icon: "magnifying-glass", color: "bg-teal-50 text-teal-600" },
-  { label: "批量润色", icon: "paintbrush", color: "bg-violet-50 text-violet-600" },
-  { label: "爆款简介", icon: "bullhorn", color: "bg-pink-50 text-pink-600" },
-];
-
 const SKILL_LIST = [
   { name: "赛道分析", icon: "A", desc: "分析爆款赛道与差异化定位" },
   { name: "篇幅规划", icon: "B", desc: "规划作品篇幅与更新节奏" },
@@ -734,27 +719,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* 12 Skills Grid */}
-        <View className="mt-5 bg-white rounded-2xl p-5 shadow-sm">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base font-bold text-gray-900">创作技能</Text>
-            <Text className="text-xs text-gray-400">12项专业工具</Text>
-          </View>
-          <View className="flex-row flex-wrap">
-            {SKILLS.map((skill) => (
-              <TouchableOpacity
-                key={skill.label}
-                className="w-1/4 items-center py-2 gap-1.5"
-                onPress={() => router.push("/ai")}
-              >
-                <View className={`w-10 h-10 rounded-xl items-center justify-center ${skill.color.split(" ")[0]}`}>
-                  <FontAwesome6 name={skill.icon as any} size={16} color={skill.color.includes("rose") ? "#E11D48" : skill.color.includes("blue") ? "#2563EB" : skill.color.includes("emerald") ? "#059669" : skill.color.includes("amber") ? "#D97706" : skill.color.includes("purple") ? "#9333EA" : skill.color.includes("indigo") ? "#6366F1" : skill.color.includes("cyan") ? "#0891B2" : skill.color.includes("orange") ? "#EA580C" : skill.color.includes("red") ? "#DC2626" : skill.color.includes("teal") ? "#0D9488" : skill.color.includes("violet") ? "#7C3AED" : skill.color.includes("pink") ? "#DB2777" : "#6366F1"} />
-                </View>
-                <Text className="text-[10px] text-gray-500 text-center leading-tight">{skill.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        
 
       </View>
     </ScrollView>

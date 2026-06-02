@@ -34,6 +34,7 @@ export default function RootLayout() {
         <Stack.Screen name="ai-map" options={{ title: "地图生成器", animation: 'slide_from_right' }} />
         <Stack.Screen name="ai-image-gen" options={{ title: "图片生成", animation: 'slide_from_right' }} />
         <Stack.Screen name="ai-relationship" options={{ title: "人物关系网", animation: 'slide_from_right' }} />
+        <Stack.Screen name="ai-skills" options={{ title: "创作技能", animation: 'slide_from_right' }} />
       </Stack>
       <Toast />
     </Provider>

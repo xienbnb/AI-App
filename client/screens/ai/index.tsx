@@ -17,6 +17,7 @@ const TOOLS = [
   { icon: "file-pen", title: "智能润色", desc: "优化表达提升文采", color: "#14B8A6", bgColor: "#CCFBF1", route: "/ai-character" },
   { icon: "arrows-left-right", title: "扩写缩写", desc: "扩展或压缩内容", color: "#8B5CF6", bgColor: "#EDE9FE", route: "/ai-outline" },
   { icon: "lightbulb", title: "灵感生成", desc: "激发创作灵感", color: "#F97316", bgColor: "#FFEDD5", route: "/ai-outline" },
+  { icon: "wand-magic-sparkles", title: "创作技能", desc: "12项专业创作工具", color: "#6366F1", bgColor: "#EEF2FF", route: "/ai-skills" },
 ];
 const KNOWLEDGE_BASES = [
   { name: "世界观库", icon: "globe", color: "#6366F1", count: 0 },
