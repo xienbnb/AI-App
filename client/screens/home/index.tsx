@@ -131,33 +131,31 @@ export default function HomeScreen() {
       }
       try {
         const parsed = JSON.parse(event.data);
-        if (parsed.type === "thinking") {
+        // Backend sends: {"content": "xxx"} for streaming chunks
+        if (parsed.content) {
           fullContent += parsed.content;
           setMessages((prev) =>
             prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: fullContent } : m))
           );
           setActiveStep("brainstorming");
-        } else if (parsed.type === "result") {
-          fullContent = parsed.content || fullContent;
-          let bookData = undefined;
-          if (parsed.book) {
-            bookData = {
-              title: parsed.book.title || "未命名作品",
-              category: parsed.book.category || "未分类",
-              description: parsed.book.description || "",
-              outline: parsed.book.outline || [],
-            };
-          }
+        }
+        // Backend sends: {"bookCreated": true, "bookTitle": "...", ...} when book is ready
+        if (parsed.bookCreated) {
+          const bookData = {
+            title: parsed.bookTitle || "未命名作品",
+            category: parsed.bookCategory || "未分类",
+            description: parsed.bookDescription || "",
+            outline: [],
+          };
           setMessages((prev) =>
             prev.map((m) =>
-              m.id === assistantMsg.id
-                ? { ...m, content: fullContent, bookData }
-                : m
+              m.id === assistantMsg.id ? { ...m, content: fullContent, bookData } : m
             )
           );
-          setActiveStep(bookData ? "creating" : "done");
+          setActiveStep("creating");
         }
       } catch {
+        // Fallback for unexpected formats
         fullContent += event.data;
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantMsg.id ? { ...m, content: fullContent } : m))
