@@ -19,23 +19,6 @@ import RNSSE from "react-native-sse";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
-// Dark theme colors
-const C = {
-  bg: "#0A0A0F",
-  surface: "#14141F",
-  card: "#1A1A2E",
-  border: "#252540",
-  accent: "#8B5CF6",
-  accentLight: "#A78BFA",
-  accentBg: "rgba(139,92,246,0.12)",
-  text: "#FFFFFF",
-  muted: "#94A3B8",
-  dim: "#4A4A6A",
-  inputBg: "#1E1E3A",
-  danger: "#EF4444",
-  success: "#10B981",
-};
-
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -54,25 +37,37 @@ const featureCards = [
     icon: "wand-magic-sparkles",
     title: "灵感创作",
     desc: "用AI将想法变成完整小说",
-    color: C.accent,
-    route: "/(tabs)",
+    color: "bg-primary-500",
+    bgLight: "bg-primary-50",
+    route: "/works",
   },
   {
     id: "works",
     icon: "book-bookmark",
     title: "作品管理",
     desc: "查看和管理你的所有作品",
-    color: "#06B6D4",
-    route: "/(tabs)",
+    color: "bg-cyan-500",
+    bgLight: "bg-cyan-50",
+    route: "/works",
   },
   {
     id: "ai-tools",
     icon: "microchip",
     title: "AI工坊",
     desc: "角色/大纲/封面等创作工具",
-    color: "#F59E0B",
+    color: "bg-amber-500",
+    bgLight: "bg-amber-50",
     route: "/ai",
   },
+];
+
+const topicTags = [
+  { label: "玄幻修仙", icon: "wand-magic-sparkles", color: "text-primary-500", bg: "bg-primary-50" },
+  { label: "都市言情", icon: "heart", color: "text-rose-500", bg: "bg-rose-50" },
+  { label: "科幻未来", icon: "rocket", color: "text-cyan-500", bg: "bg-cyan-50" },
+  { label: "悬疑推理", icon: "magnifying-glass", color: "text-orange-500", bg: "bg-orange-50" },
+  { label: "系统爽文", icon: "bolt", color: "text-emerald-500", bg: "bg-emerald-50" },
+  { label: "历史穿越", icon: "crown", color: "text-amber-500", bg: "bg-amber-50" },
 ];
 
 export default function HomeScreen() {
@@ -95,7 +90,7 @@ export default function HomeScreen() {
       fadeAnim.setValue(0);
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 700,
+        duration: 600,
         useNativeDriver: true,
       }).start();
     }
@@ -124,6 +119,9 @@ export default function HomeScreen() {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setLoading(true);
 
+    // POST /api/v1/writing/ai-dialogue
+    // Body: { message: string }
+    // Response: SSE stream with {"content": "xxx"} chunks, then {"bookCreated":true,...} then [DONE]
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/ai-dialogue`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -190,17 +188,15 @@ export default function HomeScreen() {
   };
 
   const handleCardPress = (card: typeof featureCards[0]) => {
-    if (card.id === "works" || card.id === "create") {
-      router.push("/works");
-    } else {
-      router.push("/ai");
-    }
+    router.push(card.route as any);
   };
 
   const handleCreateBook = async (msg: Message) => {
     if (!msg.bookData) return;
     setLoading(true);
     try {
+      // POST /api/v1/writing/ai-create-book
+      // Body: { prompt: string }
       const res = await fetch(`${API_BASE}/api/v1/writing/ai-create-book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -226,126 +222,121 @@ export default function HomeScreen() {
 
   return (
     <Screen>
-      <View className="flex-1" style={{ backgroundColor: C.bg }}>
+      <View className="flex-1 bg-white dark:bg-gray-900">
         <KeyboardAvoidingView
           className="flex-1"
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
         >
           {/* ===== Header ===== */}
-          <View
-            className="flex-row items-center justify-between px-5 pt-3 pb-2"
-            style={{ backgroundColor: C.bg }}
-          >
+          <View className="flex-row items-center justify-between px-5 pt-2 pb-3 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
             <View className="flex-row items-center gap-3">
               {!showWelcome && (
                 <TouchableOpacity
                   onPress={handleNewChat}
-                  className="w-8 h-8 rounded-lg items-center justify-center"
-                  style={{ backgroundColor: C.accentBg }}
+                  className="w-8 h-8 rounded-lg items-center justify-center bg-primary-50 dark:bg-primary-900/30"
                 >
-                  <FontAwesome6 name="plus" size={14} color={C.accentLight} />
+                  <FontAwesome6 name="plus" size={14} color="#6366F1" />
                 </TouchableOpacity>
               )}
-              <Text className="text-base font-semibold" style={{ color: C.text }}>
+              <Text className="text-lg font-bold text-gray-900 dark:text-white">
                 {showWelcome ? "AI 创作" : "新对话"}
               </Text>
             </View>
-            <Text className="text-xs" style={{ color: C.dim }}>v1.0</Text>
+            <Text className="text-xs text-gray-400 dark:text-gray-500">v1.0</Text>
           </View>
 
           {/* ===== Content ===== */}
           {showWelcome ? (
-            <Animated.View className="flex-1 px-5" style={{ opacity: fadeAnim }}>
+            <Animated.View className="flex-1" style={{ opacity: fadeAnim }}>
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 16 }}
+                className="px-5"
               >
                 {/* Brand Area */}
-                <View className="items-center pt-8 pb-6">
-                  <View
-                    className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
-                    style={{ backgroundColor: C.accentBg }}
-                  >
-                    <FontAwesome6 name="wand-magic-sparkles" size={28} color={C.accent} />
+                <View className="items-center pt-8 pb-7">
+                  <View className="w-16 h-16 rounded-2xl items-center justify-center mb-4 bg-primary-50 dark:bg-primary-900/30">
+                    <FontAwesome6 name="wand-magic-sparkles" size={28} color="#6366F1" />
                   </View>
-                  <Text
-                    className="text-2xl font-bold tracking-wide"
-                    style={{ color: C.text, letterSpacing: 1 }}
-                  >
+                  <Text className="text-2xl font-bold text-gray-900 dark:text-white tracking-wide">
                     AI 创作助手
                   </Text>
-                  <Text className="text-sm mt-2" style={{ color: C.muted }}>
+                  <Text className="text-sm mt-2 text-gray-500 dark:text-gray-400">
                     用灵感创作你的世界
                   </Text>
                 </View>
 
                 {/* Feature Cards */}
-                <View className="gap-3">
+                <View className="gap-3 mb-6">
                   {featureCards.map((card) => (
                     <TouchableOpacity
                       key={card.id}
                       onPress={() => handleCardPress(card)}
                       activeOpacity={0.7}
-                      className="rounded-2xl p-4 flex-row items-center"
+                      className="flex-row items-center p-4 rounded-2xl bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
                       style={{
-                        backgroundColor: C.surface,
-                        borderWidth: 1,
-                        borderColor: C.border,
+                        shadowColor: "#6366F1",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.06,
+                        shadowRadius: 8,
+                        elevation: 2,
                       }}
                     >
-                      <View
-                        className="w-11 h-11 rounded-xl items-center justify-center mr-3"
-                        style={{ backgroundColor: `${card.color}18` }}
-                      >
-                        <FontAwesome6
-                          name={card.icon as any}
-                          size={18}
-                          color={card.color}
-                        />
+                      <View className={`w-11 h-11 rounded-xl items-center justify-center mr-3 ${card.bgLight} dark:bg-gray-700`}>
+                        <FontAwesome6 name={card.icon as any} size={18} color={card.color === "bg-primary-500" ? "#6366F1" : card.color === "bg-cyan-500" ? "#06B6D4" : "#F59E0B"} />
                       </View>
                       <View className="flex-1">
-                        <Text className="text-base font-semibold" style={{ color: C.text }}>
+                        <Text className="text-base font-semibold text-gray-900 dark:text-white">
                           {card.title}
                         </Text>
-                        <Text className="text-xs mt-0.5" style={{ color: C.muted }}>
+                        <Text className="text-xs mt-0.5 text-gray-500 dark:text-gray-400">
                           {card.desc}
                         </Text>
                       </View>
-                      <FontAwesome6
-                        name="chevron-right"
-                        size={14}
-                        color={C.dim}
-                      />
+                      <FontAwesome6 name="chevron-right" size={14} color="#CBD5E1" />
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                {/* Suggested Topics - Compact */}
-                <Text className="text-xs font-medium mt-6 mb-3" style={{ color: C.dim }}>
-                  热门创作方向
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {[
-                    { label: "玄幻修仙", color: C.accent },
-                    { label: "都市言情", color: "#EC4899" },
-                    { label: "科幻未来", color: "#06B6D4" },
-                    { label: "悬疑推理", color: "#F97316" },
-                    { label: "系统爽文", color: "#10B981" },
-                    { label: "历史穿越", color: "#F59E0B" },
-                  ].map((tag, i) => (
+                {/* Divider */}
+                <View className="flex-row items-center gap-3 mb-4">
+                  <View className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+                  <Text className="text-xs text-gray-400 dark:text-gray-500 font-medium">热门方向</Text>
+                  <View className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
+                </View>
+
+                {/* Topic Tags */}
+                <View className="flex-row flex-wrap gap-2.5 mb-6">
+                  {topicTags.map((tag, i) => (
                     <TouchableOpacity
                       key={i}
                       onPress={() => setInput(`我想写一篇关于${tag.label}的小说`)}
-                      className="rounded-full px-3.5 py-1.5"
-                      style={{ backgroundColor: `${tag.color}15` }}
+                      className={`flex-row items-center gap-1.5 rounded-full px-3.5 py-2 ${tag.bg} dark:bg-gray-800`}
                     >
-                      <Text className="text-xs font-medium" style={{ color: tag.color }}>
+                      <FontAwesome6 name={tag.icon as any} size={11} color={tag.color === "text-primary-500" ? "#6366F1" : tag.color === "text-rose-500" ? "#F43F5E" : tag.color === "text-cyan-500" ? "#06B6D4" : tag.color === "text-orange-500" ? "#F97316" : tag.color === "text-emerald-500" ? "#10B981" : "#F59E0B"} />
+                      <Text className={`text-xs font-medium ${tag.color} dark:text-gray-300`}>
                         {tag.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+
+                {/* Example Prompt */}
+                <TouchableOpacity
+                  onPress={() => setInput("我想写一个关于平行世界的故事，主角能在不同世界之间穿梭")}
+                  className="flex-row items-center gap-3 rounded-2xl p-4 border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50"
+                >
+                  <View className="w-8 h-8 rounded-lg items-center justify-center bg-amber-50 dark:bg-amber-900/30">
+                    <FontAwesome6 name="lightbulb" size={14} color="#F59E0B" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-xs font-medium text-primary-500 mb-0.5">试试这样说</Text>
+                    <Text className="text-xs text-gray-400 dark:text-gray-500">
+                      {'\u201C'}我想写一个关于平行世界的故事，主角能在不同世界之间穿梭{'\u201D'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </ScrollView>
             </Animated.View>
           ) : (
@@ -369,42 +360,43 @@ export default function HomeScreen() {
                       }`}
                     >
                       {msg.role === "assistant" && (
-                        <View
-                          className="w-7 h-7 rounded-lg items-center justify-center"
-                          style={{ backgroundColor: C.accentBg }}
-                        >
-                          <FontAwesome6
-                            name="wand-magic-sparkles"
-                            size={12}
-                            color={C.accent}
-                          />
+                        <View className="w-7 h-7 rounded-lg items-center justify-center bg-primary-50 dark:bg-primary-900/30">
+                          <FontAwesome6 name="wand-magic-sparkles" size={12} color="#6366F1" />
                         </View>
                       )}
                       <View
-                        className={`rounded-2xl px-4 py-3 max-w-[80%]`}
-                        style={{
-                          backgroundColor:
-                            msg.role === "user" ? C.accent : C.surface,
-                          borderWidth: msg.role === "assistant" ? 1 : 0,
-                          borderColor: C.border,
-                        }}
+                        className={`rounded-2xl px-4 py-3 max-w-[80%] ${
+                          msg.role === "user"
+                            ? "bg-primary-500"
+                            : "bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
+                        }`}
+                        style={
+                          msg.role === "assistant"
+                            ? {
+                                shadowColor: "#000",
+                                shadowOffset: { width: 0, height: 1 },
+                                shadowOpacity: 0.04,
+                                shadowRadius: 4,
+                                elevation: 1,
+                              }
+                            : undefined
+                        }
                       >
                         {loading && msg.content === "" && msg.role === "assistant" ? (
                           <View className="flex-row gap-1.5 py-2 px-1">
                             {[0.3, 0.6, 1].map((o, i) => (
                               <View
                                 key={i}
-                                className="w-2 h-2 rounded-full"
-                                style={{ backgroundColor: C.accent, opacity: o }}
+                                className="w-2 h-2 rounded-full bg-primary-500"
+                                style={{ opacity: o }}
                               />
                             ))}
                           </View>
                         ) : (
                           <Text
-                            className="text-sm leading-6"
-                            style={{
-                              color: msg.role === "user" ? "#FFFFFF" : C.text,
-                            }}
+                            className={`text-sm leading-6 ${
+                              msg.role === "user" ? "text-white" : "text-gray-800 dark:text-gray-200"
+                            }`}
                           >
                             {msg.content}
                           </Text>
@@ -415,51 +407,34 @@ export default function HomeScreen() {
                     {/* Book Creation Card */}
                     {msg.bookData && msg.content && (
                       <View className="ml-9 mt-3">
-                        <View
-                          className="rounded-2xl overflow-hidden"
+                        <View className="rounded-2xl overflow-hidden bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700"
                           style={{
-                            backgroundColor: C.surface,
-                            borderWidth: 1,
-                            borderColor: C.border,
+                            shadowColor: "#6366F1",
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.1,
+                            shadowRadius: 12,
+                            elevation: 4,
                           }}
                         >
-                          {/* Book Preview */}
                           <View className="p-4">
+                            {/* Book Preview */}
                             <View className="flex-row gap-3 mb-3">
-                              <View
-                                className="w-16 h-20 rounded-xl items-center justify-center"
-                                style={{ backgroundColor: C.accentBg }}
-                              >
-                                <FontAwesome6
-                                  name="book-open"
-                                  size={24}
-                                  color={C.accent}
-                                />
+                              <View className="w-16 h-20 rounded-xl items-center justify-center bg-primary-50 dark:bg-primary-900/30">
+                                <FontAwesome6 name="book-open" size={24} color="#6366F1" />
                               </View>
                               <View className="flex-1 justify-center">
-                                <Text
-                                  className="font-bold text-base"
-                                  style={{ color: C.text }}
-                                >
+                                <Text className="font-bold text-base text-gray-900 dark:text-white">
                                   《{msg.bookData.title}》
                                 </Text>
-                                <View
-                                  className="self-start rounded-full px-2.5 py-0.5 mt-1.5"
-                                  style={{ backgroundColor: C.accentBg }}
-                                >
-                                  <Text
-                                    className="text-xs font-medium"
-                                    style={{ color: C.accentLight }}
-                                  >
+                                <View className="self-start rounded-full px-2.5 py-0.5 mt-1.5 bg-primary-50 dark:bg-primary-900/30">
+                                  <Text className="text-xs font-medium text-primary-500">
                                     {msg.bookData.category}
                                   </Text>
                                 </View>
                               </View>
                             </View>
-                            <Text
-                              className="text-sm leading-5 mb-4"
-                              style={{ color: C.muted }}
-                            >
+
+                            <Text className="text-sm leading-5 mb-4 text-gray-600 dark:text-gray-400">
                               {msg.bookData.description}
                             </Text>
 
@@ -468,22 +443,26 @@ export default function HomeScreen() {
                               <TouchableOpacity
                                 onPress={() => handleCreateBook(msg)}
                                 disabled={loading}
-                                className="flex-1 h-10 rounded-xl items-center justify-center flex-row gap-2"
-                                style={{ backgroundColor: C.accent }}
+                                className="flex-1 h-10 rounded-xl items-center justify-center flex-row gap-2 bg-primary-500"
                               >
-                                <FontAwesome6 name="check" size={14} color="#FFF" />
-                                <Text className="text-sm font-semibold text-white">
-                                  确认创作
-                                </Text>
+                                {loading ? (
+                                  <ActivityIndicator size="small" color="#FFF" />
+                                ) : (
+                                  <>
+                                    <FontAwesome6 name="check" size={14} color="#FFF" />
+                                    <Text className="text-sm font-semibold text-white">
+                                      确认创作
+                                    </Text>
+                                  </>
+                                )}
                               </TouchableOpacity>
                               <TouchableOpacity
                                 onPress={() => {
                                   setInput(`修改《${msg.bookData?.title}》的设定，${msg.bookData?.description}`);
                                 }}
-                                className="w-10 h-10 rounded-xl items-center justify-center"
-                                style={{ backgroundColor: C.accentBg }}
+                                className="w-10 h-10 rounded-xl items-center justify-center bg-gray-100 dark:bg-gray-700"
                               >
-                                <FontAwesome6 name="pen" size={14} color={C.accentLight} />
+                                <FontAwesome6 name="pen" size={14} color="#64748B" />
                               </TouchableOpacity>
                             </View>
                           </View>
@@ -495,8 +474,8 @@ export default function HomeScreen() {
 
                 {loading && messages[messages.length - 1]?.content !== "" && (
                   <View className="flex-row items-center gap-2 ml-9">
-                    <ActivityIndicator size="small" color={C.accent} />
-                    <Text className="text-xs" style={{ color: C.dim }}>
+                    <ActivityIndicator size="small" color="#6366F1" />
+                    <Text className="text-xs text-gray-400 dark:text-gray-500">
                       AI 正在创作...
                     </Text>
                   </View>
@@ -506,31 +485,20 @@ export default function HomeScreen() {
           )}
 
           {/* ===== Input Bar ===== */}
-          <View className="px-4 pt-2 pb-4" style={{ backgroundColor: C.bg }}>
-            <View
-              className="flex-row items-end rounded-2xl px-3 py-1.5"
-              style={{
-                backgroundColor: C.inputBg,
-                borderWidth: 1,
-                borderColor: C.border,
-              }}
-            >
-              {/* Shortcut buttons */}
-              <TouchableOpacity
-                className="w-8 h-8 rounded-lg items-center justify-center mr-1.5"
-                style={{ backgroundColor: C.accentBg }}
-              >
-                <FontAwesome6 name="at" size={14} color={C.accent} />
+          <View className="px-4 pt-2 pb-4 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800">
+            <View className="flex-row items-end rounded-2xl px-3 py-1.5 bg-gray-50 dark:bg-gray-800 border border-gray-100 dark:border-gray-700">
+              <TouchableOpacity className="w-8 h-8 rounded-lg items-center justify-center mr-1.5 bg-primary-50 dark:bg-primary-900/30">
+                <FontAwesome6 name="at" size={14} color="#6366F1" />
               </TouchableOpacity>
 
               <TextInput
-                className="flex-1 text-sm max-h-20 py-1.5"
+                className="flex-1 text-sm max-h-20 py-1.5 text-gray-900 dark:text-white"
                 placeholder="写下你的故事..."
-                placeholderTextColor={C.dim}
+                placeholderTextColor="#9CA3AF"
                 value={input}
                 onChangeText={setInput}
                 multiline
-                style={{ color: C.text, lineHeight: 20 }}
+                style={{ lineHeight: 20 }}
                 onFocus={() =>
                   scrollRef.current?.scrollToEnd({ animated: true })
                 }
@@ -540,10 +508,7 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   onPress={handleSend}
                   disabled={loading}
-                  className="w-8 h-8 rounded-lg items-center justify-center ml-1.5"
-                  style={{
-                    backgroundColor: loading ? C.dim : C.accent,
-                  }}
+                  className="w-8 h-8 rounded-lg items-center justify-center ml-1.5 bg-primary-500"
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color="#FFF" />
@@ -552,23 +517,14 @@ export default function HomeScreen() {
                   )}
                 </TouchableOpacity>
               ) : (
-                <TouchableOpacity
-                  className="w-8 h-8 rounded-lg items-center justify-center ml-1.5"
-                  style={{ backgroundColor: C.dim }}
-                >
-                  <FontAwesome6 name="arrow-up" size={14} color={C.muted} />
+                <TouchableOpacity className="w-8 h-8 rounded-lg items-center justify-center ml-1.5 bg-gray-200 dark:bg-gray-700">
+                  <FontAwesome6 name="arrow-up" size={14} color="#9CA3AF" />
                 </TouchableOpacity>
               )}
             </View>
             <View className="flex-row items-center justify-between mt-2 px-1">
-              <View className="flex-row gap-3">
-                <Text className="text-xs" style={{ color: C.dim }}>
-                  联网搜索
-                </Text>
-              </View>
-              <Text className="text-xs" style={{ color: C.dim }}>
-                Enter 发送
-              </Text>
+              <Text className="text-xs text-gray-400 dark:text-gray-500">联网搜索</Text>
+              <Text className="text-xs text-gray-400 dark:text-gray-500">Enter 发送</Text>
             </View>
           </View>
         </KeyboardAvoidingView>
