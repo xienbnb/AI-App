@@ -7,185 +7,177 @@
   <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
   <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
   <style type="text/tailwindcss">
-    @theme { --color-primary: #6366F1; --color-primary-container: #EEF2FF; --color-on-primary: #ffffff;
-      --color-background: #F8FAFC; --color-surface-container-lowest: #FAFAFA;
-      --color-surface: #FFFFFF; --color-surface-container: #F1F5F9;
-      --color-surface-container-high: #E2E8F0; --color-surface-container-highest: #CBD5E1;
+    @theme {
+      --color-primary: #6366F1; --color-primary-container: #EEF2FF; --color-on-primary: #ffffff;
+      --color-purple: #8B5CF6; --color-purple-container: #F5F3FF;
+      --color-background: #F8FAFC; --color-surface: #FFFFFF;
       --color-on-surface: #1E293B; --color-on-surface-variant: #64748B;
       --color-success: #10B981; --color-error: #EF4444; --color-warning: #F59E0B;
-      --color-outline: #CBD5E1; --color-outline-variant: #E2E8F0;
-      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem;
-      --radius-xl: 1rem; --radius-2xl: 1.5rem; --radius-full: 9999px;
-      --shadow-card: 0 4px 12px rgba(99,102,241,0.08);
-      --shadow-float: 0 10px 25px rgba(99,102,241,0.10);
-      --font-sans: system-ui, -apple-system, sans-serif; }
+      --color-outline: #CBD5E1;
+      --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-2xl: 1.5rem;
+      --shadow-card: 0 2px 8px rgba(99,102,241,0.08);
+      --font-sans: system-ui, -apple-system, sans-serif;
+    }
   </style>
   <style>
-    body { min-height: max(812px, 100dvh); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
-    .slide-up { animation: slideUp 0.4s ease forwards; }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .volume-card { transition: all 0.2s; }
-    .chapters-collapse { overflow: hidden; transition: max-height 0.35s ease; }
-    .chapters-collapse.open { max-height: 2000px; }
-    .chapters-collapse:not(.open) { max-height: 0; }
+    body { margin:0; background:#F8FAFC; font-family:system-ui,-apple-system,sans-serif; }
+    .slide-up { animation: slideUp .4s ease forwards; }
+    @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    ::-webkit-scrollbar { display:none; }
   </style>
 </head>
-<body class="bg-background text-on-surface font-sans">
-  <header class="bg-background/95 backdrop-blur-sm sticky top-0 z-40 h-14 flex items-center justify-between px-4">
-    <button class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-xl hover:bg-surface-container"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
-    <h1 class="text-base font-semibold">大纲预览</h1>
-    <button class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-xl hover:bg-surface-container"><i data-lucide="refresh-ccw" class="w-5 h-5"></i></button>
-  </header>
+<body>
+  <!-- Header -->
+  <div class="bg-white px-5 pt-4 pb-3 border-b border-gray-100 flex items-center gap-3">
+    <i data-lucide="arrow-left" class="w-5 h-5 text-gray-500 cursor-pointer"></i>
+    <div class="flex-1">
+      <div class="text-lg font-bold text-gray-900">分卷大纲</div>
+      <div class="text-xs text-gray-400">三幕式结构 · 6卷30章</div>
+    </div>
+    <div class="flex items-center gap-2">
+      <i data-lucide="refresh-cw" class="w-4.5 h-4.5 text-gray-400 cursor-pointer"></i>
+    </div>
+  </div>
 
-  <main class="px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
-    <!-- 步骤指示器 (步骤3高亮) -->
-    <div class="flex items-center justify-center gap-2 mb-5 pt-2">
-      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-success/80 flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i></div><span class="text-xs text-success">灵感</span></div>
-      <div class="w-10 h-px bg-success/30"></div>
-      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-success/80 flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i></div><span class="text-xs text-success">配置</span></div>
-      <div class="w-10 h-px bg-success/30"></div>
-      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center"><span class="text-white text-xs font-bold">3</span></div><span class="text-xs font-medium text-primary">大纲</span></div>
-      <div class="w-10 h-px bg-outline-variant"></div>
-      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center"><span class="text-on-surface-variant text-xs font-medium">4</span></div><span class="text-xs text-on-surface-variant">成书</span></div>
+  <!-- Progress Overview -->
+  <div class="bg-white px-5 pt-4 pb-3 border-b border-gray-100">
+    <div class="flex items-center justify-between mb-2">
+      <div class="text-sm font-bold text-gray-900">大纲进度</div>
+      <div class="text-xs text-gray-400">6/30章 · 20%</div>
+    </div>
+    <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+      <div class="h-full bg-gradient-to-r from-primary to-purple rounded-full" style="width:20%"></div>
+    </div>
+    <div class="flex justify-between mt-2 text-[10px] text-gray-400">
+      <span>待设定(24)</span>
+      <span class="text-primary">大纲中(6)</span>
+      <span>创作中(0)</span>
+      <span>已完成(0)</span>
+    </div>
+  </div>
+
+  <!-- Quick Action: 看板视图切换 -->
+  <div class="bg-white px-5 pt-3 pb-2 flex gap-2 border-b border-gray-100">
+    <div class="flex-1 px-3 py-2 rounded-lg bg-primary-container text-primary text-xs font-medium text-center">分卷视图</div>
+    <div class="flex-1 px-3 py-2 rounded-lg bg-gray-50 text-gray-500 text-xs text-center">看板视图</div>
+    <div class="flex-1 px-3 py-2 rounded-lg bg-gray-50 text-gray-500 text-xs text-center">时间线</div>
+  </div>
+
+  <div class="px-4 pb-24 overflow-y-auto" style="max-height:calc(100dvh - 280px);">
+    <!-- Act 1: 开端 -->
+    <div class="mt-4 slide-up">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-1 h-5 rounded-full bg-primary"></div>
+        <div class="text-base font-bold text-gray-900">第一幕 · 开端</div>
+        <div class="text-xs text-gray-400">第1-2卷</div>
+      </div>
+
+      <!-- Volume 1 -->
+      <div class="bg-white rounded-2xl shadow-card overflow-hidden mb-3">
+        <div class="px-4 py-3 flex items-center justify-between border-b border-gray-50">
+          <div class="flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4 text-primary"></i>
+            <span class="text-sm font-bold text-gray-900">第一卷 · 初入修仙界</span>
+            <span class="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">5章</span>
+          </div>
+          <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+        </div>
+        <div class="px-4 py-2">
+          <div class="text-xs text-gray-500 mb-2">穿越成为青云门外门弟子，在广场签到获得淬体圆满，藏经阁签到获得功法</div>
+          <div class="grid grid-cols-1 divide-y divide-gray-50">
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-gray-100 text-[10px] text-gray-500 flex items-center justify-center">1</span>
+                <span class="text-xs text-gray-900">魂归青门外</span>
+              </div>
+              <span class="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full">大纲中</span>
+            </div>
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-gray-100 text-[10px] text-gray-500 flex items-center justify-center">2</span>
+                <span class="text-xs text-gray-900">广场签到</span>
+              </div>
+              <span class="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full">大纲中</span>
+            </div>
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-gray-100 text-[10px] text-gray-500 flex items-center justify-center">3</span>
+                <span class="text-xs text-gray-900">藏经阁签到</span>
+              </div>
+              <span class="bg-amber-50 text-amber-600 text-[10px] px-2 py-0.5 rounded-full">大纲中</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Volume 2 -->
+      <div class="bg-white rounded-2xl shadow-card overflow-hidden mb-3">
+        <div class="px-4 py-3 flex items-center justify-between border-b border-gray-50">
+          <div class="flex items-center gap-2">
+            <i data-lucide="book-open" class="w-4 h-4 text-primary"></i>
+            <span class="text-sm font-bold text-gray-900">第二卷 · 锋芒初露</span>
+            <span class="text-xs text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">5章</span>
+          </div>
+          <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+        </div>
+        <div class="px-4 py-2">
+          <div class="text-xs text-gray-500 mb-2">参加宗门大比，利用签到系统的奖励逐步展露实力</div>
+          <div class="grid grid-cols-1 divide-y divide-gray-50">
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-gray-100 text-[10px] text-gray-500 flex items-center justify-center">1</span>
+                <span class="text-xs text-gray-900">宗门任务</span>
+              </div>
+              <span class="bg-gray-50 text-gray-400 text-[10px] px-2 py-0.5 rounded-full">待开始</span>
+            </div>
+            <div class="py-2 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded bg-gray-100 text-[10px] text-gray-500 flex items-center justify-center">2</span>
+                <span class="text-xs text-gray-900">秘境试炼</span>
+              </div>
+              <span class="bg-gray-50 text-gray-400 text-[10px] px-2 py-0.5 rounded-full">待开始</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <div class="slide-up">
-      <!-- AI分析摘要 -->
-      <div class="bg-gradient-to-br from-primary/5 to-violet-500/5 rounded-2xl p-4 mb-4 border border-primary/10">
-        <div class="flex items-center gap-2 mb-2"><i data-lucide="sparkles" class="w-4 h-4 text-primary"></i><span class="text-xs font-semibold text-primary">AI亮点分析</span></div>
-        <p class="text-xs text-on-surface/80 leading-relaxed">"签到修仙"是近年大热的题材方向，结合了"穿越+系统+修仙"三大爽点元素。本大纲采用"签到升级"为主线，搭配宗门崛起为辅线，节奏紧凑，适合长篇连载。</p>
+    <!-- Act 2: 发展 -->
+    <div class="mt-4 slide-up" style="animation-delay:.1s">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-1 h-5 rounded-full bg-purple"></div>
+        <div class="text-base font-bold text-gray-900">第二幕 · 发展</div>
+        <div class="text-xs text-gray-400">第3-4卷</div>
       </div>
-
-      <!-- 统计信息 -->
-      <div class="flex gap-2 mb-4">
-        <div class="flex-1 bg-surface rounded-2xl p-3 shadow-card text-center"><p class="text-lg font-bold text-primary">6卷</p><p class="text-[10px] text-on-surface-variant">分卷</p></div>
-        <div class="flex-1 bg-surface rounded-2xl p-3 shadow-card text-center"><p class="text-lg font-bold text-primary">30章</p><p class="text-[10px] text-on-surface-variant">章节</p></div>
-        <div class="flex-1 bg-surface rounded-2xl p-3 shadow-card text-center"><p class="text-lg font-bold text-success">15w</p><p class="text-[10px] text-on-surface-variant">预估字数</p></div>
-      </div>
-
-      <!-- 角色一览 -->
-      <div class="flex gap-2 mb-4 overflow-x-auto -mx-4 px-4">
-        <div class="flex-shrink-0 flex items-center gap-2 bg-surface rounded-2xl p-2.5 shadow-card"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white text-xs font-bold">林</div><div><p class="text-xs font-medium">林辰</p><p class="text-[10px] text-on-surface-variant">主角</p></div></div>
-        <div class="flex-shrink-0 flex items-center gap-2 bg-surface rounded-2xl p-2.5 shadow-card"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-rose-400 to-rose-600 flex items-center justify-center text-white text-xs font-bold">苏</div><div><p class="text-xs font-medium">苏瑶</p><p class="text-[10px] text-on-surface-variant">女主</p></div></div>
-        <div class="flex-shrink-0 flex items-center gap-2 bg-surface rounded-2xl p-2.5 shadow-card"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold">赵</div><div><p class="text-xs font-medium">赵无极</p><p class="text-[10px] text-on-surface-variant">反派</p></div></div>
-        <div class="flex-shrink-0 flex items-center gap-2 bg-surface rounded-2xl p-2.5 shadow-card"><div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-xs font-bold">白</div><div><p class="text-xs font-medium">白云道长</p><p class="text-[10px] text-on-surface-variant">师父</p></div></div>
-      </div>
-
-      <!-- 分卷大纲 -->
-      <div class="mb-4">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold">分卷大纲 <span class="text-on-surface-variant font-normal">(点击卷名展开)</span></h3>
-          <button class="text-xs text-primary font-medium">全部展开</button>
-        </div>
-
-        <!-- 卷1 -->
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-violet-500/20 flex items-center justify-center"><span class="text-xs font-bold text-primary">壹</span></div>
-              <div><p class="text-sm font-medium">初入修真界</p><p class="text-[10px] text-on-surface-variant">5章 · 穿越觉醒</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse">
-            <div class="px-3.5 pb-3 space-y-1">
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group">
-                <div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">1</span><span class="text-xs text-on-surface">魂归青门外</span></div>
-                <button class="opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button>
-              </div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group">
-                <div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">2</span><span class="text-xs text-on-surface">神秘签到系统</span></div>
-                <button class="opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button>
-              </div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group">
-                <div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">3</span><span class="text-xs text-on-surface">初试签到</span></div>
-                <button class="opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button>
-              </div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group">
-                <div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">4</span><span class="text-xs text-on-surface">外门小试锋芒</span></div>
-                <button class="opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button>
-              </div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group">
-                <div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">5</span><span class="text-xs text-on-surface">拜入青云门</span></div>
-                <button class="opacity-0 group-hover:opacity-100 transition-opacity"><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 卷2 -->
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center"><span class="text-xs font-bold text-emerald-600">贰</span></div>
-              <div><p class="text-sm font-medium">宗门崛起</p><p class="text-[10px] text-on-surface-variant">5章 · 宗门争锋</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse open">
-            <div class="px-3.5 pb-3 space-y-1">
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group"><div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">6</span><span class="text-xs text-on-surface">签到突破筑基</span></div><button><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button></div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group"><div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">7</span><span class="text-xs text-on-surface">藏经阁签到</span></div><button><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button></div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group"><div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">8</span><span class="text-xs text-on-surface">宗门大比</span></div><button><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button></div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group"><div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">9</span><span class="text-xs text-on-surface">秘境探险</span></div><button><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button></div>
-              <div class="flex items-center justify-between bg-background rounded-xl px-3 py-2 group"><div class="flex items-center gap-2"><span class="text-[10px] text-on-surface-variant w-5">10</span><span class="text-xs text-on-surface">初遇女主</span></div><button><i data-lucide="pencil" class="w-3.5 h-3.5 text-on-surface-variant"></i></button></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 卷3-6 (折叠的) -->
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500/20 to-pink-500/20 flex items-center justify-center"><span class="text-xs font-bold text-rose-600">叁</span></div>
-              <div><p class="text-sm font-medium">青云榜之争</p><p class="text-[10px] text-on-surface-variant">5章 · 扬名立万</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse"><div class="px-3.5 pb-3 space-y-1"><div class="flex items-center justify-between bg-background rounded-xl px-3 py-2"><span class="text-xs text-on-surface">点击展开查看章节</span></div></div></div>
-        </div>
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500/20 to-yellow-500/20 flex items-center justify-center"><span class="text-xs font-bold text-amber-600">肆</span></div>
-              <div><p class="text-sm font-medium">魔道入侵</p><p class="text-[10px] text-on-surface-variant">5章 · 危机四伏</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse"><div class="px-3.5 pb-3 space-y-1"><div class="flex items-center justify-between bg-background rounded-xl px-3 py-2"><span class="text-xs text-on-surface">点击展开查看章节</span></div></div></div>
-        </div>
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500/20 to-sky-500/20 flex items-center justify-center"><span class="text-xs font-bold text-cyan-600">伍</span></div>
-              <div><p class="text-sm font-medium">九天之上</p><p class="text-[10px] text-on-surface-variant">5章 · 飞升之路</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse"><div class="px-3.5 pb-3 space-y-1"><div class="flex items-center justify-between bg-background rounded-xl px-3 py-2"><span class="text-xs text-on-surface">点击展开查看章节</span></div></div></div>
-        </div>
-        <div class="volume-card bg-surface rounded-2xl shadow-card mb-2.5 overflow-hidden">
-          <div class="flex items-center justify-between p-3.5 cursor-pointer" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.chevron').classList.toggle('rotate-180')">
-            <div class="flex items-center gap-3">
-              <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500/20 to-violet-500/20 flex items-center justify-center"><span class="text-xs font-bold text-violet-600">陆</span></div>
-              <div><p class="text-sm font-medium">仙界签到</p><p class="text-[10px] text-on-surface-variant">5章 · 终章大结局</p></div>
-            </div>
-            <i data-lucide="chevron-down" class="w-4 h-4 text-on-surface-variant chevron transition-transform"></i>
-          </div>
-          <div class="chapters-collapse"><div class="px-3.5 pb-3 space-y-1"><div class="flex items-center justify-between bg-background rounded-xl px-3 py-2"><span class="text-xs text-on-surface">点击展开查看章节</span></div></div></div>
-        </div>
-      </div>
-
-      <!-- 操作按钮 -->
-      <div class="flex gap-3 pb-4">
-        <button class="flex-1 h-12 rounded-2xl bg-surface border border-outline-variant text-on-surface font-medium text-sm">修改大纲</button>
-        <button class="flex-[2] h-12 rounded-2xl bg-gradient-to-r from-primary to-violet-500 text-white font-semibold text-sm shadow-[0_4px_16px_rgba(99,102,241,0.25)] active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
-          确认大纲
-          <i data-lucide="arrow-right" class="w-4 h-4"></i>
-        </button>
+      <div class="bg-white rounded-2xl p-6 shadow-card text-center">
+        <i data-lucide="sparkles" class="w-6 h-6 text-primary mx-auto mb-2"></i>
+        <div class="text-sm text-gray-500">AI正在生成中幕大纲...</div>
+        <div class="text-xs text-gray-400 mt-1">基于已确认的角色和世界观</div>
       </div>
     </div>
-  </main>
+
+    <!-- Act 3: 高潮 -->
+    <div class="mt-4 slide-up" style="animation-delay:.2s">
+      <div class="flex items-center gap-2 mb-3">
+        <div class="w-1 h-5 rounded-full bg-rose-400"></div>
+        <div class="text-base font-bold text-gray-900">第三幕 · 高潮</div>
+        <div class="text-xs text-gray-400">第5-6卷</div>
+      </div>
+      <div class="bg-white rounded-2xl p-6 shadow-card text-center">
+        <i data-lucide="lock" class="w-6 h-6 text-gray-300 mx-auto mb-2"></i>
+        <div class="text-sm text-gray-400">先完成前两幕</div>
+        <div class="text-xs text-gray-300 mt-1">第三幕大纲将在前两幕确认后生成</div>
+      </div>
+    </div>
+
+    <!-- Bottom Actions -->
+    <div class="mt-5 mb-6 flex gap-3">
+      <button class="flex-1 bg-white border border-gray-200 text-gray-700 py-3 rounded-xl text-sm font-medium">修改配置</button>
+      <button class="flex-1 bg-primary text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5">
+        <i data-lucide="check" class="w-4 h-4"></i> 确认大纲
+      </button>
+    </div>
+  </div>
 
   <script>lucide.createIcons();</script>
 </body>

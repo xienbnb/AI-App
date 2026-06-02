@@ -9,6 +9,7 @@
   <style type="text/tailwindcss">
     @theme {
       --color-primary: #6366F1; --color-primary-container: #EEF2FF; --color-on-primary: #ffffff;
+      --color-purple: #8B5CF6; --color-purple-container: #F5F3FF;
       --color-background: #F8FAFC; --color-surface-container-lowest: #FAFAFA;
       --color-surface: #FFFFFF; --color-surface-container: #F1F5F9;
       --color-surface-container-high: #E2E8F0; --color-surface-container-highest: #CBD5E1;
@@ -16,141 +17,231 @@
       --color-success: #10B981; --color-error: #EF4444; --color-warning: #F59E0B;
       --color-outline: #CBD5E1; --color-outline-variant: #E2E8F0;
       --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem;
-      --radius-xl: 1rem; --radius-2xl: 1.5rem; --radius-full: 9999px;
-      --shadow-card: 0 4px 12px rgba(99,102,241,0.08);
-      --shadow-float: 0 10px 25px rgba(99,102,241,0.10);
-      --shadow-dialog: 0 25px 50px rgba(99,102,241,0.15);
+      --radius-xl: 1rem; --radius-2xl: 1.5rem;
+      --shadow-card: 0 2px 8px rgba(99,102,241,0.08);
+      --shadow-float: 0 8px 20px rgba(99,102,241,0.10);
       --font-sans: system-ui, -apple-system, sans-serif;
     }
   </style>
   <style>
-    body { min-height: max(812px, 100dvh); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
-    .slide-up { animation: slideUp 0.4s ease forwards; }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-    .pulse-dot { animation: pulse 1.4s ease-in-out infinite; }
-    @keyframes pulse { 0%,100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 1; transform: scale(1.2); } }
-    .chip-tag { transition: all 0.2s; cursor: pointer; }
-    .chip-tag:hover { border-color: #6366F1; color: #6366F1; }
+    body { margin:0; background:#F8FAFC; font-family:system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
+    .slide-up { animation: slideUp .4s ease forwards; }
+    @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+    .progress-bar { transition: width .6s ease; }
+    .skill-item:active { transform: scale(0.95); }
+    ::-webkit-scrollbar { display:none; }
   </style>
-  <script>
-    document.addEventListener('error', function (e) {
-      const img = e.target; if (img.tagName !== 'IMG' || img.dataset.fallback) return;
-      img.dataset.fallback = '1';
-      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      const cat = img.getAttribute('data-category') || '其他';
-      const alt = img.getAttribute('alt') || '';
-      const label = esc(alt.length > 8 ? alt.slice(0, 8) + '…' : alt);
-      const icons = { '人物': '👤', '自然风景': '🏞', '动物': '🐾', '建筑城市': '🏙', '运动体育': '⚽', '交通工具': '🚗', '食物': '🍽', '服饰时尚': '👗', '商业科技': '💼', '游戏娱乐': '🎮', '艺术': '🎨', '其他': '🖼' };
-      const icon = icons[cat] || '🖼';
-      const w = img.width || 400, h = img.height || 300;
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="45%" text-anchor="middle" font-size="${Math.min(w, h) * 0.18}" dominant-baseline="central">${icon}</text><text x="50%" y="68%" text-anchor="middle" font-size="${Math.min(w, h) * 0.07}" fill="%239ca3af" font-family="system-ui,sans-serif" dominant-baseline="central">${label}</text></svg>`;
-      img.src = 'data:image/svg+xml,' + svg;
-    }, true);
-  </script>
 </head>
-<body class="bg-background text-on-surface font-sans">
-  <header class="bg-background/95 backdrop-blur-sm sticky top-0 z-40 h-14 flex items-center justify-between px-4">
-    <button class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-xl hover:bg-surface-container">
-      <i data-lucide="menu" class="w-5 h-5"></i>
-    </button>
-    <h1 class="text-base font-semibold">灵犀写作</h1>
-    <button class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-xl hover:bg-surface-container">
-      <i data-lucide="bell" class="w-5 h-5"></i>
-    </button>
-  </header>
-
-  <main class="px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
-    <!-- 步骤指示器 -->
-    <div class="flex items-center justify-center gap-2 mb-6 pt-2">
-      <div class="flex items-center gap-1.5">
-        <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center"><span class="text-white text-xs font-bold">1</span></div>
-        <span class="text-xs font-medium text-primary">灵感</span>
-      </div>
-      <div class="w-10 h-px bg-outline-variant"></div>
-      <div class="flex items-center gap-1.5">
-        <div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center"><span class="text-on-surface-variant text-xs font-medium">2</span></div>
-        <span class="text-xs text-on-surface-variant">配置</span>
-      </div>
-      <div class="w-10 h-px bg-outline-variant"></div>
-      <div class="flex items-center gap-1.5">
-        <div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center"><span class="text-on-surface-variant text-xs font-medium">3</span></div>
-        <span class="text-xs text-on-surface-variant">大纲</span>
-      </div>
-      <div class="w-10 h-px bg-outline-variant"></div>
-      <div class="flex items-center gap-1.5">
-        <div class="w-7 h-7 rounded-full bg-surface-container-high flex items-center justify-center"><span class="text-on-surface-variant text-xs font-medium">4</span></div>
-        <span class="text-xs text-on-surface-variant">成书</span>
+<body>
+  <!-- Header -->
+  <div class="bg-white px-5 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-purple flex items-center justify-center text-white text-sm font-bold">创</div>
+      <div>
+        <div class="text-lg font-bold text-gray-900">创作台</div>
+        <div class="text-xs text-gray-400">灵感 · 创作 · 发布</div>
       </div>
     </div>
-
-    <!-- 品牌展示区 -->
-    <div class="flex flex-col items-center pt-2 pb-6 slide-up">
-      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-[0_8px_24px_rgba(99,102,241,0.2)] mb-4">
-        <i data-lucide="sparkles" class="w-8 h-8 text-white"></i>
-      </div>
-      <h2 class="text-2xl font-bold text-on-surface mb-1">开始创作</h2>
-      <p class="text-sm text-on-surface-variant">输入灵感，AI助你完成创作</p>
+    <div class="flex items-center gap-3">
+      <i data-lucide="bell" class="w-5 h-5 text-gray-400"></i>
+      <i data-lucide="settings" class="w-5 h-5 text-gray-400"></i>
     </div>
+  </div>
 
-    <!-- 灵感输入区 -->
-    <div class="bg-surface rounded-2xl p-1 shadow-card mb-5">
-      <textarea placeholder="输入你的小说灵感…&#10;例如：主角穿越到修真界获得签到系统" class="w-full min-h-[100px] bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 px-4 py-3 outline-none resize-none leading-relaxed" rows="4"></textarea>
-      <div class="px-3 pb-3 flex items-center gap-2">
-        <button class="text-xs text-on-surface-variant flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary-container text-primary-700"><i data-lucide="bot" class="w-3.5 h-3.5"></i>AI助力</button>
-        <button class="text-xs text-on-surface-variant flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-container"><i data-lucide="file-text" class="w-3.5 h-3.5"></i>导入</button>
-      </div>
-    </div>
-
-    <!-- 快捷灵感标签 -->
-    <div class="mb-6">
-      <p class="text-xs text-on-surface-variant mb-3 flex items-center gap-1"><i data-lucide="lightbulb" class="w-3.5 h-3.5"></i>试试这些灵感</p>
-      <div class="flex flex-wrap gap-2">
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i>修仙签到系统</span>
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="heart" class="w-3.5 h-3.5 text-rose-400"></i>都市甜宠文</span>
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="rocket" class="w-3.5 h-3.5 text-blue-400"></i>科幻星际文明</span>
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="search" class="w-3.5 h-3.5 text-purple-400"></i>悬疑推理</span>
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="swords" class="w-3.5 h-3.5 text-emerald-400"></i>系统爽文</span>
-        <span class="chip-tag text-xs px-3 py-1.5 rounded-full bg-surface border border-outline-variant text-on-surface-variant inline-flex items-center gap-1.5"><i data-lucide="globe" class="w-3.5 h-3.5 text-amber-400"></i>历史穿越</span>
-      </div>
-    </div>
-
-    <!-- 最近作品（快速进入） -->
-    <div class="mb-6">
-      <p class="text-xs text-on-surface-variant mb-3 flex items-center gap-1"><i data-lucide="history" class="w-3.5 h-3.5"></i>最近创作</p>
-      <div class="flex gap-3 overflow-x-auto -mx-4 px-4 pb-1">
-        <div class="flex-shrink-0 w-32 bg-surface rounded-2xl p-3 shadow-card">
-          <div class="w-full h-20 rounded-xl bg-gradient-to-br from-primary/10 to-violet-500/10 flex items-center justify-center mb-2"><i data-lucide="book" class="w-6 h-6 text-primary"></i></div>
-          <p class="text-xs font-medium truncate">签到修仙传</p>
-          <p class="text-[10px] text-on-surface-variant">玄幻 · 3章</p>
+  <div class="px-4 pb-24 overflow-y-auto" style="max-height:calc(100dvh - 140px);">
+    <!-- Stats Banner -->
+    <div class="mt-4 bg-gradient-to-r from-primary to-purple rounded-2xl p-5 text-white slide-up">
+      <div class="grid grid-cols-3 gap-3 text-center">
+        <div>
+          <div class="text-2xl font-bold">3</div>
+          <div class="text-xs text-white/70 mt-0.5">作品总数</div>
         </div>
-        <div class="flex-shrink-0 w-32 bg-surface rounded-2xl p-3 shadow-card">
-          <div class="w-full h-20 rounded-xl bg-gradient-to-br from-rose-500/10 to-pink-500/10 flex items-center justify-center mb-2"><i data-lucide="book" class="w-6 h-6 text-rose-400"></i></div>
-          <p class="text-xs font-medium truncate">星河之约</p>
-          <p class="text-[10px] text-on-surface-variant">科幻 · 1章</p>
+        <div class="border-x border-white/20">
+          <div class="text-2xl font-bold">15.6w</div>
+          <div class="text-xs text-white/70 mt-0.5">累计字数</div>
         </div>
-        <div class="flex-shrink-0 w-32 bg-surface rounded-2xl p-3 shadow-card">
-          <div class="w-full h-20 rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10 flex items-center justify-center mb-2"><i data-lucide="book" class="w-6 h-6 text-amber-400"></i></div>
-          <p class="text-xs font-medium truncate">大明王侯</p>
-          <p class="text-[10px] text-on-surface-variant">历史 · 5章</p>
+        <div>
+          <div class="text-2xl font-bold">2</div>
+          <div class="text-xs text-white/70 mt-0.5">连载中</div>
         </div>
       </div>
     </div>
 
-    <!-- 开始按钮 -->
-    <button class="w-full h-12 rounded-2xl bg-gradient-to-r from-primary to-violet-500 text-white font-semibold text-sm shadow-[0_4px_16px_rgba(99,102,241,0.25)] active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
-      开始创作
-      <i data-lucide="arrow-right" class="w-4 h-4"></i>
-    </button>
-  </main>
+    <!-- Quick Create -->
+    <div class="mt-5 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.1s">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-gray-900 text-base">快捷创作</div>
+        <div class="text-xs text-primary flex items-center gap-1">
+          进入完整工作流 <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </div>
+      </div>
+      <div class="relative">
+        <textarea placeholder="输入你的小说灵感..." class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-900 border-0 outline-none resize-none h-20 placeholder:text-gray-300">一名社畜穿越到修仙世界，获得签到系统…</textarea>
+        <div class="flex items-center justify-between mt-3">
+          <div class="flex gap-2">
+            <span class="text-xs bg-primary-container text-primary px-3 py-1 rounded-full">重生</span>
+            <span class="text-xs bg-purple-container text-purple px-3 py-1 rounded-full">穿越</span>
+            <span class="text-xs bg-orange-50 text-orange-500 px-3 py-1 rounded-full">系统流</span>
+          </div>
+          <button class="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium flex items-center gap-1.5">
+            <i data-lucide="sparkles" class="w-4 h-4"></i> 开始创作
+          </button>
+        </div>
+      </div>
+    </div>
 
-  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface flex justify-around items-center h-14 pb-[env(safe-area-inset-bottom)] shadow-[0_-2px_12px_rgba(99,102,241,0.06)]">
-    <a href="home.html" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-primary"><i data-lucide="pen-tool" class="w-5 h-5"></i><span class="text-[10px] font-bold tracking-wide">创作</span></a>
-    <a href="#" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant"><i data-lucide="book-open" class="w-5 h-5"></i><span class="text-[10px] font-bold tracking-wide">作品</span></a>
-    <a href="#" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] font-bold tracking-wide">社区</span></a>
-    <a href="#" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant"><i data-lucide="wand-sparkles" class="w-5 h-5"></i><span class="text-[10px] font-bold tracking-wide">AI工坊</span></a>
-    <a href="#" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant"><i data-lucide="user" class="w-5 h-5"></i><span class="text-[10px] font-bold tracking-wide">我的</span></a>
-  </nav>
+    <!-- In Progress Book -->
+    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.2s">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-gray-900 text-base">创作中的作品</div>
+        <a href="home-outline.html" class="text-xs text-primary flex items-center gap-1">查看全部 <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></a>
+      </div>
+      <div class="flex gap-3">
+        <div class="w-14 h-20 rounded-lg bg-gradient-to-br from-primary/80 to-purple/80 flex items-center justify-center text-white text-xs font-bold shrink-0">签到<br>修仙</div>
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-bold text-gray-900">签到修仙传</div>
+          <div class="text-xs text-gray-400 mt-0.5">玄幻 · 长篇 · 男频</div>
+          <div class="mt-2">
+            <div class="flex justify-between text-xs text-gray-400 mb-1">
+              <span>大纲进度</span>
+              <span>6/30章</span>
+            </div>
+            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full progress-bar" style="width:20%"></div>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-2.5">
+            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="book-open" class="w-3.5 h-3.5"></i> 大纲</div>
+            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="users" class="w-3.5 h-3.5"></i> 角色</div>
+            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="globe" class="w-3.5 h-3.5"></i> 世界观</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-  <script>lucide.createIcons();</script>
+    <!-- 12 Skills Grid -->
+    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.3s">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-gray-900 text-base">创作技能</div>
+        <div class="text-xs text-gray-400">12项专业工具</div>
+      </div>
+      <div class="grid grid-cols-4 gap-3">
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500"><i data-lucide="target" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">赛道分析</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500"><i data-lucide="calendar" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">篇幅规划</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500"><i data-lucide="globe" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">世界观</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500"><i data-lucide="user" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">人物设定</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple"><i data-lucide="share-2" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">关系网</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500"><i data-lucide="layers" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">分卷大纲</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-500"><i data-lucide="file-text" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">单章大纲</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500"><i data-lucide="pen-tool" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">正文生成</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-500"><i data-lucide="zap" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">场景优化</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-500"><i data-lucide="search" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">逻辑校验</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500"><i data-lucide="brush" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">润色文风</span>
+        </div>
+        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
+          <div class="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500"><i data-lucide="megaphone" class="w-5 h-5"></i></div>
+          <span class="text-[10px] text-gray-500 text-center leading-tight">简介爆款</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Knowledge Base Quick Access -->
+    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.4s">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-gray-900 text-base">知识库</div>
+        <div class="text-xs text-primary">管理</div>
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500"><i data-lucide="globe" class="w-4.5 h-4.5"></i></div>
+          <div>
+            <div class="text-sm font-medium text-gray-900">世界观库</div>
+            <div class="text-xs text-gray-400">2个世界</div>
+          </div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500"><i data-lucide="users" class="w-4.5 h-4.5"></i></div>
+          <div>
+            <div class="text-sm font-medium text-gray-900">人物库</div>
+            <div class="text-xs text-gray-400">12个角色</div>
+          </div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500"><i data-lucide="book-open" class="w-4.5 h-4.5"></i></div>
+          <div>
+            <div class="text-sm font-medium text-gray-900">大纲库</div>
+            <div class="text-xs text-gray-400">2部作品</div>
+          </div>
+        </div>
+        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500"><i data-lucide="archive" class="w-4.5 h-4.5"></i></div>
+          <div>
+            <div class="text-sm font-medium text-gray-900">素材库</div>
+            <div class="text-xs text-gray-400">36条</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Tab Bar -->
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 pb-2 pt-2 flex justify-around items-center" style="box-shadow:0 -2px 10px rgba(0,0,0,0.04);">
+    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
+      <div class="w-10 h-7 rounded-full bg-primary-container flex items-center justify-center"><i data-lucide="layout-dashboard" class="w-5 h-5 text-primary"></i></div>
+      <span class="text-[10px] text-primary font-medium">创作台</span>
+    </div>
+    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
+      <i data-lucide="book" class="w-5 h-5 text-gray-400"></i>
+      <span class="text-[10px] text-gray-400">作品</span>
+    </div>
+    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
+      <i data-lucide="compass" class="w-5 h-5 text-gray-400"></i>
+      <span class="text-[10px] text-gray-400">社区</span>
+    </div>
+    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
+      <i data-lucide="wand-2" class="w-5 h-5 text-gray-400"></i>
+      <span class="text-[10px] text-gray-400">AI工坊</span>
+    </div>
+    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
+      <i data-lucide="user" class="w-5 h-5 text-gray-400"></i>
+      <span class="text-[10px] text-gray-400">我的</span>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+  </script>
 </body>
 </html>
