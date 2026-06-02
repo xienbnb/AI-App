@@ -267,6 +267,7 @@ export default function HomeScreen() {
   const [confirmMsg, setConfirmMsg] = useState("");
   const [showNewBookBtn, setShowNewBookBtn] = useState(false);
   const [pendingBookData, setPendingBookData] = useState<any>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // -- Guided creation state --
   const [creationStep, setCreationStep] = useState<CreationStep | null>(null);
@@ -718,24 +719,28 @@ export default function HomeScreen() {
   // ===== Render =====
   return (
     <View className="flex-1 bg-white">
-      {/* Header */}
-      <View className="bg-indigo-500 pb-3 px-5 rounded-b-[24px]" style={{ paddingTop: insets.top + 8 }}>
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <View className="w-8 h-8 rounded-xl bg-white/20 items-center justify-center">
-              <FontAwesome6 name="pen-fancy" size={14} color="white" />
-            </View>
-            <Text className="text-lg font-bold text-white">AI 创作助手</Text>
+      {/* Top Bar */}
+      <View className="flex-row items-center justify-between px-4 border-b border-gray-100" style={{ paddingTop: insets.top + 4, paddingBottom: 10 }}>
+        <TouchableOpacity
+          className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center"
+          onPress={() => setSidebarOpen(true)}
+        >
+          <FontAwesome6 name="bars" size={18} color="#374151" />
+        </TouchableOpacity>
+
+        <View className="flex-row items-center gap-2">
+          <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
+            <FontAwesome6 name="robot" size={11} color="#6366F1" />
           </View>
-          {creationStep && (
-            <TouchableOpacity
-              className="bg-white/20 rounded-xl px-3 py-1.5"
-              onPress={resetAll}
-            >
-              <Text className="text-xs text-white font-medium">新对话</Text>
-            </TouchableOpacity>
-          )}
+          <Text className="text-sm font-medium text-gray-700">豆包 Seed 2.0</Text>
         </View>
+
+        <TouchableOpacity
+          className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center"
+          onPress={resetAll}
+        >
+          <FontAwesome6 name="plus" size={13} color="#6366F1" />
+        </TouchableOpacity>
       </View>
 
       {/* Messages Area */}
@@ -1120,6 +1125,84 @@ export default function HomeScreen() {
         onSave={saveChapter}
         onClose={() => { setEditingVolumeIdx(-1); setEditingChapterIdx(-1); }}
       />
+
+      {/* Sidebar Drawer */}
+      <Modal visible={sidebarOpen} transparent animationType="none" onRequestClose={() => setSidebarOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setSidebarOpen(false)}>
+          <View className="flex-1 bg-black/40">
+            <TouchableWithoutFeedback>
+              <View className="w-[280px] h-full bg-white" style={{ paddingTop: insets.top }}>
+                {/* Sidebar Header */}
+                <View className="px-5 py-4 border-b border-gray-100">
+                  <View className="flex-row items-center gap-3 mb-4">
+                    <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center">
+                      <FontAwesome6 name="pen-fancy" size={18} color="#6366F1" />
+                    </View>
+                    <View>
+                      <Text className="text-base font-bold text-gray-900">AI 创作</Text>
+                      <Text className="text-xs text-gray-400">创意写作助手</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    className="bg-indigo-500 rounded-xl py-2.5 items-center"
+                    onPress={() => { setSidebarOpen(false); resetAll(); }}
+                  >
+                    <Text className="text-sm text-white font-medium">新对话</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Sidebar Menu Items */}
+                <View className="flex-1 px-3 py-3">
+                  <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3 rounded-xl bg-indigo-50 mb-1">
+                    <FontAwesome6 name="message" size={16} color="#6366F1" />
+                    <Text className="text-sm font-medium text-indigo-600">当前对话</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1">
+                    <FontAwesome6 name="clock-rotate-left" size={16} color="#6B7280" />
+                    <Text className="text-sm text-gray-600">历史记录</Text>
+                  </TouchableOpacity>
+
+                  <View className="border-t border-gray-100 my-3" />
+
+                  <TouchableOpacity
+                    className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1"
+                    onPress={() => {
+                      setSidebarOpen(false);
+                      router.navigate('/');
+                    }}
+                  >
+                    <FontAwesome6 name="book" size={16} color="#6B7280" />
+                    <Text className="text-sm text-gray-600">我的作品</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1"
+                    onPress={() => {
+                      setSidebarOpen(false);
+                      router.navigate('/');
+                    }}
+                  >
+                    <FontAwesome6 name="compass" size={16} color="#6B7280" />
+                    <Text className="text-sm text-gray-600">AI 工坊</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Sidebar Footer */}
+                <View className="px-5 py-4 border-t border-gray-100">
+                  <TouchableOpacity
+                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
+                    onPress={() => setSidebarOpen(false)}
+                  >
+                    <FontAwesome6 name="gear" size={16} color="#9CA3AF" />
+                    <Text className="text-sm text-gray-400">设置</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
