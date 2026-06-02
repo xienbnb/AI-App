@@ -131,6 +131,16 @@ function BookCard({
           </View>
           <Text className="text-[10px] text-gray-400 mt-0.5">{getChapterCount(book)}章 · {formatWordCount(book.wordCount)}字</Text>
         </View>
+        {/* 更多按钮（兼容Web鼠标操作） */}
+        <TouchableOpacity
+          onPress={(e) => { e.stopPropagation?.(); onLongPress(); }}
+          className="w-9 h-full items-center justify-center"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <View className="w-6 h-6 rounded-full bg-gray-100 items-center justify-center">
+            <Text className="text-gray-500 text-sm font-bold leading-none">⋯</Text>
+          </View>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   }
@@ -165,6 +175,14 @@ function BookCard({
             )}
             {/* 书脊效果 */}
             <View className="absolute left-0 top-0 bottom-0 w-2 bg-black/20" />
+            {/* 更多按钮（兼容Web鼠标操作） */}
+            <TouchableOpacity
+              onPress={(e) => { e.stopPropagation?.(); onLongPress(); }}
+              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 items-center justify-center"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text className="text-white text-lg font-bold leading-none">⋯</Text>
+            </TouchableOpacity>
             {/* 底部渐变 */}
             <View className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/60 to-transparent" />
             <View className="absolute bottom-2 left-3 right-3">
@@ -218,6 +236,14 @@ function BookCard({
             {statusLabel}
           </Text>
         </View>
+        {/* 更多按钮 */}
+        <TouchableOpacity
+          onPress={(e) => { e.stopPropagation?.(); onLongPress(); }}
+          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/30 items-center justify-center"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Text className="text-white text-lg font-bold leading-none">⋯</Text>
+        </TouchableOpacity>
       </View>
       {/* 信息区 */}
       <View className="px-3 py-2.5">
