@@ -10,11 +10,13 @@ import {
   Modal,
   FlatList,
   TouchableWithoutFeedback,
+  Alert,
 } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
 import RNSSE from "react-native-sse";
+import * as DocumentPicker from "expo-document-picker";
 
 const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
@@ -108,12 +110,11 @@ const INSPIRATION_CHIPS = [
   "我养的猫竟然是上古神兽",
 ];
 
-const QUICK_ACTIONS = [
-  { label: "小说创作", icon: "pen-fancy", hint: "我想写一部小说" },
-  { label: "大纲生成", icon: "list-tree", hint: "帮我生成大纲" },
-  { label: "角色设定", icon: "users", hint: "帮我设计角色" },
-  { label: "世界观", icon: "globe", hint: "帮我构建世界观" },
-  { label: "润色修改", icon: "wand-magic-sparkles", hint: "帮我润色一段文字" },
+const SUGGESTIONS = [
+  { title: "帮我写一部玄幻小说", subtitle: "主角获得签到系统，穿越到修仙世界", icon: "wand-magic-sparkles" },
+  { title: "设计一个复杂反派", subtitle: "让读者又爱又恨的悲剧反派角色", icon: "mask" },
+  { title: "润色这段文字", subtitle: "帮我提升文笔，让描写更生动", icon: "pen-fancy" },
+  { title: "续写都市剧情", subtitle: "豪门千金与草根逆袭的故事走向", icon: "book-open" },
 ];
 
 // ===== Helpers =====
@@ -639,6 +640,53 @@ export default function HomeScreen() {
     ]);
   };
 
+  // ===== File Upload =====
+  const handleFileUpload = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["text/plain", "text/markdown", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      const file = result.assets[0];
+      const formData = new FormData();
+      formData.append("file", {
+        uri: file.uri,
+        name: file.name || "file.txt",
+        type: file.mimeType || "text/plain",
+      } as any);
+
+      addMessage("user", `[上传文件] ${file.name}`);
+      setIsAiThinking(true);
+      setStreamContent("正在读取文件...");
+
+      const res = await fetch(`${API_BASE}/api/v1/writing/upload`, {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        const fileContent = json.data.content;
+        // Send file content to AI
+        const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${fileContent.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
+        setInputText(text);
+        setIsAiThinking(false);
+        setStreamContent("");
+        // Auto-send
+        setTimeout(() => sendFreeChat(text), 100);
+      } else {
+        setIsAiThinking(false);
+        addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
+      }
+    } catch (e: any) {
+      setIsAiThinking(false);
+      addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
+    }
+  };
+
   // ===== Send button handler =====
   const handleSend = () => {
     if (!inputText.trim() || isAiThinking) return;
@@ -699,12 +747,12 @@ export default function HomeScreen() {
           <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
             {/* AI message */}
             {msg.role === "ai" && (
-              <View className="flex-row gap-2 max-w-[88%]">
+              <View className="flex-row gap-2 max-w-[85%]">
                 <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
                   <FontAwesome6 name="robot" size={14} color="#6366F1" />
                 </View>
-                <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3">
-                  <Text className="text-sm text-gray-800 leading-6">{msg.content}</Text>
+                <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
+                  <Text className="text-sm text-gray-800 leading-6 flex-shrink flex-wrap">{msg.content}</Text>
                 </View>
               </View>
             )}
@@ -712,7 +760,7 @@ export default function HomeScreen() {
             {/* User message */}
             {msg.role === "user" && (
               <View className="bg-indigo-500 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%]">
-                <Text className="text-sm text-white leading-6">{msg.content}</Text>
+                <Text className="text-sm text-white leading-6 flex-shrink flex-wrap">{msg.content}</Text>
               </View>
             )}
           </View>
@@ -721,12 +769,12 @@ export default function HomeScreen() {
         {/* Streaming content */}
         {isAiThinking && streamContent.length > 0 && (
           <View className="mb-4 items-start">
-            <View className="flex-row gap-2 max-w-[88%]">
+            <View className="flex-row gap-2 max-w-[85%]">
               <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
                 <FontAwesome6 name="robot" size={14} color="#6366F1" />
               </View>
-              <View className="bg-indigo-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-indigo-100">
-                <Text className="text-sm text-indigo-800 leading-6">{streamContent}</Text>
+              <View className="bg-indigo-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-indigo-100 flex-shrink">
+                <Text className="text-sm text-indigo-800 leading-6 flex-shrink flex-wrap">{streamContent}</Text>
               </View>
             </View>
           </View>
@@ -749,24 +797,26 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== Quick Actions (only when idle) ===== */}
+        {/* ===== Coze-style Suggestion Bars (only when idle) ===== */}
         {!creationStep && !isAiThinking && messages.length <= 1 && (
-          <View className="mb-4 pl-10">
-            <Text className="text-xs text-gray-400 mb-2">快速开始</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {QUICK_ACTIONS.map((action) => (
-                <TouchableOpacity
-                  key={action.label}
-                  className="flex-row items-center gap-1.5 bg-gray-50 rounded-xl px-3.5 py-2 border border-gray-200"
-                  onPress={() => {
-                    setInputText(action.hint);
-                  }}
-                >
-                  <FontAwesome6 name={action.icon as any} size={12} color="#6366F1" />
-                  <Text className="text-xs text-gray-600 font-medium">{action.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <View className="mb-4">
+            <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
+            {SUGGESTIONS.map((s, i) => (
+              <TouchableOpacity
+                key={i}
+                className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-gray-100 active:bg-gray-50"
+                onPress={() => setInputText(s.title)}
+              >
+                <View className="w-9 h-9 rounded-xl bg-indigo-50 items-center justify-center mr-3">
+                  <FontAwesome6 name={s.icon as any} size={15} color="#6366F1" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-800">{s.title}</Text>
+                  <Text className="text-xs text-gray-400 mt-0.5">{s.subtitle}</Text>
+                </View>
+                <FontAwesome6 name="arrow-up-right-from-square" size={11} color="#CBD5E1" />
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 
@@ -998,10 +1048,19 @@ export default function HomeScreen() {
           </ScrollView>
         )}
 
-        <View className="flex-row items-center gap-2">
+        <View className="flex-row items-end gap-2">
+          {/* File upload button */}
+          <TouchableOpacity
+            className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center border border-gray-200"
+            onPress={handleFileUpload}
+            disabled={isAiThinking}
+          >
+            <FontAwesome6 name="paperclip" size={15} color={isAiThinking ? "#CBD5E1" : "#64748B"} />
+          </TouchableOpacity>
+
           {/* @ Skill button */}
           <TouchableOpacity
-            className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center"
+            className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200"
             onPress={() => setShowSkillPicker(true)}
           >
             <FontAwesome6 name="at" size={15} color="#9333EA" />
@@ -1010,10 +1069,10 @@ export default function HomeScreen() {
           {/* Text input */}
           <View className="flex-1 bg-gray-50 rounded-2xl border border-gray-200 flex-row items-center px-3">
             <TextInput
-              className="flex-1 py-2.5 text-gray-900 text-sm max-h-20"
+              className="flex-1 py-2.5 text-gray-900 text-sm max-h-20 leading-5"
               value={inputText}
               onChangeText={setInputText}
-              placeholder={isAiThinking ? "AI正在回复..." : "随意输入你的想法..."}
+              placeholder={isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
               placeholderTextColor="#94A3B8"
               multiline
               editable={!isAiThinking}

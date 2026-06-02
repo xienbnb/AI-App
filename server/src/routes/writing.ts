@@ -1,6 +1,9 @@
 import { Router, type Request, type Response } from "express";
 import { LLMClient } from "coze-coding-dev-sdk";
 import type { LLMConfig } from "coze-coding-dev-sdk";
+import multer from "multer";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
 
@@ -620,6 +623,31 @@ router.put("/:id/inspirations", (req: Request, res: Response) => {
   const id = req.params.id as string;
   inspirations[id] = req.body.data || [];
   res.json({ success: true });
+});
+
+// === File Upload ===
+router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
+  try {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ success: false, error: "请上传文件" });
+      return;
+    }
+
+    const textContent = file.buffer.toString("utf-8");
+
+    res.json({
+      success: true,
+      data: {
+        name: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype,
+        content: textContent.substring(0, 50000), // Limit content size
+      },
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message || "上传失败" });
+  }
 });
 
 export default router;
