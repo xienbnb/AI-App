@@ -217,7 +217,7 @@ router.get("/:id/chapters/:chapterId/export", (req: Request, res: Response) => {
   res.send(content);
 });
 
-// === AI Book Creation Dialogue (SSE) ===
+// === AI Dialogue (SSE) - Free-form chatting ===
 router.post("/ai-dialogue", async (req: Request, res: Response) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
@@ -337,171 +337,154 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
     res.end();
   }
 });
-router.post("/ai-generate", async (req: Request, res: Response) => {
-  const { idea, theme, genre } = req.body;
+
+// === AI Generate Outline (SSE) - Structured outline generation ===
+router.post("/generate-outline", async (req: Request, res: Response) => {
+  const { inspiration, genre, audience, platform, length } = req.body;
+
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
   const client = new LLMClient();
 
-  let bookInfo: any = {};
-  let lastContent = "";
-
   try {
-    const prompt = `你是一位资深小说创作助手。用户有以下创作想法：${idea || "无"}
+    const prompt = `你是一位资深网文创作顾问。用户计划创作一部小说，基本信息如下：
 
-请一步步帮助用户创作一部小说。
+【创作灵感】${inspiration || "待完善"}
+【小说类型】${genre || "待确定"}
+【受众定位】${audience || "待确定"}
+【目标平台】${platform || "待确定"}
+【篇幅规划】${length || "待确定"}
 
-首先，根据用户的灵感，生成小说的基本信息：
-- 书名（吸引人、贴合主题）
-- 类型（玄幻/言情/悬疑/科幻/都市/仙侠/历史/其他）
-- 一句话简介
+请根据以上信息，生成一个详细的小说大纲。
 
-然后，生成一个详细的大纲（3-5个主要章节/情节节点）。
+要求：
+1. 先简要分析该创意的亮点和潜力（1-2句话）
+2. 然后给出完整的章节大纲
+3. 每章包含标题和核心内容概要（50字以内）
+4. 长篇建议8-12章，中篇5-8章，短篇3-5章
 
-格式要求：
-【书名】xxx
-【类型】xxx
-【简介】xxx
+格式：
+【分析】xxx
 【大纲】
-1. xxx
-2. xxx
-3. xxx`;
+第1章：标题 - 内容概要
+第2章：标题 - 内容概要
+...`;
 
     const stream = client.stream(
-      [{ role: "user", content: prompt }],
-      { model: "doubao-seed-2-0-lite-260215" }
+      [{ role: "system", content: "你是一个专业的网文大纲生成专家，擅长根据用户需求生成结构化的小说大纲。" },
+       { role: "user", content: prompt }],
+      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
     );
 
+    let fullContent = "";
     for await (const chunk of stream) {
       if (chunk.content) {
-        lastContent += chunk.content;
-        res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ type: "outline", content: chunk.content })}\n\n`);
       }
     }
 
-    // Parse generated content to create book
-    const titleMatch = lastContent.match(/【书名】(.+)/);
-    const genreMatch = lastContent.match(/【类型】(.+)/);
-    const descMatch = lastContent.match(/【简介】(.+)/);
-    const outlineMatch = lastContent.match(/【大纲】\n([\s\S]+)/);
+    // Send the full parsed outline as structured data
+    const analysisMatch = fullContent.match(/【分析】\n?([\s\S]*?)(?=\n【大纲】|$)/);
+    const chapterLines = fullContent.split("\n").filter((l: string) => {
+      const trimmed = l.trim();
+      return /^(第?\d+[章节卷]|第\d+章)/.test(trimmed) || /^\d+[\.\s、]/.test(trimmed);
+    });
 
-    const title = titleMatch?.[1]?.trim() || "未命名作品";
-    const category = genreMatch?.[1]?.trim() || genre || "其他";
-    const description = descMatch?.[1]?.trim() || "";
-    const outlineText = outlineMatch?.[1]?.trim() || "";
+    const chapters = chapterLines.map((l: string, i: number) => {
+      const clean = l.trim().replace(/^第?\d+[章节卷\.\s、]+/, "").replace(/^[\d\.\s、]+/, "");
+      const parts = clean.split(/[-–—]/);
+      return {
+        index: i + 1,
+        title: parts[0]?.trim() || `第${i + 1}章`,
+        summary: parts[1]?.trim() || "",
+      };
+    });
 
-    const outlineChapters = outlineText.split(/\n/).filter((l: string) => l.trim()).map((l: string, i: number) => ({
-      id: generateId(),
-      title: l.trim().replace(/^\d+[\.\s]+/, ""),
-      wordCount: 0, createdAt: new Date().toISOString().split("T")[0],
-      content: "", volumeId: "",
-    }));
+    const analysis = analysisMatch?.[1]?.trim() || "";
 
-    const volumeId = generateId();
-    outlineChapters.forEach((c: Chapter) => { c.volumeId = volumeId; });
+    res.write(`data: ${JSON.stringify({
+      type: "outline_complete",
+      analysis,
+      chapters,
+      fullOutline: fullContent,
+    })}\n\n`);
 
-    const newBook: Book = {
-      id: generateId(), title, category,
-      status: "draft", cover: "from-purple-500 to-blue-500",
-      coverImage: `/api/v1/static/images/covers/${["man","women"][Math.floor(Math.random()*2)]}/${(Math.floor(Math.random()*16)+1)}.jpg`,
-      description, wordCount: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-      volumes: [{ id: volumeId, title: "第一卷", order: 1, chapters: outlineChapters }],
-    };
-
-    books.unshift(newBook);
-
-    res.write(`data: ${JSON.stringify({ done: true, bookId: newBook.id, title: newBook.title })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
-  } catch (error) {
-    console.error("AI生成失败:", error);
-    res.write(`data: ${JSON.stringify({ error: "AI生成失败，请重试" })}\n\n`);
+  } catch (err) {
+    console.error("Generate outline error:", err);
+    res.write(`data: ${JSON.stringify({ error: "大纲生成失败，请重试" })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
   }
 });
 
-// === AI Chat (for homepage dialogue) ===
-router.post("/ai-chat", async (req: Request, res: Response) => {
-  const { message, history } = req.body;
+// === AI Generate Book Details (SSE) ===
+router.post("/generate-details", async (req: Request, res: Response) => {
+  const { outline, chapters, genre, inspiration } = req.body;
+
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
   const client = new LLMClient();
 
-  const systemPrompt = `你是一位专业的AI小说创作助手，名叫"灵犀"。你的任务是帮助用户创作小说。
-
-你可以：
-1. 根据用户的灵感，帮ta构思书名、类型、大纲、章节
-2. 对用户的想法提出建设性建议和补充
-3. 引导用户逐步完善小说设定
-4. 在用户确认后，帮ta生成完整的小说结构和章节
-
-回复风格：友善、专业、有创造力。用中文回复。`;
-
-  const messages = [{ role: "system", content: systemPrompt }, ...(history || []), { role: "user", content: message }];
-
   try {
-    const stream = client.stream(messages) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
-    for await (const chunk of stream) {
-      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
-    }
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } catch (error) {
-    console.error("AI对话失败:", error);
-    res.write("data: [DONE]\n\n");
-    res.end();
-  }
-});
+    const chapterList = chapters?.map((c: any, i: number) =>
+      `第${i + 1}章 ${c.title || c.name || ""}：${c.summary || ""}`
+    ).join("\n") || "";
 
-// === AI Tools ===
-router.post("/ai-expand", async (req: Request, res: Response) => {
-  const { content, instruction } = req.body;
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  const client = new LLMClient();
-  const prompt = instruction || "请对以下内容进行润色和扩写，保持风格一致：\n\n" + content;
-  try {
-    const stream = client.stream([{ role: "user" as const, content: prompt }]) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
-    for await (const chunk of stream) {
-      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
-    }
-    res.write("data: [DONE]\n\n");
-    res.end();
-  } catch (error) {
-    console.error("AI扩写失败:", error);
-    res.write("data: [DONE]\n\n");
-    res.end();
-  }
-});
+    const prompt = `基于以下小说大纲，生成书名、简介和封面描述。
 
-router.post("/ai-name", async (req: Request, res: Response) => {
-  const { type, count, context } = req.body;
-  const nameTypes: Record<string, string> = {
-    "person": "人物名字", "place": "地名", "power": "势力名",
-    "skill": "招式/技能名", "equip": "装备名", "monster": "怪物名", "item": "道具名",
-  };
-  const typeName = nameTypes[type as string] || "名字";
-  const prompt = `为${context || "一部小说"}生成${count || 5}个${typeName}，每个名字附带简短解释。格式：名字 - 解释。`;
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  const client = new LLMClient();
-  try {
-    const stream = client.stream([{ role: "user" as const, content: prompt }]) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
+【灵感】${inspiration || ""}
+【类型】${genre || ""}
+【大纲】
+${chapterList || outline || ""}
+
+请生成：
+1. 一个吸引人的书名（有网文风格，突出爽点/亮点）
+2. 一段精彩的简介（100-150字，包含核心设定和冲突，有钩子）
+3. 一段封面描述（适合AI绘图使用的英文prompt，描述封面场景和风格）
+
+格式：
+【书名】xxx
+【简介】xxx（不要用markdown格式，纯文字）
+【封面描述】xxx（英文）`;
+
+    const stream = client.stream(
+      [{ role: "system", content: "你是一个专业的小说出版顾问，擅长为小说起名、写简介和设计封面。" },
+       { role: "user", content: prompt }],
+      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
+    );
+
+    let fullContent = "";
     for await (const chunk of stream) {
-      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+      if (chunk.content) {
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ type: "details", content: chunk.content })}\n\n`);
+      }
     }
+
+    const titleMatch = fullContent.match(/【书名】\n?([^\n]+)/);
+    const descMatch = fullContent.match(/【简介】\n?([\s\S]*?)(?=\n【封面描述】|$)/);
+    const coverMatch = fullContent.match(/【封面描述】\n?([\s\S]*)/);
+
+    res.write(`data: ${JSON.stringify({
+      type: "details_complete",
+      title: titleMatch?.[1]?.trim() || "",
+      description: descMatch?.[1]?.trim() || "",
+      coverPrompt: coverMatch?.[1]?.trim() || "",
+      fullContent,
+    })}\n\n`);
+
     res.write("data: [DONE]\n\n");
     res.end();
-  } catch (error) {
-    console.error("AI起名失败:", error);
+  } catch (err) {
+    console.error("Generate details error:", err);
+    res.write(`data: ${JSON.stringify({ error: "详情生成失败，请重试" })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
   }
