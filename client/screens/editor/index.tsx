@@ -85,8 +85,8 @@ export default function EditorScreen() {
     // 删除多余空行
     text = text.replace(/\n{4,}/g, "\n\n\n");
     // 中文后英文前加空格
-    text = text.replace(/([\u4e00-\u9fa5])([a-zA-Z])/g, "$1 $2");
-    text = text.replace(/([a-zA-Z])([\u4e00-\u9fa5])/g, "$1 $2");
+    text = text.replace(/([\u4e00-\u9fa5])([a-z])/gi, "$1 $2");
+    text = text.replace(/([a-z])([\u4e00-\u9fa5])/gi, "$1 $2");
     setContent(text);
     Alert.alert("排版完成", "已规范化文章格式");
   };
@@ -251,7 +251,7 @@ export default function EditorScreen() {
                   <Text className="text-xs text-gray-700 font-medium">排版</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleQuotes} className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-gray-50">
-                  <Text className="text-xs text-gray-700 font-medium" style={{fontSize:13}}>"</Text>
+                  <Text className="text-xs text-gray-700 font-medium" style={{fontSize:13}}>{'"'}</Text>
                   <Text className="text-xs text-gray-700 font-medium">双引号</Text>
                 </TouchableOpacity>
 
@@ -275,7 +275,7 @@ export default function EditorScreen() {
                 {/* AI功能 */}
                 <TouchableOpacity onPress={() => { setAiMode("generate"); setAiModalVisible(true); setAiPrompt(""); }}
                   className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg" style={{backgroundColor: "#EEF2FF"}}>
-                  <FontAwesome6 name="wand-magic-sparkles" size={12} color="#6366F1" />
+                  <FontAwesome6 name="wand-sparkles" size={12} color="#6366F1" />
                   <Text className="text-xs font-semibold" style={{color: "#6366F1"}}>AI创作</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => { setAiMode("expand"); setAiPrompt("请扩写以下内容，增加细节和描写："); setAiModalVisible(true); }}
@@ -305,7 +305,7 @@ export default function EditorScreen() {
             {isGenerating && (
               <View className="bg-indigo-50 rounded-2xl p-4 mb-4 border border-indigo-100">
                 <View className="flex-row items-center gap-2 mb-2">
-                  <FontAwesome6 name="sparkles" size={14} color="#6366F1" />
+                  <FontAwesome6 name="wand-sparkles" size={14} color="#6366F1" />
                   <Text className="font-semibold text-indigo-700">AI正在创作...</Text>
                 </View>
                 <Text className="text-sm text-gray-700 leading-relaxed">
@@ -360,7 +360,7 @@ export default function EditorScreen() {
                         <TouchableOpacity onPress={handleGenerateNames}
                           className="w-full py-3 rounded-xl items-center flex-row justify-center gap-2"
                           style={{backgroundColor: "#6366F1"}} disabled={isGenerating}>
-                          <FontAwesome6 name="wand-magic-sparkles" size={14} color="#fff" />
+                          <FontAwesome6 name="wand-sparkles" size={14} color="#fff" />
                           <Text className="text-white font-medium">{isGenerating ? "生成中..." : "生成名称"}</Text>
                         </TouchableOpacity>
                       </View>

@@ -57,7 +57,7 @@ function getStatusConfig(status: string) {
 }
 
 const CATEGORY_ICONS: Record<string, string> = {
- 玄幻: "dragon", 仙侠: "wand-sparkles", 言情: "heart", 都市: "building",
+ 玄幻: "dragon", 仙侠: "wand-magic", 言情: "heart", 都市: "building",
  悬疑: "magnifying-glass", 科幻: "rocket", 历史: "landmark", 游戏: "gamepad",
 };
 
@@ -269,7 +269,7 @@ export default function DetailScreen() {
         onPress={() => setShowTypeInput(true)}
         className="flex-row items-center gap-2 mt-2"
       >
-        <FontAwesome6 name="plus-circle" size={14} color="#6366F1" />
+        <FontAwesome6 name="circle-plus" size={14} color="#6366F1" />
         <Text className="text-sm text-primary-500">自定义设定分类</Text>
       </TouchableOpacity>
 
@@ -519,7 +519,7 @@ export default function DetailScreen() {
       <Modal visible={modalVisible} transparent animationType="slide">
         <TouchableOpacity activeOpacity={1} onPress={() => setModalVisible(false)} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableOpacity activeOpacity={1} onPress={() => {}} className="mx-6 bg-white rounded-3xl p-6"
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6"
               style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 10 }}
             >
               <Text className="text-lg font-bold text-gray-800 mb-4">新建章节</Text>
@@ -547,7 +547,7 @@ export default function DetailScreen() {
       <Modal visible={settingModal} transparent animationType="slide">
         <TouchableOpacity activeOpacity={1} onPress={() => setSettingModal(false)} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableOpacity activeOpacity={1} onPress={() => {}} className="mx-6 bg-white rounded-3xl p-6">
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
               <Text className="text-lg font-bold text-gray-800 mb-4">新增设定</Text>
               <View className="flex-row flex-wrap gap-2 mb-3">
                 {allSettingTypes.map((type) => (
@@ -575,7 +575,7 @@ export default function DetailScreen() {
       <Modal visible={outlineModal} transparent animationType="slide">
         <TouchableOpacity activeOpacity={1} onPress={() => setOutlineModal(false)} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableOpacity activeOpacity={1} onPress={() => {}} className="mx-6 bg-white rounded-3xl p-6">
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
               <Text className="text-lg font-bold text-gray-800 mb-4">新建{newOutline.type}</Text>
               <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-2" placeholder="标题" value={newOutline.title} onChangeText={(t) => setNewOutline({ ...newOutline, title: t })} />
               <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4" placeholder="内容（可选）" value={newOutline.content} onChangeText={(t) => setNewOutline({ ...newOutline, content: t })} multiline />
@@ -592,7 +592,7 @@ export default function DetailScreen() {
       <Modal visible={inspirationModal} transparent animationType="slide">
         <TouchableOpacity activeOpacity={1} onPress={() => setInspirationModal(false)} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableOpacity activeOpacity={1} onPress={() => {}} className="mx-6 bg-white rounded-3xl p-6">
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
               <Text className="text-lg font-bold text-gray-800 mb-4">记录灵感</Text>
               <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4" placeholder="写下你的灵感..." value={newInspiration} onChangeText={setNewInspiration} multiline autoFocus />
               <View className="flex-row gap-3">

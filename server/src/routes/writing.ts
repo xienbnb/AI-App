@@ -1,77 +1,29 @@
 import { Router, type Request, type Response } from "express";
-import { LLMClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
-import "dotenv/config";
+import { LLMClient } from "coze-coding-dev-sdk";
+import type { LLMConfig } from "coze-coding-dev-sdk";
 
 const router = Router();
 
-// ==================== 内存数据存储 ====================
-const books: Book[] = [
-  {
-    id: "1",
-    title: "超神：我以DNF镇诸神",
-    category: "玄幻",
-    status: "writing",
-    cover: "from-purple-500 to-blue-500",
-    coverImage: "/api/v1/static/images/covers/man/1.jpg",
-    description:
-      "谢峰，一个普通的996社畜，意外穿越到超神学院的世界，获得了阿拉德系统...",
-    createdAt: "2026-05-01",
-    wordCount: 128000,
-    chapters: [
-      {
-        id: "101",
-        title: "第一章 穿越",
-        wordCount: 2100,
-        createdAt: "2026-05-01",
-        content:
-          "谢峰站在巨峡市的街头，看着天空中突然出现的虫洞，眼神变得凝重。这一天，终于还是来了...",
-      },
-      {
-        id: "102",
-        title: "第二章 阿拉德系统",
-        wordCount: 2050,
-        createdAt: "2026-05-02",
-        content:
-          "【叮！检测到宿主穿越成功，阿拉德系统正在激活...】",
-      },
-      {
-        id: "103",
-        title: "第三章 初次试炼",
-        wordCount: 1980,
-        createdAt: "2026-05-03",
-        content:
-          "系统提示音落下，谢峰的眼前出现了一个虚拟面板。",
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "凡人修仙传同人",
-    category: "仙侠",
-    status: "writing",
-    cover: "from-green-500 to-teal-500",
-    coverImage: "/api/v1/static/images/covers/man/3.jpg",
-    description: "一个普通山村少年的修仙之路...",
-    createdAt: "2026-05-10",
-    wordCount: 85000,
-    chapters: [
-      {
-        id: "201",
-        title: "第一章 山村少年",
-        wordCount: 2200,
-        createdAt: "2026-05-10",
-        content: "青牛镇，一个位于越国边境的普通小镇。",
-      },
-    ],
-  },
-];
+function generateId(): string {
+  return Math.random().toString(36).substring(2, 15);
+}
 
+// --- Types ---
 interface Chapter {
   id: string;
   title: string;
   wordCount: number;
   createdAt: string;
   content: string;
+  volumeId: string;
+}
+
+interface Volume {
+  id: string;
+  title: string;
+  order: number;
+  chapters: Chapter[];
+  collapsed?: boolean;
 }
 
 interface Book {
@@ -84,282 +36,389 @@ interface Book {
   description: string;
   createdAt: string;
   wordCount: number;
-  chapters: Chapter[];
+  volumes: Volume[];
 }
 
-// ==================== 工具函数 ====================
-const generateId = (): string => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+// --- In-memory store ---
+let books: Book[] = [
+  {
+    id: "book1", title: "超神：我以DNF镇诸神", category: "玄幻", status: "连载中",
+    cover: "from-purple-500 to-blue-500",
+    coverImage: "/api/v1/static/images/covers/man/1.jpg",
+    description: "当DNF角色穿越到诸神世界，一场颠覆之旅就此展开...",
+    createdAt: "2025-01-15", wordCount: 0,
+    volumes: [{ id: "v1", title: "第一卷 初入异世", order: 1, chapters: [
+      { id: "c1", title: "第一章 穿越", wordCount: 0, createdAt: "2025-01-15", content: "", volumeId: "v1" },
+    ]}],
+  },
+  {
+    id: "book2", title: "总裁的天价小娇妻", category: "言情", status: "连载中",
+    cover: "from-pink-500 to-rose-500",
+    coverImage: "/api/v1/static/images/covers/women/1.jpg",
+    description: "一场契约婚姻，却让两人的心越走越近...",
+    createdAt: "2025-02-01", wordCount: 0,
+    volumes: [{ id: "v2", title: "第一卷 契约婚姻", order: 1, chapters: [
+      { id: "c2", title: "第一章 相遇", wordCount: 0, createdAt: "2025-02-01", content: "", volumeId: "v2" },
+    ]}],
+  },
+  {
+    id: "book3", title: "雾锁深山", category: "悬疑", status: "已完成",
+    cover: "from-gray-700 to-gray-900",
+    coverImage: "/api/v1/static/images/covers/man/9.jpg",
+    description: "深山老林中的离奇命案，引出一段尘封多年的秘密...",
+    createdAt: "2024-11-20", wordCount: 0,
+    volumes: [{ id: "v3", title: "第一卷 迷雾", order: 1, chapters: [
+      { id: "c3", title: "第一章 命案", wordCount: 0, createdAt: "2024-11-20", content: "", volumeId: "v3" },
+      { id: "c4", title: "第二章 调查", wordCount: 0, createdAt: "2024-11-25", content: "", volumeId: "v3" },
+    ]}],
+  },
+];
 
-// ==================== 书籍 API ====================
-// 获取书籍列表
+let outlines: Record<string, any[]> = {};
+let settings: Record<string, any[]> = {};
+let inspirations: Record<string, any[]> = {};
+
+// --- Helper ---
+function countWords(text: string): number {
+  return text.replace(/\s/g, "").length;
+}
+
+// === Books CRUD ===
 router.get("/", (_req: Request, res: Response) => {
   res.json({ success: true, data: books });
 });
 
-// 获取单本书籍
 router.get("/:id", (req: Request, res: Response) => {
   const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
   res.json({ success: true, data: book });
 });
 
-// 创建书籍
 router.post("/", (req: Request, res: Response) => {
-  const { title, category, cover, coverImage, description } = req.body;
-  if (!title) {
-    res.status(400).json({ success: false, message: "请输入书名" });
-    return;
-  }
+  const { title, description, cover, coverImage, category } = req.body;
+  if (!title) return res.status(400).json({ success: false, message: "书名不能为空" });
   const newBook: Book = {
-    id: generateId(),
-    title,
-    category: category || "玄幻",
-    status: "writing",
+    id: generateId(), title, category: category || "其他", status: "draft",
     cover: cover || "from-purple-500 to-blue-500",
-    coverImage: coverImage || undefined,
-    description: description || "暂无简介",
+    coverImage: coverImage || "",
+    description: description || "",
     createdAt: new Date().toISOString().split("T")[0],
     wordCount: 0,
-    chapters: [],
+    volumes: [{ id: generateId(), title: "第一卷", order: 1, chapters: [] }],
   };
   books.unshift(newBook);
   res.json({ success: true, data: newBook });
 });
 
-// 更新书籍
 router.put("/:id", (req: Request, res: Response) => {
   const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
-  const { title, category, status, cover, coverImage, description } = req.body;
-  if (title) book.title = title;
-  if (category) book.category = category;
-  if (status) book.status = status;
-  if (cover) book.cover = cover;
-  if (coverImage !== undefined) book.coverImage = coverImage;
-  if (description !== undefined) book.description = description;
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  Object.assign(book, req.body);
   res.json({ success: true, data: book });
 });
 
-// 删除书籍
 router.delete("/:id", (req: Request, res: Response) => {
   const index = books.findIndex((b) => b.id === req.params.id);
-  if (index === -1) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
+  if (index === -1) return res.status(404).json({ success: false, message: "未找到书籍" });
   books.splice(index, 1);
-  res.json({ success: true, message: "删除成功" });
+  res.json({ success: true });
 });
 
-// ==================== 章节 API ====================
-// 获取某本书的章节列表
-router.get("/:id/chapters", (req: Request, res: Response) => {
+// === Volumes CRUD ===
+router.post("/:id/volumes", (req: Request, res: Response) => {
   const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
-  res.json({ success: true, data: book.chapters });
-});
-
-// 获取单个章节
-router.get("/:id/chapters/:chapterId", (req: Request, res: Response) => {
-  const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
-  const chapter = book.chapters.find((c) => c.id === req.params.chapterId);
-  if (!chapter) {
-    res.status(404).json({ success: false, message: "章节未找到" });
-    return;
-  }
-  res.json({ success: true, data: chapter });
-});
-
-// 创建章节
-router.post("/:id/chapters", (req: Request, res: Response) => {
-  const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
-  }
-  const { title, content } = req.body;
-  if (!title) {
-    res.status(400).json({ success: false, message: "请输入章节标题" });
-    return;
-  }
-  const newChapter: Chapter = {
-    id: generateId(),
-    title,
-    wordCount: content ? content.replace(/\s/g, "").length : 0,
-    createdAt: new Date().toISOString().split("T")[0],
-    content: content || "",
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  const { title } = req.body;
+  const newVolume: Volume = {
+    id: generateId(), title: title || `第${book.volumes.length + 1}卷`,
+    order: book.volumes.length + 1, chapters: [],
   };
-  book.chapters.push(newChapter);
-  book.wordCount = book.chapters.reduce((sum, c) => sum + c.wordCount, 0);
+  book.volumes.push(newVolume);
+  res.json({ success: true, data: newVolume });
+});
+
+router.put("/:id/volumes/:volumeId", (req: Request, res: Response) => {
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  const volume = book.volumes.find((v) => v.id === req.params.volumeId);
+  if (!volume) return res.status(404).json({ success: false, message: "未找到卷" });
+  Object.assign(volume, req.body);
+  res.json({ success: true, data: volume });
+});
+
+router.delete("/:id/volumes/:volumeId", (req: Request, res: Response) => {
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  const index = book.volumes.findIndex((v) => v.id === req.params.volumeId);
+  if (index === -1) return res.status(404).json({ success: false, message: "未找到卷" });
+  book.volumes.splice(index, 1);
+  res.json({ success: true });
+});
+
+// === Chapters CRUD ===
+router.post("/:id/volumes/:volumeId/chapters", (req: Request, res: Response) => {
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  const volume = book.volumes.find((v) => v.id === req.params.volumeId);
+  if (!volume) return res.status(404).json({ success: false, message: "未找到卷" });
+  const { title } = req.body;
+  const newChapter: Chapter = {
+    id: generateId(), title: title || `第${volume.chapters.length + 1}章`,
+    wordCount: 0, createdAt: new Date().toISOString().split("T")[0],
+    content: "", volumeId: volume.id,
+  };
+  volume.chapters.push(newChapter);
   res.json({ success: true, data: newChapter });
 });
 
-// 更新章节
 router.put("/:id/chapters/:chapterId", (req: Request, res: Response) => {
   const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  let chapter: Chapter | undefined;
+  for (const v of book.volumes) {
+    chapter = v.chapters.find((c) => c.id === req.params.chapterId);
+    if (chapter) break;
   }
-  const chapter = book.chapters.find((c) => c.id === req.params.chapterId);
-  if (!chapter) {
-    res.status(404).json({ success: false, message: "章节未找到" });
-    return;
-  }
-  const { title, content } = req.body;
-  if (title) chapter.title = title;
-  if (content !== undefined) {
-    chapter.content = content;
-    chapter.wordCount = content.replace(/\s/g, "").length;
-  }
-  book.wordCount = book.chapters.reduce((sum, c) => sum + c.wordCount, 0);
+  if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
+  if (req.body.content !== undefined) chapter.wordCount = countWords(req.body.content);
+  Object.assign(chapter, req.body);
   res.json({ success: true, data: chapter });
 });
 
-// 删除章节
 router.delete("/:id/chapters/:chapterId", (req: Request, res: Response) => {
   const book = books.find((b) => b.id === req.params.id);
-  if (!book) {
-    res.status(404).json({ success: false, message: "书籍未找到" });
-    return;
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  for (const v of book.volumes) {
+    const index = v.chapters.findIndex((c) => c.id === req.params.chapterId);
+    if (index !== -1) { v.chapters.splice(index, 1); break; }
   }
-  const index = book.chapters.findIndex((c) => c.id === req.params.chapterId);
-  if (index === -1) {
-    res.status(404).json({ success: false, message: "章节未找到" });
-    return;
-  }
-  book.chapters.splice(index, 1);
-  book.wordCount = book.chapters.reduce((sum, c) => sum + c.wordCount, 0);
-  res.json({ success: true, message: "章节已删除" });
+  res.json({ success: true });
 });
 
-// ==================== AI 写作生成 ====================
-const config = new Config();
-const client = new LLMClient(config);
+// === Export Chapter ===
+router.get("/:id/chapters/:chapterId/export", (req: Request, res: Response) => {
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  let chapter: Chapter | undefined;
+  for (const v of book.volumes) {
+    chapter = v.chapters.find((c) => c.id === req.params.chapterId);
+    if (chapter) break;
+  }
+  if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
+  const format = req.query.format as string || "txt";
+  const content = `# ${chapter.title}\n\n${chapter.content}`;
+  if (format === "md") {
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${chapter.title}.md"`);
+  } else {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${chapter.title}.txt"`);
+  }
+  res.send(content);
+});
 
-router.post("/generate", async (req: Request, res: Response) => {
+// === AI Generate Book ===
+router.post("/ai-generate", async (req: Request, res: Response) => {
+  const { idea, theme, genre } = req.body;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const client = new LLMClient();
+
+  let bookInfo: any = {};
+  let lastContent = "";
+
   try {
-    const { prompt, style = "default", wordCount = 500, context = "" } = req.body;
-    if (!prompt) {
-      res.status(400).json({ success: false, message: "请输入写作主题" });
-      return;
-    }
+    const prompt = `你是一位资深小说创作助手。用户有以下创作想法：${idea || "无"}
 
-    const styleMap: Record<string, string> = {
-      default: "平实流畅的叙述风格",
-      formal: "正式严谨的文风",
-      casual: "轻松活泼的口语化风格",
-      literary: "优美富有文采的文学风格",
-      professional: "专业技术的说明风格",
-    };
+请一步步帮助用户创作一部小说。
 
-    const styleDesc = styleMap[style] || styleMap.default;
+首先，根据用户的灵感，生成小说的基本信息：
+- 书名（吸引人、贴合主题）
+- 类型（玄幻/言情/悬疑/科幻/都市/仙侠/历史/其他）
+- 一句话简介
 
-    const systemPrompt = `你是一位专业的网络文学作家，擅长各种类型的创作。
-请按照以下要求进行创作：
-1. 写作风格：${styleDesc}
-2. 篇幅要求：约${wordCount}字
-3. 如果需要标题，用 ## 包裹标题
-4. 输出流畅、吸引人的内容`;
+然后，生成一个详细的大纲（3-5个主要章节/情节节点）。
 
-    const userPrompt = context ? `背景上下文：${context}\n\n请根据以上背景，继续创作：${prompt}` : prompt;
+格式要求：
+【书名】xxx
+【类型】xxx
+【简介】xxx
+【大纲】
+1. xxx
+2. xxx
+3. xxx`;
 
-    // SSE 流式输出
-    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-    res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
-    res.setHeader("Connection", "keep-alive");
-
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: userPrompt },
-    ];
-
-    const stream = client.stream(messages, {
-      model: "doubao-seed-2-0-lite-260215",
-      temperature: 0.8,
-    });
-
-    let fullContent = "";
+    const stream = client.stream(
+      [{ role: "user", content: prompt }],
+      { model: "doubao-seed-2-0-lite-260215" }
+    );
 
     for await (const chunk of stream) {
       if (chunk.content) {
-        const text = chunk.content.toString();
-        fullContent += text;
-        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+        lastContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
       }
     }
 
-    res.write(`data: ${JSON.stringify({ done: true, fullContent })}\n\n`);
+    // Parse generated content to create book
+    const titleMatch = lastContent.match(/【书名】(.+)/);
+    const genreMatch = lastContent.match(/【类型】(.+)/);
+    const descMatch = lastContent.match(/【简介】(.+)/);
+    const outlineMatch = lastContent.match(/【大纲】\n([\s\S]+)/);
+
+    const title = titleMatch?.[1]?.trim() || "未命名作品";
+    const category = genreMatch?.[1]?.trim() || genre || "其他";
+    const description = descMatch?.[1]?.trim() || "";
+    const outlineText = outlineMatch?.[1]?.trim() || "";
+
+    const outlineChapters = outlineText.split(/\n/).filter((l: string) => l.trim()).map((l: string, i: number) => ({
+      id: generateId(),
+      title: l.trim().replace(/^\d+[\.\s]+/, ""),
+      wordCount: 0, createdAt: new Date().toISOString().split("T")[0],
+      content: "", volumeId: "",
+    }));
+
+    const volumeId = generateId();
+    outlineChapters.forEach((c: Chapter) => { c.volumeId = volumeId; });
+
+    const newBook: Book = {
+      id: generateId(), title, category,
+      status: "draft", cover: "from-purple-500 to-blue-500",
+      coverImage: `/api/v1/static/images/covers/${["man","women"][Math.floor(Math.random()*2)]}/${(Math.floor(Math.random()*16)+1)}.jpg`,
+      description, wordCount: 0,
+      createdAt: new Date().toISOString().split("T")[0],
+      volumes: [{ id: volumeId, title: "第一卷", order: 1, chapters: outlineChapters }],
+    };
+
+    books.unshift(newBook);
+
+    res.write(`data: ${JSON.stringify({ done: true, bookId: newBook.id, title: newBook.title })}\n\n`);
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (error) {
     console.error("AI生成失败:", error);
-    if (!res.headersSent) {
-      res.status(500).json({ success: false, message: "AI生成失败" });
-    } else {
-      res.write(`data: ${JSON.stringify({ error: "AI生成失败" })}\n\n`);
-      res.write("data: [DONE]\n\n");
-      res.end();
-    }
+    res.write(`data: ${JSON.stringify({ error: "AI生成失败，请重试" })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
   }
 });
 
-// ==================== AI智能创建书籍 ====================
-router.post("/generate-book", async (req: Request, res: Response) => {
+// === AI Chat (for homepage dialogue) ===
+router.post("/ai-chat", async (req: Request, res: Response) => {
+  const { message, history } = req.body;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const client = new LLMClient();
+
+  const systemPrompt = `你是一位专业的AI小说创作助手，名叫"灵犀"。你的任务是帮助用户创作小说。
+
+你可以：
+1. 根据用户的灵感，帮ta构思书名、类型、大纲、章节
+2. 对用户的想法提出建设性建议和补充
+3. 引导用户逐步完善小说设定
+4. 在用户确认后，帮ta生成完整的小说结构和章节
+
+回复风格：友善、专业、有创造力。用中文回复。`;
+
+  const messages = [{ role: "system", content: systemPrompt }, ...(history || []), { role: "user", content: message }];
+
   try {
-    const { topic, style } = req.body;
-    const client = LLMClient.getInstance();
-    const systemPrompt =
-      "你是一个专业的书籍创作助手。根据用户提供的主题，生成一部小说的基本信息。";
-    const userPrompt = `请根据主题"${topic || "随机"}"${style ? `和风格"${style}"` : ""}生成一部小说，返回JSON格式：{
-      "title": "书名",
-      "category": "分类（玄幻/仙侠/言情/都市/悬疑/科幻/历史/游戏）",
-      "description": "书籍简介（50-100字）"
-    }`;
-
-    const result = await client.chat({
-      model: "doubao-seed-2-0-lite-260215",
-      messages: [
-        { role: "system" as const, content: systemPrompt },
-        { role: "user" as const, content: userPrompt },
-      ],
-      responseFormat: { type: "json_object" },
-    });
-
-    const bookInfo = JSON.parse(result.content);
-
-    const newBook: Book = {
-      id: generateId(),
-      title: bookInfo.title,
-      category: bookInfo.category || "其他",
-      status: "draft",
-      cover: "from-purple-500 to-blue-500",
-      coverImage: `/api/v1/static/images/covers/man/${(Math.floor(Math.random() * 16) + 1).toString()}.jpg`,
-      description: bookInfo.description || "",
-      createdAt: new Date().toISOString().split("T")[0],
-      wordCount: 0,
-      chapters: [],
-    };
-
-    books.unshift(newBook);
-    res.json({ success: true, data: newBook });
+    const stream = client.stream(messages) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
+    for await (const chunk of stream) {
+      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
   } catch (error) {
-    console.error("AI创建书籍失败:", error);
-    res.status(500).json({ success: false, message: "AI创建失败" });
+    console.error("AI对话失败:", error);
+    res.write("data: [DONE]\n\n");
+    res.end();
   }
+});
+
+// === AI Tools ===
+router.post("/ai-expand", async (req: Request, res: Response) => {
+  const { content, instruction } = req.body;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  const client = new LLMClient();
+  const prompt = instruction || "请对以下内容进行润色和扩写，保持风格一致：\n\n" + content;
+  try {
+    const stream = client.stream([{ role: "user" as const, content: prompt }]) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
+    for await (const chunk of stream) {
+      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error) {
+    console.error("AI扩写失败:", error);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  }
+});
+
+router.post("/ai-name", async (req: Request, res: Response) => {
+  const { type, count, context } = req.body;
+  const nameTypes: Record<string, string> = {
+    "person": "人物名字", "place": "地名", "power": "势力名",
+    "skill": "招式/技能名", "equip": "装备名", "monster": "怪物名", "item": "道具名",
+  };
+  const typeName = nameTypes[type as string] || "名字";
+  const prompt = `为${context || "一部小说"}生成${count || 5}个${typeName}，每个名字附带简短解释。格式：名字 - 解释。`;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  const client = new LLMClient();
+  try {
+    const stream = client.stream([{ role: "user" as const, content: prompt }]) as AsyncGenerator<{ content: string } & { delta?: string }, void, unknown>;
+    for await (const chunk of stream) {
+      if (chunk.content) res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (error) {
+    console.error("AI起名失败:", error);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  }
+});
+
+// === Outlines ===
+router.get("/:id/outlines", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  res.json({ success: true, data: outlines[id] || [] });
+});
+router.put("/:id/outlines", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  outlines[id] = req.body.data || [];
+  res.json({ success: true });
+});
+
+// === Settings ===
+router.get("/:id/settings", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  res.json({ success: true, data: settings[id] || [] });
+});
+router.put("/:id/settings", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  settings[id] = req.body.data || [];
+  res.json({ success: true });
+});
+
+// === Inspirations ===
+router.get("/:id/inspirations", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  res.json({ success: true, data: inspirations[id] || [] });
+});
+router.put("/:id/inspirations", (req: Request, res: Response) => {
+  const id = req.params.id as string;
+  inspirations[id] = req.body.data || [];
+  res.json({ success: true });
 });
 
 export default router;
