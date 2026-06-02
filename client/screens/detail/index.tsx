@@ -12,6 +12,7 @@ import {
   Keyboard,
   Alert,
   RefreshControl,
+  Image,
 } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
@@ -64,6 +65,7 @@ interface Book {
   category: string;
   status: string;
   cover: string;
+  coverImage?: string;
   description: string;
   createdAt: string;
   wordCount: number;
@@ -178,21 +180,41 @@ export default function DetailScreen() {
       >
         {/* 书籍封面头部 */}
         <View className="mt-2 mb-6">
-          <View
-            className="rounded-3xl px-6 py-8"
-            style={{ backgroundColor: c1 }}
-          >
-            <View className="items-center">
-              <FontAwesome6 name={catIcon} size={44} color="rgba(255,255,255,0.9)" />
-              <Text className="text-white/70 text-sm mt-2 font-medium tracking-wider uppercase">
-                {book.category}
-              </Text>
-              <Text className="text-white text-2xl font-bold mt-3 text-center" numberOfLines={2}>
-                {book.title}
-              </Text>
-              <Text className="text-white/60 text-xs mt-2">{book.createdAt}</Text>
+          {book.coverImage ? (
+            <View className="rounded-3xl overflow-hidden h-56 relative">
+              <Image
+                source={{ uri: `${API_BASE}${book.coverImage}` }}
+                className="w-full h-full"
+                resizeMode="cover"
+              />
+              <View className="absolute inset-0 bg-black/30" />
+              <View className="absolute bottom-0 left-0 right-0 p-6">
+                <Text className="text-white/70 text-sm font-medium tracking-wider uppercase">
+                  {book.category}
+                </Text>
+                <Text className="text-white text-2xl font-bold mt-1" numberOfLines={2}>
+                  {book.title}
+                </Text>
+                <Text className="text-white/60 text-xs mt-1">{book.createdAt}</Text>
+              </View>
             </View>
-          </View>
+          ) : (
+            <View
+              className="rounded-3xl px-6 py-8"
+              style={{ backgroundColor: c1 }}
+            >
+              <View className="items-center">
+                <FontAwesome6 name={catIcon} size={44} color="rgba(255,255,255,0.9)" />
+                <Text className="text-white/70 text-sm mt-2 font-medium tracking-wider uppercase">
+                  {book.category}
+                </Text>
+                <Text className="text-white text-2xl font-bold mt-3 text-center" numberOfLines={2}>
+                  {book.title}
+                </Text>
+                <Text className="text-white/60 text-xs mt-2">{book.createdAt}</Text>
+              </View>
+            </View>
+          )}
 
           {/* 状态标签 */}
           <View className="flex-row justify-center -mt-4 gap-2">

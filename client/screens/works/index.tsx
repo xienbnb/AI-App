@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
@@ -72,6 +73,7 @@ interface Book {
   category: string;
   status: string;
   cover: string;
+  coverImage?: string;
   description: string;
   createdAt: string;
   wordCount: number;
@@ -110,24 +112,46 @@ function BookCard({
         elevation: 3,
       }}
     >
-      {/* 封面渐变 */}
-      <View
-        className="px-5 py-6"
-        style={{ backgroundColor: c1 }}
-      >
-        <View className="items-center">
-          <FontAwesome6 name={catIcon} size={32} color="rgba(255,255,255,0.9)" />
-          <Text className="text-white/80 text-xs mt-2 font-medium tracking-wider">
-            {book.category}
-          </Text>
-          <Text
-            className="text-white font-bold text-base mt-1 text-center"
-            numberOfLines={1}
-          >
-            {book.title}
-          </Text>
+      {/* 封面 - 有图片则展示图片，否则用渐变 */}
+      {book.coverImage ? (
+        <View className="h-44 relative">
+          <Image
+            source={{ uri: `${API_BASE}${book.coverImage}` }}
+            className="w-full h-full"
+            resizeMode="cover"
+          />
+          <View className="absolute inset-0 bg-black/20" />
+          <View className="absolute bottom-3 left-4">
+            <Text className="text-white/80 text-xs font-medium tracking-wider">
+              {book.category}
+            </Text>
+            <Text
+              className="text-white font-bold text-base mt-0.5"
+              numberOfLines={1}
+            >
+              {book.title}
+            </Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View
+          className="px-5 py-6"
+          style={{ backgroundColor: c1 }}
+        >
+          <View className="items-center">
+            <FontAwesome6 name={catIcon} size={32} color="rgba(255,255,255,0.9)" />
+            <Text className="text-white/80 text-xs mt-2 font-medium tracking-wider">
+              {book.category}
+            </Text>
+            <Text
+              className="text-white font-bold text-base mt-1 text-center"
+              numberOfLines={1}
+            >
+              {book.title}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* 底部信息 */}
       <View className="px-4 py-3.5 bg-white">

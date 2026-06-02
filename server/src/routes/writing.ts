@@ -12,6 +12,7 @@ const books: Book[] = [
     category: "玄幻",
     status: "writing",
     cover: "from-purple-500 to-blue-500",
+    coverImage: "/static/images/covers/man/1.jpg",
     description:
       "谢峰，一个普通的996社畜，意外穿越到超神学院的世界，获得了阿拉德系统...",
     createdAt: "2026-05-01",
@@ -49,6 +50,7 @@ const books: Book[] = [
     category: "仙侠",
     status: "writing",
     cover: "from-green-500 to-teal-500",
+    coverImage: "/static/images/covers/man/3.jpg",
     description: "一个普通山村少年的修仙之路...",
     createdAt: "2026-05-10",
     wordCount: 85000,
@@ -78,6 +80,7 @@ interface Book {
   category: string;
   status: string;
   cover: string;
+  coverImage?: string;
   description: string;
   createdAt: string;
   wordCount: number;
@@ -105,7 +108,7 @@ router.get("/:id", (req: Request, res: Response) => {
 
 // 创建书籍
 router.post("/", (req: Request, res: Response) => {
-  const { title, category, cover, description } = req.body;
+  const { title, category, cover, coverImage, description } = req.body;
   if (!title) {
     res.status(400).json({ success: false, message: "请输入书名" });
     return;
@@ -116,6 +119,7 @@ router.post("/", (req: Request, res: Response) => {
     category: category || "玄幻",
     status: "writing",
     cover: cover || "from-purple-500 to-blue-500",
+    coverImage: coverImage || undefined,
     description: description || "暂无简介",
     createdAt: new Date().toISOString().split("T")[0],
     wordCount: 0,
@@ -132,11 +136,12 @@ router.put("/:id", (req: Request, res: Response) => {
     res.status(404).json({ success: false, message: "书籍未找到" });
     return;
   }
-  const { title, category, status, cover, description } = req.body;
+  const { title, category, status, cover, coverImage, description } = req.body;
   if (title) book.title = title;
   if (category) book.category = category;
   if (status) book.status = status;
   if (cover) book.cover = cover;
+  if (coverImage !== undefined) book.coverImage = coverImage;
   if (description !== undefined) book.description = description;
   res.json({ success: true, data: book });
 });
