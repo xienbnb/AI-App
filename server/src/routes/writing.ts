@@ -317,4 +317,49 @@ router.post("/generate", async (req: Request, res: Response) => {
   }
 });
 
+// ==================== AI智能创建书籍 ====================
+router.post("/generate-book", async (req: Request, res: Response) => {
+  try {
+    const { topic, style } = req.body;
+    const client = LLMClient.getInstance();
+    const systemPrompt =
+      "你是一个专业的书籍创作助手。根据用户提供的主题，生成一部小说的基本信息。";
+    const userPrompt = `请根据主题"${topic || "随机"}"${style ? `和风格"${style}"` : ""}生成一部小说，返回JSON格式：{
+      "title": "书名",
+      "category": "分类（玄幻/仙侠/言情/都市/悬疑/科幻/历史/游戏）",
+      "description": "书籍简介（50-100字）"
+    }`;
+
+    const result = await client.chat({
+      model: "doubao-seed-2-0-lite-260215",
+      messages: [
+        { role: "system" as const, content: systemPrompt },
+        { role: "user" as const, content: userPrompt },
+      ],
+      responseFormat: { type: "json_object" },
+    });
+
+    const bookInfo = JSON.parse(result.content);
+
+    const newBook: Book = {
+      id: generateId(),
+      title: bookInfo.title,
+      category: bookInfo.category || "其他",
+      status: "draft",
+      cover: "from-purple-500 to-blue-500",
+      coverImage: `/api/v1/static/images/covers/man/${(Math.floor(Math.random() * 16) + 1).toString()}.jpg`,
+      description: bookInfo.description || "",
+      createdAt: new Date().toISOString().split("T")[0],
+      wordCount: 0,
+      chapters: [],
+    };
+
+    books.unshift(newBook);
+    res.json({ success: true, data: newBook });
+  } catch (error) {
+    console.error("AI创建书籍失败:", error);
+    res.status(500).json({ success: false, message: "AI创建失败" });
+  }
+});
+
 export default router;
