@@ -38,13 +38,15 @@ const COVER_TEMPLATES = [
 // 真实封面图片列表（从后端静态文件服务获取）
 const COVER_IMAGES_MAN = Array.from({ length: 16 }, (_, i) => ({
   id: `man/${i + 1}.jpg`,
-  url: `${API_BASE}/static/images/covers/man/${i + 1}.jpg`,
+  url: `${API_BASE}/api/v1/static/images/covers/man/${i + 1}.jpg`,
+  path: `/api/v1/static/images/covers/man/${i + 1}.jpg`,
   label: `男频封面 ${i + 1}`,
 }));
 
 const COVER_IMAGES_WOMEN = Array.from({ length: 16 }, (_, i) => ({
   id: `women/${i + 1}.jpg`,
-  url: `${API_BASE}/static/images/covers/women/${i + 1}.jpg`,
+  url: `${API_BASE}/api/v1/static/images/covers/women/${i + 1}.jpg`,
+  path: `/api/v1/static/images/covers/women/${i + 1}.jpg`,
   label: `女频封面 ${i + 1}`,
 }));
 
@@ -436,11 +438,11 @@ export default function HomeScreen() {
                   ) : (
                     <View className="flex-row flex-wrap gap-2 mb-5">
                       {(coverType === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN).map((img) => {
-                        const selected = newCoverImage === img.url;
+                        const selected = newCoverImage === img.path;
                         return (
                           <TouchableOpacity
                             key={img.id}
-                            onPress={() => setNewCoverImage(img.url)}
+                            onPress={() => setNewCoverImage(img.path)}
                             className={`w-[22%] aspect-[3/4] rounded-xl overflow-hidden mb-2 ${
                               selected ? "border-2 border-primary-500" : ""
                             }`}

@@ -12,7 +12,7 @@ const books: Book[] = [
     category: "玄幻",
     status: "writing",
     cover: "from-purple-500 to-blue-500",
-    coverImage: "/static/images/covers/man/1.jpg",
+    coverImage: "/api/v1/static/images/covers/man/1.jpg",
     description:
       "谢峰，一个普通的996社畜，意外穿越到超神学院的世界，获得了阿拉德系统...",
     createdAt: "2026-05-01",
@@ -50,7 +50,7 @@ const books: Book[] = [
     category: "仙侠",
     status: "writing",
     cover: "from-green-500 to-teal-500",
-    coverImage: "/static/images/covers/man/3.jpg",
+    coverImage: "/api/v1/static/images/covers/man/3.jpg",
     description: "一个普通山村少年的修仙之路...",
     createdAt: "2026-05-10",
     wordCount: 85000,
