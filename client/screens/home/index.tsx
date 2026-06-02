@@ -204,135 +204,201 @@ export default function HomeScreen() {
     <Screen>
       <ScrollView
         className="flex-1 px-4"
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />
         }
       >
-        {/* 问候区 */}
-        <View className="flex-row items-center justify-between mt-2 mb-4">
+        {/* ===== 头部问候区 ===== */}
+        <View className="flex-row items-center justify-between mt-2 mb-5">
           <View>
-            <Text className="text-sm text-gray-500">{getGreeting()}，作者</Text>
-            <Text className="text-xl font-bold text-gray-800">开始今天的创作</Text>
+            <Text className="text-sm" style={{ color: "#8B5CF6" }}>{getGreeting()}，作者</Text>
+            <View className="flex-row items-baseline gap-1">
+              <Text className="text-2xl font-bold text-gray-800">开始创作</Text>
+              <Text className="text-2xl font-bold" style={{ color: "#6366F1" }}>·</Text>
+            </View>
           </View>
+          <TouchableOpacity
+            className="w-12 h-12 rounded-full items-center justify-center"
+            style={{
+              backgroundColor: "#EEF2FF",
+              shadowColor: "#6366F1",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
+          >
+            <FontAwesome6 name="pen-nib" size={20} color="#6366F1" />
+          </TouchableOpacity>
         </View>
 
-        {/* 创建新书按钮 */}
+        {/* ===== 创建新书按钮 - 渐变背景+图标 ===== */}
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
-          className="w-full p-5 rounded-2xl mb-4"
+          activeOpacity={0.9}
+          className="w-full rounded-2xl mb-5 overflow-hidden"
           style={{
-            backgroundColor: "#6366F1",
             shadowColor: "#6366F1",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 12,
-            elevation: 8,
+            shadowOffset: { width: 0, height: 6 },
+            shadowOpacity: 0.35,
+            shadowRadius: 16,
+            elevation: 10,
           }}
         >
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1">
-              <Text className="text-2xl font-bold text-white mb-1">+ 创建新书</Text>
-              <Text className="text-sm text-white/80">开始你的创作之旅</Text>
+          <View className="flex-row items-center p-5" style={{ backgroundColor: "#6366F1" }}>
+            <View className="w-14 h-14 rounded-2xl bg-white/15 items-center justify-center mr-4">
+              <FontAwesome6 name="feather" size={26} color="#FFFFFF" />
             </View>
-            <Text className="text-4xl opacity-80">B</Text>
+            <View className="flex-1">
+              <Text className="text-lg font-bold text-white mb-0.5">创建新书</Text>
+              <Text className="text-sm text-white/70">开启你的创作之旅</Text>
+            </View>
+            <View className="w-8 h-8 rounded-full bg-white/15 items-center justify-center">
+              <FontAwesome6 name="arrow-right" size={14} color="#FFFFFF" />
+            </View>
           </View>
+          {/* 底部装饰线 */}
+          <View className="h-1" style={{ backgroundColor: "#4F46E5" }} />
         </TouchableOpacity>
 
-        {/* 统计卡片 */}
-        <View className="flex-row gap-3 mb-4">
+        {/* ===== 统计卡片网格 ===== */}
+        <View className="flex-row gap-3 mb-5">
           <View className="flex-1 bg-white rounded-2xl p-4" style={{
             shadowColor: "#6366F1",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 2,
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.07,
+            shadowRadius: 10,
+            elevation: 3,
           }}>
-            <Text className="text-xs text-gray-500 mb-1">今日创作</Text>
-            <Text className="text-2xl font-bold text-primary-500">2,150</Text>
-            <Text className="text-xs text-gray-500">字</Text>
+            <View className="w-8 h-8 rounded-xl bg-primary-500/10 items-center justify-center mb-2">
+              <FontAwesome6 name="pen-to-square" size={14} color="#6366F1" />
+            </View>
+            <Text className="text-xs" style={{ color: "#94A3B8" }}>今日创作</Text>
+            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>2,150</Text>
+            <Text className="text-xs" style={{ color: "#CBD5E1" }}>字</Text>
           </View>
           <View className="flex-1 bg-white rounded-2xl p-4" style={{
-            shadowColor: "#6366F1",
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.06,
-            shadowRadius: 8,
-            elevation: 2,
+            shadowColor: "#8B5CF6",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.07,
+            shadowRadius: 10,
+            elevation: 3,
           }}>
-            <Text className="text-xs text-gray-500 mb-1">总作品</Text>
-            <Text className="text-2xl font-bold text-ai-500">{books.length}</Text>
-            <Text className="text-xs text-gray-500">本</Text>
+            <View className="w-8 h-8 rounded-xl bg-ai-500/10 items-center justify-center mb-2">
+              <FontAwesome6 name="fire" size={14} color="#8B5CF6" />
+            </View>
+            <Text className="text-xs" style={{ color: "#94A3B8" }}>连续创作</Text>
+            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>7</Text>
+            <Text className="text-xs" style={{ color: "#CBD5E1" }}>天</Text>
+          </View>
+          <View className="flex-1 bg-white rounded-2xl p-4" style={{
+            shadowColor: "#059669",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.07,
+            shadowRadius: 10,
+            elevation: 3,
+          }}>
+            <View className="w-8 h-8 rounded-xl bg-emerald-500/10 items-center justify-center mb-2">
+              <FontAwesome6 name="book" size={14} color="#059669" />
+            </View>
+            <Text className="text-xs" style={{ color: "#94A3B8" }}>作品总数</Text>
+            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>{books.length}</Text>
+            <Text className="text-xs" style={{ color: "#CBD5E1" }}>本</Text>
           </View>
         </View>
 
-        {/* 最近作品 */}
-        <View className="mb-4">
+        {/* ===== 最近作品 ===== */}
+        <View className="mb-5">
           <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base font-semibold text-gray-800">最近作品</Text>
-            <TouchableOpacity onPress={() => router.push("/works")}>
-              <Text className="text-sm text-primary-500 font-medium">查看全部 ›</Text>
+            <View className="flex-row items-center gap-2">
+              <View className="w-1 h-4 rounded-full" style={{ backgroundColor: "#6366F1" }} />
+              <Text className="text-base font-semibold" style={{ color: "#1E293B" }}>最近作品</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => router.push("/works")}
+              className="flex-row items-center gap-1 px-3 py-1.5 rounded-full"
+              style={{ backgroundColor: "#EEF2FF" }}
+            >
+              <Text className="text-xs font-medium" style={{ color: "#6366F1" }}>查看全部</Text>
+              <FontAwesome6 name="chevron-right" size={10} color="#6366F1" />
             </TouchableOpacity>
           </View>
           {books.length === 0 ? (
-            <View className="bg-white rounded-2xl p-8 items-center" style={{
+            <View className="bg-white rounded-2xl py-10 items-center" style={{
               shadowColor: "#000",
               shadowOffset: { width: 0, height: 2 },
               shadowOpacity: 0.04,
               shadowRadius: 8,
               elevation: 1,
             }}>
-              <Text className="text-4xl mb-3">B</Text>
-              <Text className="text-gray-500 text-sm">还没有作品，点击上方创建</Text>
+              <View className="w-16 h-16 rounded-2xl bg-gray-100 items-center justify-center mb-3">
+                <FontAwesome6 name="book-open" size={24} color="#94A3B8" />
+              </View>
+              <Text className="text-gray-400 text-sm">还没有作品，点击上方创建</Text>
             </View>
           ) : (
             <View className="space-y-3 gap-3">
               {books.slice(0, 3).map((book) => {
-                const [c1] = getCoverColors(book.cover);
+                const [c1, c2] = getCoverColors(book.cover);
                 return (
                   <TouchableOpacity
                     key={book.id}
                     onPress={() => router.push("/detail", { id: book.id })}
-                    className="bg-white rounded-2xl p-4 flex-row items-center gap-4"
+                    activeOpacity={0.7}
+                    className="bg-white rounded-2xl overflow-hidden"
                     style={{
                       shadowColor: "#6366F1",
                       shadowOffset: { width: 0, height: 2 },
                       shadowOpacity: 0.06,
-                      shadowRadius: 8,
-                      elevation: 2,
+                      shadowRadius: 10,
+                      elevation: 3,
                     }}
                   >
-                    {book.coverImage ? (
-                      <View className="w-16 h-20 rounded-xl overflow-hidden">
-                        <Image
-                          source={{ uri: `${API_BASE}${book.coverImage}` }}
-                          className="w-full h-full"
-                          resizeMode="cover"
-                        />
+                    <View className="flex-row">
+                      {/* 封面侧边条 */}
+                      {book.coverImage ? (
+                        <View className="w-20 h-24">
+                          <Image
+                            source={{ uri: `${API_BASE}${book.coverImage}` }}
+                            className="w-full h-full"
+                            resizeMode="cover"
+                          />
+                        </View>
+                      ) : (
+                        <View className="w-20 h-24 items-center justify-center" style={{ backgroundColor: c1 }}>
+                          <FontAwesome6 name="book" size={24} color="#FFFFFF" />
+                        </View>
+                      )}
+                      {/* 内容区域 */}
+                      <View className="flex-1 p-3.5 justify-between">
+                        <View>
+                          <Text className="font-semibold text-base" style={{ color: "#1E293B" }} numberOfLines={1}>
+                            {book.title}
+                          </Text>
+                          <Text className="text-xs mt-1" style={{ color: "#94A3B8" }}>
+                            {book.category} · {book.chapters.length}章
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center gap-2 mt-1">
+                          <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#EEF2FF" }}>
+                            <FontAwesome6 name="pen" size={8} color="#6366F1" />
+                            <Text className="text-xs font-medium" style={{ color: "#6366F1" }}>
+                              {formatWordCount(book.wordCount)}字
+                            </Text>
+                          </View>
+                          <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#F0FDF4" }}>
+                            <FontAwesome6 name="circle" size={6} color="#22C55E" />
+                            <Text className="text-xs" style={{ color: "#22C55E" }}>
+                              {getStatusText(book.status)}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
-                    ) : (
-                      <View
-                        className="w-16 h-20 rounded-xl items-center justify-center"
-                        style={{ backgroundColor: c1 }}
-                      >
-                        <Text className="text-2xl">{getCategoryIcon(book.category)}</Text>
-                      </View>
-                    )}
-                    <View className="flex-1">
-                      <Text className="font-semibold text-gray-800" numberOfLines={1}>
-                        {book.title}
-                      </Text>
-                      <Text className="text-xs text-gray-500 mt-1">
-                        {book.category} · {book.chapters.length}章
-                      </Text>
-                      <View className="flex-row items-center gap-2 mt-2">
-                        <Text className="px-2 py-0.5 bg-primary-500/10 text-primary-500 text-xs rounded-full">
-                          {formatWordCount(book.wordCount)}字
-                        </Text>
-                        <Text className="px-2 py-0.5 bg-primary-500/10 text-primary-500 text-xs rounded-full">
-                          {getStatusText(book.status)}
-                        </Text>
+                      <View className="justify-center pr-4">
+                        <FontAwesome6 name="chevron-right" size={12} color="#CBD5E1" />
                       </View>
                     </View>
-                    <Text className="text-gray-300">›</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -340,18 +406,42 @@ export default function HomeScreen() {
           )}
         </View>
 
-        {/* 写作建议 */}
-        <View className="bg-green-50 rounded-2xl p-4 mb-8">
-          <View className="flex-row items-center gap-3 mb-2">
-            <Text className="text-xl">I</Text>
-            <Text className="font-semibold text-gray-800">今日写作建议</Text>
+        {/* ===== 今日写作建议 ===== */}
+        <View className="rounded-2xl p-5 mb-8 overflow-hidden" style={{ backgroundColor: "#EEF2FF" }}>
+          <View className="flex-row items-center gap-3 mb-3">
+            <View className="w-9 h-9 rounded-xl bg-white items-center justify-center" style={{
+              shadowColor: "#6366F1",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 4,
+              elevation: 2,
+            }}>
+              <FontAwesome6 name="lightbulb" size={16} color="#6366F1" />
+            </View>
+            <View>
+              <Text className="font-semibold" style={{ color: "#1E293B" }}>今日写作建议</Text>
+              <Text className="text-xs" style={{ color: "#6366F1" }}>写作技巧</Text>
+            </View>
           </View>
-          <Text className="text-sm text-gray-600 leading-relaxed">
-            试着在每章结尾留下一个悬念或反转，这能有效提升读者的追读欲望。好的断章位置往往在冲突爆发前或真相揭晓时。
+          <Text className="text-sm leading-relaxed" style={{ color: "#475569" }}>
+            试着在每章结尾留下一个悬念或反转，这能有效提升读者的追读欲望。
+            好的断章位置往往在冲突爆发前或真相揭晓时。
           </Text>
+          <View className="flex-row items-center gap-2 mt-3">
+            <View className="flex-1 h-1.5 rounded-full bg-white/60" />
+            <TouchableOpacity className="px-3 py-1.5 rounded-lg bg-white" style={{
+              shadowColor: "#6366F1",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.08,
+              shadowRadius: 3,
+              elevation: 1,
+            }}>
+              <Text className="text-xs font-medium" style={{ color: "#6366F1" }}>换一条</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
-        <View className="h-4" />
+        <View className="h-6" />
       </ScrollView>
 
       {/* 创建新书 Modal */}
