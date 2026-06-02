@@ -233,7 +233,7 @@ router.get("/:id/chapters/:chapterId/export", (req: Request, res: Response) => {
 
 // === AI Dialogue (SSE) - Free-form chatting ===
 router.post("/ai-dialogue", async (req: Request, res: Response) => {
-  const { message } = req.body;
+  const { message, history } = req.body;
   if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -252,8 +252,8 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
 3. 当信息足够时（书名+类型+大纲雏形），主动提出帮用户创建书籍
 
 对话节奏：
-- 第一轮：用户给灵感 → 你给出3个书名建议，让用户选择或提供更详细的想法
-- 后续轮次：用户选择或补充 → 完善类型、简介、核心设定
+- 自由对话模式：用户可能提出任何创作相关的问题
+- 如果用户给了小说灵感，引导ta完善设定
 - 当信息充分时：生成完整大纲，通知用户准备好创建书籍
 
 回复格式（markdown）：
@@ -262,13 +262,25 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
 - 保持热情鼓励的语气
 - 每次回复末尾给出明确的下一步建议`;
 
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: message },
+    // Build message array with history context
+    const msgs: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: systemPrompt },
     ];
 
+    // Add conversation history if provided
+    if (Array.isArray(history)) {
+      for (const h of history) {
+        if (h.role && h.content && (h.role === "user" || h.role === "assistant")) {
+          msgs.push({ role: h.role, content: h.content });
+        }
+      }
+    }
+
+    // Add current message
+    msgs.push({ role: "user", content: message });
+
     const stream = client.stream(
-      messages,
+      msgs,
       { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
     );
 
