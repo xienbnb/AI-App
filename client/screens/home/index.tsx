@@ -285,7 +285,6 @@ export default function HomeScreen() {
             <View className="space-y-3 gap-3">
               {books.slice(0, 3).map((book) => {
                 const [c1] = getCoverColors(book.cover);
-                const showCoverImage = book.coverImage && book.cover !== "cover-image" === false;
                 return (
                   <TouchableOpacity
                     key={book.id}
