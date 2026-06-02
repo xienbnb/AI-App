@@ -8,11 +8,11 @@ import {
   TextInput,
   Modal,
   Platform,
+  Image,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
-  Image,
 } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";

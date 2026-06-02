@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -34,6 +35,19 @@ const COVER_TEMPLATES = [
   { id: "from-sky-400 to-blue-600", name: "深海渐变", icon: "O" },
 ];
 
+// 真实封面图片列表（从后端静态文件服务获取）
+const COVER_IMAGES_MAN = Array.from({ length: 16 }, (_, i) => ({
+  id: `man/${i + 1}.jpg`,
+  url: `${API_BASE}/static/images/covers/man/${i + 1}.jpg`,
+  label: `男频封面 ${i + 1}`,
+}));
+
+const COVER_IMAGES_WOMEN = Array.from({ length: 16 }, (_, i) => ({
+  id: `women/${i + 1}.jpg`,
+  url: `${API_BASE}/static/images/covers/women/${i + 1}.jpg`,
+  label: `女频封面 ${i + 1}`,
+}));
+
 const CATEGORIES = ["玄幻", "仙侠", "都市", "科幻", "历史"];
 
 interface Chapter {
@@ -50,6 +64,7 @@ interface Book {
   category: string;
   status: string;
   cover: string;
+  coverImage?: string;
   description: string;
   createdAt: string;
   wordCount: number;
@@ -105,6 +120,8 @@ export default function HomeScreen() {
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("玄幻");
   const [newCover, setNewCover] = useState("from-purple-500 to-blue-500");
+  const [newCoverImage, setNewCoverImage] = useState<string | null>(null);
+  const [coverType, setCoverType] = useState<"gradient" | "man" | "women">("gradient");
   const [newDesc, setNewDesc] = useState("");
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
@@ -157,7 +174,8 @@ export default function HomeScreen() {
         body: JSON.stringify({
           title: newTitle.trim(),
           category: newCategory,
-          cover: newCover,
+          cover: newCoverImage ? "cover-image" : newCover,
+          coverImage: newCoverImage,
           description: newDesc.trim() || "暂无简介",
         }),
       });
@@ -167,7 +185,9 @@ export default function HomeScreen() {
         setNewTitle("");
         setNewDesc("");
         setNewCover("from-purple-500 to-blue-500");
+        setNewCoverImage(null);
         setNewCategory("玄幻");
+        setCoverType("gradient");
         await fetchBooks();
         router.push("/detail", { id: json.data.id });
       }
@@ -264,7 +284,8 @@ export default function HomeScreen() {
           ) : (
             <View className="space-y-3 gap-3">
               {books.slice(0, 3).map((book) => {
-                const [c1, c2] = getCoverColors(book.cover);
+                const [c1] = getCoverColors(book.cover);
+                const showCoverImage = book.coverImage && book.cover !== "cover-image" === false;
                 return (
                   <TouchableOpacity
                     key={book.id}
@@ -278,12 +299,22 @@ export default function HomeScreen() {
                       elevation: 2,
                     }}
                   >
-                    <View
-                      className="w-16 h-20 rounded-xl items-center justify-center"
-                      style={{ backgroundColor: c1 }}
-                    >
-                      <Text className="text-2xl">{getCategoryIcon(book.category)}</Text>
-                    </View>
+                    {book.coverImage ? (
+                      <View className="w-16 h-20 rounded-xl overflow-hidden">
+                        <Image
+                          source={{ uri: `${API_BASE}${book.coverImage}` }}
+                          className="w-full h-full"
+                          resizeMode="cover"
+                        />
+                      </View>
+                    ) : (
+                      <View
+                        className="w-16 h-20 rounded-xl items-center justify-center"
+                        style={{ backgroundColor: c1 }}
+                      >
+                        <Text className="text-2xl">{getCategoryIcon(book.category)}</Text>
+                      </View>
+                    )}
                     <View className="flex-1">
                       <Text className="font-semibold text-gray-800" numberOfLines={1}>
                         {book.title}
@@ -358,25 +389,78 @@ export default function HomeScreen() {
                   />
 
                   {/* 封面选择 */}
-                  <Text className="text-sm font-medium text-gray-700 mb-2">选择封面</Text>
-                  <View className="flex-row flex-wrap gap-2 mb-5">
-                    {COVER_TEMPLATES.map((cover) => {
-                      const [c1, c2] = getCoverColors(cover.id);
-                      const selected = newCover === cover.id;
-                      return (
-                        <TouchableOpacity
-                          key={cover.id}
-                          onPress={() => setNewCover(cover.id)}
-                          className={`w-[22%] aspect-[3/4] rounded-xl items-center justify-center mb-2 ${
-                            selected ? "border-2 border-primary-500" : ""
-                          }`}
-                          style={{ backgroundColor: c1 }}
-                        >
-                          <Text className="text-xl">{cover.icon}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                  <Text className="text-sm font-medium text-gray-700 mb-3">选择封面</Text>
+                  
+                  {/* 封面类型切换 */}
+                  <View className="flex-row bg-gray-100 rounded-xl p-1 mb-4">
+                    {[
+                      { key: "gradient" as const, label: "渐变风格" },
+                      { key: "man" as const, label: "男频封面" },
+                      { key: "women" as const, label: "女频封面" },
+                    ].map((tab) => (
+                      <TouchableOpacity
+                        key={tab.key}
+                        onPress={() => { setCoverType(tab.key); setNewCoverImage(null); }}
+                        className={`flex-1 py-2 rounded-lg ${
+                          coverType === tab.key ? "bg-white shadow-sm" : ""
+                        }`}
+                      >
+                        <Text className={`text-center text-sm font-medium ${
+                          coverType === tab.key ? "text-primary-500" : "text-gray-500"
+                        }`}>
+                          {tab.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
+
+                  {/* 封面内容 */}
+                  {coverType === "gradient" ? (
+                    <View className="flex-row flex-wrap gap-2 mb-5">
+                      {COVER_TEMPLATES.map((cover) => {
+                        const [c1] = getCoverColors(cover.id);
+                        const selected = newCover === cover.id;
+                        return (
+                          <TouchableOpacity
+                            key={cover.id}
+                            onPress={() => { setNewCover(cover.id); setNewCoverImage(null); }}
+                            className={`w-[22%] aspect-[3/4] rounded-xl items-center justify-center mb-2 ${
+                              selected ? "border-2 border-primary-500" : ""
+                            }`}
+                            style={{ backgroundColor: c1 }}
+                          >
+                            <Text className="text-xl">{cover.icon}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View className="flex-row flex-wrap gap-2 mb-5">
+                      {(coverType === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN).map((img) => {
+                        const selected = newCoverImage === img.url;
+                        return (
+                          <TouchableOpacity
+                            key={img.id}
+                            onPress={() => setNewCoverImage(img.url)}
+                            className={`w-[22%] aspect-[3/4] rounded-xl overflow-hidden mb-2 ${
+                              selected ? "border-2 border-primary-500" : ""
+                            }`}
+                          >
+                            <Image
+                              source={{ uri: img.url }}
+                              className="w-full h-full"
+                              resizeMode="cover"
+                            />
+                            {selected && (
+                              <View className="absolute inset-0 bg-primary-500/20 items-center justify-center">
+                                <FontAwesome6 name="check" size={20} color="#6366F1" />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
 
                   {/* 分类选择 */}
                   <Text className="text-sm font-medium text-gray-700 mb-2">分类</Text>
