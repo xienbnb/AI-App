@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+  <style type="text/tailwindcss">
+    @theme { --color-primary: #6366F1; --color-primary-container: #EEF2FF; --color-on-primary: #ffffff;
+      --color-background: #F8FAFC; --color-surface-container-lowest: #FAFAFA;
+      --color-surface: #FFFFFF; --color-surface-container: #F1F5F9;
+      --color-surface-container-high: #E2E8F0; --color-surface-container-highest: #CBD5E1;
+      --color-on-surface: #1E293B; --color-on-surface-variant: #64748B;
+      --color-success: #10B981; --color-error: #EF4444; --color-warning: #F59E0B;
+      --color-outline: #CBD5E1; --color-outline-variant: #E2E8F0;
+      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem;
+      --radius-xl: 1rem; --radius-2xl: 1.5rem; --radius-full: 9999px;
+      --shadow-card: 0 4px 12px rgba(99,102,241,0.08);
+      --shadow-float: 0 10px 25px rgba(99,102,241,0.10);
+      --font-sans: system-ui, -apple-system, sans-serif; }
+  </style>
+  <style>
+    body { min-height: max(812px, 100dvh); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+    .slide-up { animation: slideUp 0.4s ease forwards; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .edit-field { transition: all 0.2s; }
+    .edit-field:hover { border-color: #6366F1; }
+  </style>
+</head>
+<body class="bg-background text-on-surface font-sans">
+  <header class="bg-background/95 backdrop-blur-sm sticky top-0 z-40 h-14 flex items-center justify-between px-4">
+    <button class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-xl hover:bg-surface-container"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+    <h1 class="text-base font-semibold">作品信息</h1>
+    <div class="w-10 h-10"></div>
+  </header>
+
+  <main class="px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+    <!-- 步骤指示器 (步骤4高亮) -->
+    <div class="flex items-center justify-center gap-2 mb-5 pt-2">
+      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-success/80 flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i></div><span class="text-xs text-success">灵感</span></div>
+      <div class="w-10 h-px bg-success/30"></div>
+      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-success/80 flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i></div><span class="text-xs text-success">配置</span></div>
+      <div class="w-10 h-px bg-success/30"></div>
+      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-success/80 flex items-center justify-center"><i data-lucide="check" class="w-3.5 h-3.5 text-white"></i></div><span class="text-xs text-success">大纲</span></div>
+      <div class="w-10 h-px bg-success/30"></div>
+      <div class="flex items-center gap-1.5"><div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center"><span class="text-white text-xs font-bold">4</span></div><span class="text-xs font-medium text-primary">成书</span></div>
+    </div>
+
+    <div class="slide-up space-y-4">
+      <!-- AI推荐 vs 手动切换提示 -->
+      <div class="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2.5">
+        <div class="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><i data-lucide="lightbulb" class="w-3.5 h-3.5 text-amber-600"></i></div>
+        <p class="text-xs text-amber-800 leading-relaxed">以下内容由AI根据大纲生成，你可以 <strong>直接编辑</strong> 或点击 <strong>换一个</strong> 使用AI重新生成</p>
+      </div>
+
+      <!-- 封面 -->
+      <div class="bg-surface rounded-2xl p-4 shadow-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold">封面</h3>
+          <button class="text-xs text-primary flex items-center gap-1"><i data-lucide="refresh-ccw" class="w-3 h-3"></i>AI生成封面</button>
+        </div>
+        <div class="w-full h-44 rounded-xl bg-gradient-to-br from-primary/10 via-violet-500/10 to-indigo-500/10 flex items-center justify-center border-2 border-dashed border-outline-variant">
+          <div class="text-center">
+            <i data-lucide="image-plus" class="w-8 h-8 text-on-surface-variant mx-auto mb-2"></i>
+            <p class="text-xs text-on-surface-variant">点击上传封面图片</p>
+            <p class="text-[10px] text-on-surface-variant mt-1">或使用AI生成</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 书名 -->
+      <div class="bg-surface rounded-2xl p-4 shadow-card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold">书名</h3>
+          <button class="text-xs text-primary flex items-center gap-1"><i data-lucide="refresh-ccw" class="w-3 h-3"></i>换一个</button>
+        </div>
+        <div class="flex items-center gap-2 bg-background rounded-xl px-4 py-3 edit-field border border-transparent">
+          <i data-lucide="book" class="w-4 h-4 text-primary flex-shrink-0"></i>
+          <input type="text" value="签到修仙：从废柴开始" class="flex-1 bg-transparent text-sm text-on-surface outline-none" />
+        </div>
+        <div class="flex gap-2 mt-2">
+          <span class="text-[10px] px-2 py-1 rounded-full bg-primary-container text-primary">玄幻</span>
+          <span class="text-[10px] px-2 py-1 rounded-full bg-rose-50 text-rose-600">男频</span>
+          <span class="text-[10px] px-2 py-1 rounded-full bg-blue-50 text-blue-600">长篇</span>
+        </div>
+      </div>
+
+      <!-- 简介 -->
+      <div class="bg-surface rounded-2xl p-4 shadow-card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold">简介</h3>
+          <button class="text-xs text-primary flex items-center gap-1"><i data-lucide="refresh-ccw" class="w-3 h-3"></i>换一个</button>
+        </div>
+        <div class="bg-background rounded-xl px-4 py-3 edit-field border border-transparent">
+          <textarea class="w-full min-h-[90px] bg-transparent text-sm text-on-surface outline-none resize-none leading-relaxed" rows="4">穿越到修真界的林辰意外觉醒了"签到系统"！每天签到就能获得修炼功法、丹药法宝、绝世机缘。当别人还在苦修时，他已经在签到中一步步走向巅峰。且看废柴如何在宗门中签到崛起，碾压天骄，最终飞升九天之上！</textarea>
+        </div>
+        <div class="flex justify-between mt-2">
+          <span class="text-[10px] text-on-surface-variant">建议 80-150 字，目前 96 字</span>
+          <span class="text-[10px] text-success">✓ 字数适中</span>
+        </div>
+      </div>
+
+      <!-- 作者 -->
+      <div class="bg-surface rounded-2xl p-4 shadow-card">
+        <div class="flex items-center justify-between mb-2">
+          <h3 class="text-sm font-semibold">作者署名</h3>
+        </div>
+        <div class="flex items-center gap-2 bg-background rounded-xl px-4 py-3 edit-field border border-transparent">
+          <i data-lucide="user" class="w-4 h-4 text-on-surface-variant flex-shrink-0"></i>
+          <input type="text" value="默言" placeholder="输入笔名" class="flex-1 bg-transparent text-sm text-on-surface outline-none" />
+        </div>
+      </div>
+
+      <!-- 操作按钮 -->
+      <div class="flex gap-3 pt-2 pb-6">
+        <button class="flex-1 h-12 rounded-2xl bg-surface border border-outline-variant text-on-surface font-medium text-sm">上一步</button>
+        <button class="flex-[2] h-12 rounded-2xl bg-gradient-to-r from-primary to-violet-500 text-white font-semibold text-sm shadow-[0_4px_16px_rgba(99,102,241,0.25)] active:scale-[0.98] transition-transform flex items-center justify-center gap-2">
+          完成创作
+          <i data-lucide="check" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>lucide.createIcons();</script>
+</body>
+</html>
