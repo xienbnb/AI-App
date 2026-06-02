@@ -13,27 +13,13 @@ import {
   Keyboard,
   Alert,
   Image,
+  ActionSheetIOS,
 } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { Screen } from "@/components/Screen";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
-
-const COVER_TEMPLATES = [
-  { id: "from-purple-500 to-blue-500", name: "紫蓝渐变", icon: "S" },
-  { id: "from-green-500 to-teal-500", name: "青绿渐变", icon: "M" },
-  { id: "from-rose-500 to-pink-500", name: "玫粉渐变", icon: "H" },
-  { id: "from-amber-500 to-orange-500", name: "金黄渐变", icon: "C" },
-  { id: "from-cyan-500 to-sky-500", name: "天蓝渐变", icon: "F" },
-  { id: "from-red-500 to-rose-500", name: "绯红渐变", icon: "K" },
-  { id: "from-indigo-500 to-purple-500", name: "靛紫渐变", icon: "N" },
-  { id: "from-emerald-500 to-green-500", name: "翡翠渐变", icon: "G" },
-  { id: "from-fuchsia-500 to-pink-500", name: "樱花渐变", icon: "P" },
-  { id: "from-violet-500 to-indigo-500", name: "堇紫渐变", icon: "L" },
-  { id: "from-slate-700 to-slate-900", name: "暗黑渐变", icon: "D" },
-  { id: "from-sky-400 to-blue-600", name: "深海渐变", icon: "O" },
-];
 
 // 真实封面图片列表（从后端静态文件服务获取）
 const COVER_IMAGES_MAN = Array.from({ length: 16 }, (_, i) => ({
@@ -86,46 +72,32 @@ function formatWordCount(count: number) {
   return count.toString();
 }
 
-function getCategoryIcon(category: string) {
-  const icons: Record<string, string> = { 玄幻: "S", 仙侠: "M", 都市: "C", 科幻: "F", 历史: "H" };
-  return icons[category] || "B";
-}
-
 function getStatusText(status: string) {
   const texts: Record<string, string> = { writing: "正在写", completed: "已完结", paused: "已暂停" };
   return texts[status] || "未知";
 }
 
-function getCoverColors(cover: string) {
-  const colors: Record<string, string[]> = {
-    "from-purple-500 to-blue-500": ["#8B5CF6", "#6366F1"],
-    "from-green-500 to-teal-500": ["#22C55E", "#14B8A6"],
-    "from-rose-500 to-pink-500": ["#F43F5E", "#EC4899"],
-    "from-amber-500 to-orange-500": ["#F59E0B", "#F97316"],
-    "from-cyan-500 to-sky-500": ["#06B6D4", "#0EA5E9"],
-    "from-red-500 to-rose-500": ["#EF4444", "#F43F5E"],
-    "from-indigo-500 to-purple-500": ["#6366F1", "#8B5CF6"],
-    "from-emerald-500 to-green-500": ["#10B981", "#22C55E"],
-    "from-fuchsia-500 to-pink-500": ["#D946EF", "#EC4899"],
-    "from-violet-500 to-indigo-500": ["#8B5CF6", "#6366F1"],
-    "from-slate-700 to-slate-900": ["#334155", "#0F172A"],
-    "from-sky-400 to-blue-600": ["#38BDF8", "#2563EB"],
-  };
-  return colors[cover] || ["#8B5CF6", "#6366F1"];
-}
+const DEFAULT_COVER = `${API_BASE}/api/v1/static/images/covers/man/1.jpg`;
 
 export default function HomeScreen() {
   const router = useSafeRouter();
   const [books, setBooks] = useState<Book[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // 创建弹窗
   const [modalVisible, setModalVisible] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newCategory, setNewCategory] = useState("玄幻");
-  const [newCover, setNewCover] = useState("from-purple-500 to-blue-500");
-  const [newCoverImage, setNewCoverImage] = useState<string | null>(null);
-  const [coverType, setCoverType] = useState<"gradient" | "man" | "women">("gradient");
+  const [newCoverImage, setNewCoverImage] = useState<string>(COVER_IMAGES_MAN[0].path);
+  const [coverType, setCoverType] = useState<"man" | "women">("man");
   const [newDesc, setNewDesc] = useState("");
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+
+  // 长按编辑弹窗
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editCategory, setEditCategory] = useState("玄幻");
+  const [editDesc, setEditDesc] = useState("");
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -152,15 +124,13 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await (async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/writing`);
-        const json = await res.json();
-        if (json.success) setBooks(json.data);
-      } catch (e) {
-        console.error("获取书籍列表失败", e);
-      }
-    })();
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing`);
+      const json = await res.json();
+      if (json.success) setBooks(json.data);
+    } catch (e) {
+      console.error("获取书籍列表失败", e);
+    }
     setRefreshing(false);
   }, []);
 
@@ -176,7 +146,7 @@ export default function HomeScreen() {
         body: JSON.stringify({
           title: newTitle.trim(),
           category: newCategory,
-          cover: newCoverImage ? "cover-image" : newCover,
+          cover: "cover-image",
           coverImage: newCoverImage,
           description: newDesc.trim() || "暂无简介",
         }),
@@ -186,16 +156,97 @@ export default function HomeScreen() {
         setModalVisible(false);
         setNewTitle("");
         setNewDesc("");
-        setNewCover("from-purple-500 to-blue-500");
-        setNewCoverImage(null);
+        setNewCoverImage(COVER_IMAGES_MAN[0].path);
         setNewCategory("玄幻");
-        setCoverType("gradient");
+        setCoverType("man");
         await fetchBooks();
         router.push("/detail", { id: json.data.id });
       }
     } catch (e) {
       Alert.alert("错误", "创建失败");
     }
+  };
+
+  // 长按处理
+  const handleLongPress = (book: Book) => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["取消", "编辑信息", "删除书籍"],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 2,
+        },
+        (index) => {
+          if (index === 1) openEditModal(book);
+          else if (index === 2) handleDeleteBook(book);
+        }
+      );
+    } else {
+      Alert.alert("操作", `《${book.title}》`, [
+        { text: "编辑信息", onPress: () => openEditModal(book) },
+        { text: "删除书籍", style: "destructive", onPress: () => handleDeleteBook(book) },
+        { text: "取消", style: "cancel" },
+      ]);
+    }
+  };
+
+  const openEditModal = (book: Book) => {
+    setEditingBook(book);
+    setEditTitle(book.title);
+    setEditCategory(book.category);
+    setEditDesc(book.description);
+    setEditModalVisible(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingBook || !editTitle.trim()) {
+      Alert.alert("提示", "书名不能为空");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${editingBook.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editTitle.trim(),
+          category: editCategory,
+          description: editDesc.trim() || "暂无简介",
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setEditModalVisible(false);
+        setEditingBook(null);
+        await fetchBooks();
+        Alert.alert("成功", "书籍信息已更新");
+      }
+    } catch (e) {
+      Alert.alert("错误", "更新失败");
+    }
+  };
+
+  const handleDeleteBook = (book: Book) => {
+    Alert.alert("确认删除", `确定要删除《${book.title}》吗？此操作不可恢复。`, [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, {
+              method: "DELETE",
+            });
+            const json = await res.json();
+            if (json.success) {
+              await fetchBooks();
+              Alert.alert("已删除", `《${book.title}》已删除`);
+            }
+          } catch (e) {
+            Alert.alert("错误", "删除失败");
+          }
+        },
+      },
+    ]);
   };
 
   const totalWords = books.reduce((sum, b) => sum + b.wordCount, 0);
@@ -215,7 +266,7 @@ export default function HomeScreen() {
             <Text className="text-sm" style={{ color: "#8B5CF6" }}>{getGreeting()}，作者</Text>
             <View className="flex-row items-baseline gap-1">
               <Text className="text-2xl font-bold text-gray-800">开始创作</Text>
-              <Text className="text-2xl font-bold" style={{ color: "#6366F1" }}>·</Text>
+              <Text className="text-2xl font-bold" style={{ color: "#6366F1" }}>.</Text>
             </View>
           </View>
           <TouchableOpacity
@@ -233,7 +284,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ===== 创建新书按钮 - 渐变背景+图标 ===== */}
+        {/* ===== 创建新书按钮 ===== */}
         <TouchableOpacity
           onPress={() => setModalVisible(true)}
           activeOpacity={0.9}
@@ -258,54 +309,35 @@ export default function HomeScreen() {
               <FontAwesome6 name="arrow-right" size={14} color="#FFFFFF" />
             </View>
           </View>
-          {/* 底部装饰线 */}
           <View className="h-1" style={{ backgroundColor: "#4F46E5" }} />
         </TouchableOpacity>
 
         {/* ===== 统计卡片网格 ===== */}
         <View className="flex-row gap-3 mb-5">
-          <View className="flex-1 bg-white rounded-2xl p-4" style={{
-            shadowColor: "#6366F1",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.07,
-            shadowRadius: 10,
-            elevation: 3,
-          }}>
-            <View className="w-8 h-8 rounded-xl bg-primary-500/10 items-center justify-center mb-2">
-              <FontAwesome6 name="pen-to-square" size={14} color="#6366F1" />
+          {[
+            { icon: "pen-to-square", color: "#6366F1", bgColor: "#EEF2FF", label: "今日创作", value: "2,150", unit: "字" },
+            { icon: "fire", color: "#8B5CF6", bgColor: "#F3E8FF", label: "连续创作", value: "7", unit: "天" },
+            { icon: "book", color: "#059669", bgColor: "#ECFDF5", label: "作品总数", value: books.length.toString(), unit: "本" },
+          ].map((stat, idx) => (
+            <View
+              key={idx}
+              className="flex-1 bg-white rounded-2xl p-4"
+              style={{
+                shadowColor: stat.color,
+                shadowOffset: { width: 0, height: 3 },
+                shadowOpacity: 0.07,
+                shadowRadius: 10,
+                elevation: 3,
+              }}
+            >
+              <View className="w-8 h-8 rounded-xl items-center justify-center mb-2" style={{ backgroundColor: stat.bgColor }}>
+                <FontAwesome6 name={stat.icon as any} size={14} color={stat.color} />
+              </View>
+              <Text className="text-xs" style={{ color: "#94A3B8" }}>{stat.label}</Text>
+              <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>{stat.value}</Text>
+              <Text className="text-xs" style={{ color: "#CBD5E1" }}>{stat.unit}</Text>
             </View>
-            <Text className="text-xs" style={{ color: "#94A3B8" }}>今日创作</Text>
-            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>2,150</Text>
-            <Text className="text-xs" style={{ color: "#CBD5E1" }}>字</Text>
-          </View>
-          <View className="flex-1 bg-white rounded-2xl p-4" style={{
-            shadowColor: "#8B5CF6",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.07,
-            shadowRadius: 10,
-            elevation: 3,
-          }}>
-            <View className="w-8 h-8 rounded-xl bg-ai-500/10 items-center justify-center mb-2">
-              <FontAwesome6 name="fire" size={14} color="#8B5CF6" />
-            </View>
-            <Text className="text-xs" style={{ color: "#94A3B8" }}>连续创作</Text>
-            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>7</Text>
-            <Text className="text-xs" style={{ color: "#CBD5E1" }}>天</Text>
-          </View>
-          <View className="flex-1 bg-white rounded-2xl p-4" style={{
-            shadowColor: "#059669",
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.07,
-            shadowRadius: 10,
-            elevation: 3,
-          }}>
-            <View className="w-8 h-8 rounded-xl bg-emerald-500/10 items-center justify-center mb-2">
-              <FontAwesome6 name="book" size={14} color="#059669" />
-            </View>
-            <Text className="text-xs" style={{ color: "#94A3B8" }}>作品总数</Text>
-            <Text className="text-xl font-bold mt-0.5" style={{ color: "#1E293B" }}>{books.length}</Text>
-            <Text className="text-xs" style={{ color: "#CBD5E1" }}>本</Text>
-          </View>
+          ))}
         </View>
 
         {/* ===== 最近作品 ===== */}
@@ -338,70 +370,63 @@ export default function HomeScreen() {
               <Text className="text-gray-400 text-sm">还没有作品，点击上方创建</Text>
             </View>
           ) : (
-            <View className="space-y-3 gap-3">
-              {books.slice(0, 3).map((book) => {
-                const [c1, c2] = getCoverColors(book.cover);
-                return (
-                  <TouchableOpacity
-                    key={book.id}
-                    onPress={() => router.push("/detail", { id: book.id })}
-                    activeOpacity={0.7}
-                    className="bg-white rounded-2xl overflow-hidden"
-                    style={{
-                      shadowColor: "#6366F1",
-                      shadowOffset: { width: 0, height: 2 },
-                      shadowOpacity: 0.06,
-                      shadowRadius: 10,
-                      elevation: 3,
-                    }}
-                  >
-                    <View className="flex-row">
-                      {/* 封面侧边条 */}
-                      {book.coverImage ? (
-                        <View className="w-20 h-24">
-                          <Image
-                            source={{ uri: `${API_BASE}${book.coverImage}` }}
-                            className="w-full h-full"
-                            resizeMode="cover"
-                          />
-                        </View>
-                      ) : (
-                        <View className="w-20 h-24 items-center justify-center" style={{ backgroundColor: c1 }}>
-                          <FontAwesome6 name="book" size={24} color="#FFFFFF" />
-                        </View>
-                      )}
-                      {/* 内容区域 */}
-                      <View className="flex-1 p-3.5 justify-between">
-                        <View>
-                          <Text className="font-semibold text-base" style={{ color: "#1E293B" }} numberOfLines={1}>
-                            {book.title}
-                          </Text>
-                          <Text className="text-xs mt-1" style={{ color: "#94A3B8" }}>
-                            {book.category} · {book.chapters.length}章
-                          </Text>
-                        </View>
-                        <View className="flex-row items-center gap-2 mt-1">
-                          <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#EEF2FF" }}>
-                            <FontAwesome6 name="pen" size={8} color="#6366F1" />
-                            <Text className="text-xs font-medium" style={{ color: "#6366F1" }}>
-                              {formatWordCount(book.wordCount)}字
-                            </Text>
-                          </View>
-                          <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#F0FDF4" }}>
-                            <FontAwesome6 name="circle" size={6} color="#22C55E" />
-                            <Text className="text-xs" style={{ color: "#22C55E" }}>
-                              {getStatusText(book.status)}
-                            </Text>
-                          </View>
-                        </View>
+            <View className="gap-3">
+              {books.slice(0, 5).map((book) => (
+                <TouchableOpacity
+                  key={book.id}
+                  onPress={() => router.push("/detail", { id: book.id })}
+                  onLongPress={() => handleLongPress(book)}
+                  delayLongPress={500}
+                  activeOpacity={0.7}
+                  className="bg-white rounded-2xl overflow-hidden"
+                  style={{
+                    shadowColor: "#6366F1",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.06,
+                    shadowRadius: 10,
+                    elevation: 3,
+                  }}
+                >
+                  <View className="flex-row">
+                    {/* 封面 */}
+                    <View className="w-20 h-24">
+                      <Image
+                        source={{ uri: `${API_BASE}${book.coverImage || "/api/v1/static/images/covers/man/1.jpg"}` }}
+                        className="w-full h-full"
+                        resizeMode="cover"
+                      />
+                    </View>
+                    {/* 内容 */}
+                    <View className="flex-1 p-3.5 justify-between">
+                      <View>
+                        <Text className="font-semibold text-base" style={{ color: "#1E293B" }} numberOfLines={1}>
+                          {book.title}
+                        </Text>
+                        <Text className="text-xs mt-1" style={{ color: "#94A3B8" }}>
+                          {book.category} · {book.chapters.length}章
+                        </Text>
                       </View>
-                      <View className="justify-center pr-4">
-                        <FontAwesome6 name="chevron-right" size={12} color="#CBD5E1" />
+                      <View className="flex-row items-center gap-2 mt-1">
+                        <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#EEF2FF" }}>
+                          <FontAwesome6 name="pen" size={8} color="#6366F1" />
+                          <Text className="text-xs font-medium" style={{ color: "#6366F1" }}>
+                            {formatWordCount(book.wordCount)}字
+                          </Text>
+                        </View>
+                        <View className="flex-row items-center gap-1 px-2 py-0.5 rounded-full" style={{ backgroundColor: "#F0FDF4" }}>
+                          <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: book.status === "completed" ? "#22C55E" : book.status === "paused" ? "#F59E0B" : "#6366F1" }} />
+                          <Text className="text-xs" style={{ color: "#22C55E" }}>
+                            {getStatusText(book.status)}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-                  </TouchableOpacity>
-                );
-              })}
+                    <View className="justify-center pr-4">
+                      <FontAwesome6 name="chevron-right" size={12} color="#CBD5E1" />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
         </View>
@@ -444,7 +469,7 @@ export default function HomeScreen() {
         <View className="h-6" />
       </ScrollView>
 
-      {/* 创建新书 Modal */}
+      {/* ===== 创建新书 Modal ===== */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === "web"}>
           <KeyboardAvoidingView
@@ -466,7 +491,7 @@ export default function HomeScreen() {
                       onPress={() => setModalVisible(false)}
                       className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
                     >
-                      <Text className="text-gray-400">x</Text>
+                      <FontAwesome6 name="xmark" size={16} color="#94A3B8" />
                     </TouchableOpacity>
                   </View>
 
@@ -481,77 +506,50 @@ export default function HomeScreen() {
 
                   {/* 封面选择 */}
                   <Text className="text-sm font-medium text-gray-700 mb-3">选择封面</Text>
-                  
                   {/* 封面类型切换 */}
                   <View className="flex-row bg-gray-100 rounded-xl p-1 mb-4">
                     {[
-                      { key: "gradient" as const, label: "渐变风格" },
                       { key: "man" as const, label: "男频封面" },
                       { key: "women" as const, label: "女频封面" },
                     ].map((tab) => (
                       <TouchableOpacity
                         key={tab.key}
-                        onPress={() => { setCoverType(tab.key); setNewCoverImage(null); }}
-                        className={`flex-1 py-2 rounded-lg ${
-                          coverType === tab.key ? "bg-white shadow-sm" : ""
-                        }`}
+                        onPress={() => { setCoverType(tab.key); setNewCoverImage(tab.key === "man" ? COVER_IMAGES_MAN[0].path : COVER_IMAGES_WOMEN[0].path); }}
+                        className={`flex-1 py-2 rounded-lg ${coverType === tab.key ? "bg-white shadow-sm" : ""}`}
                       >
-                        <Text className={`text-center text-sm font-medium ${
-                          coverType === tab.key ? "text-primary-500" : "text-gray-500"
-                        }`}>
+                        <Text className={`text-center text-sm font-medium ${coverType === tab.key ? "text-primary-500" : "text-gray-500"}`}>
                           {tab.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
 
-                  {/* 封面内容 */}
-                  {coverType === "gradient" ? (
-                    <View className="flex-row flex-wrap gap-2 mb-5">
-                      {COVER_TEMPLATES.map((cover) => {
-                        const [c1] = getCoverColors(cover.id);
-                        const selected = newCover === cover.id;
-                        return (
-                          <TouchableOpacity
-                            key={cover.id}
-                            onPress={() => { setNewCover(cover.id); setNewCoverImage(null); }}
-                            className={`w-[22%] aspect-[3/4] rounded-xl items-center justify-center mb-2 ${
-                              selected ? "border-2 border-primary-500" : ""
-                            }`}
-                            style={{ backgroundColor: c1 }}
-                          >
-                            <Text className="text-xl">{cover.icon}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ) : (
-                    <View className="flex-row flex-wrap gap-2 mb-5">
-                      {(coverType === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN).map((img) => {
-                        const selected = newCoverImage === img.path;
-                        return (
-                          <TouchableOpacity
-                            key={img.id}
-                            onPress={() => setNewCoverImage(img.path)}
-                            className={`w-[22%] aspect-[3/4] rounded-xl overflow-hidden mb-2 ${
-                              selected ? "border-2 border-primary-500" : ""
-                            }`}
-                          >
-                            <Image
-                              source={{ uri: img.url }}
-                              className="w-full h-full"
-                              resizeMode="cover"
-                            />
-                            {selected && (
-                              <View className="absolute inset-0 bg-primary-500/20 items-center justify-center">
-                                <FontAwesome6 name="check" size={20} color="#6366F1" />
-                              </View>
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  )}
+                  {/* 封面网格 */}
+                  <View className="flex-row flex-wrap gap-2 mb-5">
+                    {(coverType === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN).map((img) => {
+                      const selected = newCoverImage === img.path;
+                      return (
+                        <TouchableOpacity
+                          key={img.id}
+                          onPress={() => setNewCoverImage(img.path)}
+                          className={`w-[22%] aspect-[3/4] rounded-xl overflow-hidden mb-2 ${
+                            selected ? "border-2 border-primary-500" : ""
+                          }`}
+                        >
+                          <Image
+                            source={{ uri: img.url }}
+                            className="w-full h-full"
+                            resizeMode="cover"
+                          />
+                          {selected && (
+                            <View className="absolute inset-0 bg-primary-500/20 items-center justify-center">
+                              <FontAwesome6 name="check" size={20} color="#6366F1" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
                   {/* 分类选择 */}
                   <Text className="text-sm font-medium text-gray-700 mb-2">分类</Text>
@@ -560,17 +558,9 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         key={cat}
                         onPress={() => setNewCategory(cat)}
-                        className={`px-4 py-2 rounded-xl ${
-                          newCategory === cat
-                            ? "bg-primary-500"
-                            : "bg-gray-100"
-                        }`}
+                        className={`px-4 py-2 rounded-xl ${newCategory === cat ? "bg-primary-500" : "bg-gray-100"}`}
                       >
-                        <Text
-                          className={`text-sm font-medium ${
-                            newCategory === cat ? "text-white" : "text-gray-700"
-                          }`}
-                        >
+                        <Text className={`text-sm font-medium ${newCategory === cat ? "text-white" : "text-gray-700"}`}>
                           {cat}
                         </Text>
                       </TouchableOpacity>
@@ -597,6 +587,100 @@ export default function HomeScreen() {
                     <Text className="text-white text-center font-bold">创建作品</Text>
                   </TouchableOpacity>
                 </ScrollView>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* ===== 编辑书籍 Modal ===== */}
+      <Modal visible={editModalVisible} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === "web"}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+          >
+            <View className="flex-1 justify-end bg-black/50">
+              <View className="bg-white rounded-t-3xl p-6 max-h-[75%]" style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 20,
+                elevation: 10,
+              }}>
+                <View className="flex-row items-center justify-between mb-6">
+                  <Text className="text-xl font-bold text-gray-800">编辑书籍</Text>
+                  <TouchableOpacity
+                    onPress={() => setEditModalVisible(false)}
+                    className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                  >
+                    <FontAwesome6 name="xmark" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* 封面预览 */}
+                {editingBook && (
+                  <View className="flex-row items-center gap-4 mb-5">
+                    <Image
+                      source={{ uri: `${API_BASE}${editingBook.coverImage || "/api/v1/static/images/covers/man/1.jpg"}` }}
+                      className="w-16 h-20 rounded-xl"
+                      resizeMode="cover"
+                    />
+                    <View className="flex-1">
+                      <Text className="font-semibold text-gray-800">{editingBook.title}</Text>
+                      <Text className="text-xs text-gray-400 mt-1">ID: {editingBook.id}</Text>
+                    </View>
+                  </View>
+                )}
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">书名</Text>
+                <TextInput
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="输入书名"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 mb-5 text-gray-800"
+                />
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">分类</Text>
+                <View className="flex-row flex-wrap gap-2 mb-5">
+                  {CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat}
+                      onPress={() => setEditCategory(cat)}
+                      className={`px-4 py-2 rounded-xl ${editCategory === cat ? "bg-primary-500" : "bg-gray-100"}`}
+                    >
+                      <Text className={`text-sm font-medium ${editCategory === cat ? "text-white" : "text-gray-700"}`}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">简介</Text>
+                <TextInput
+                  value={editDesc}
+                  onChangeText={setEditDesc}
+                  placeholder="简介..."
+                  multiline
+                  numberOfLines={3}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 mb-6 text-gray-800"
+                />
+
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    onPress={() => setEditModalVisible(false)}
+                    className="flex-1 py-4 rounded-xl bg-gray-100"
+                  >
+                    <Text className="text-gray-700 text-center font-medium">取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={handleEditSave}
+                    className="flex-1 py-4 rounded-xl"
+                    style={{ backgroundColor: "#6366F1" }}
+                  >
+                    <Text className="text-white text-center font-bold">保存</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </KeyboardAvoidingView>

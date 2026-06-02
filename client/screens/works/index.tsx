@@ -1,14 +1,14 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  RefreshControl,
   TextInput,
   Modal,
   Platform,
   Image,
+  RefreshControl,
   KeyboardAvoidingView,
   TouchableWithoutFeedback,
   Keyboard,
@@ -28,28 +28,22 @@ const CATEGORY_ICONS: Record<string, string> = {
   科幻: "rocket",
   历史: "scroll",
 };
-const CATEGORY_EMOJIS: Record<string, string> = {
-  玄幻: "S",
-  仙侠: "M",
-  都市: "C",
-  科幻: "F",
-  历史: "H",
-};
 
-const COVER_TEMPLATES = [
-  { id: "from-purple-500 to-blue-500", name: "紫蓝渐变", colors: ["#8B5CF6", "#6366F1"] },
-  { id: "from-green-500 to-teal-500", name: "青绿渐变", colors: ["#22C55E", "#14B8A6"] },
-  { id: "from-rose-500 to-pink-500", name: "玫粉渐变", colors: ["#F43F5E", "#EC4899"] },
-  { id: "from-amber-500 to-orange-500", name: "金黄渐变", colors: ["#F59E0B", "#F97316"] },
-  { id: "from-cyan-500 to-sky-500", name: "天蓝渐变", colors: ["#06B6D4", "#0EA5E9"] },
-  { id: "from-red-500 to-rose-500", name: "绯红渐变", colors: ["#EF4444", "#F43F5E"] },
-  { id: "from-indigo-500 to-purple-500", name: "靛紫渐变", colors: ["#6366F1", "#8B5CF6"] },
-  { id: "from-emerald-500 to-green-500", name: "翡翠渐变", colors: ["#10B981", "#22C55E"] },
-  { id: "from-fuchsia-500 to-pink-500", name: "樱花渐变", colors: ["#D946EF", "#EC4899"] },
-  { id: "from-violet-500 to-indigo-500", name: "堇紫渐变", colors: ["#8B5CF6", "#6366F1"] },
-  { id: "from-slate-700 to-slate-900", name: "暗黑渐变", colors: ["#334155", "#0F172A"] },
-  { id: "from-sky-400 to-blue-600", name: "深海渐变", colors: ["#38BDF8", "#2563EB"] },
-];
+const COVER_IMAGES_MAN = Array.from({ length: 16 }, (_, i) => ({
+  id: `man_${i + 1}`,
+  path: `/api/v1/static/images/covers/man/${i + 1}.jpg`,
+  url: `${API_BASE}/api/v1/static/images/covers/man/${i + 1}.jpg`,
+  type: "man" as const,
+}));
+
+const COVER_IMAGES_WOMEN = Array.from({ length: 16 }, (_, i) => ({
+  id: `women_${i + 1}`,
+  path: `/api/v1/static/images/covers/women/${i + 1}.jpg`,
+  url: `${API_BASE}/api/v1/static/images/covers/women/${i + 1}.jpg`,
+  type: "women" as const,
+}));
+
+const ALL_COVERS = [...COVER_IMAGES_MAN, ...COVER_IMAGES_WOMEN];
 
 function formatWordCount(count: number) {
   if (count >= 10000) return (count / 10000).toFixed(1) + "万";
@@ -58,14 +52,9 @@ function formatWordCount(count: number) {
 }
 
 function getStatusText(status: string) {
-  const texts: Record<string, string> = { writing: "正在写", completed: "已完结", paused: "已暂停" };
+  const texts: Record<string, string> = { writing: "连载中", completed: "已完结", paused: "已暂停" };
   return texts[status] || "未知";
 }
-
-const getCoverColors = (cover: string): [string, string] => {
-  const found = COVER_TEMPLATES.find((t) => t.id === cover);
-  return found ? (found.colors as [string, string]) : ["#8B5CF6", "#6366F1"];
-};
 
 interface Book {
   id: string;
@@ -80,17 +69,204 @@ interface Book {
   chapters: { id: string; title: string }[];
 }
 
+/** 长按操作面板 */
+function BookActionSheet({
+  visible,
+  book,
+  onClose,
+  onEdit,
+  onDelete,
+}: {
+  visible: boolean;
+  book: Book | null;
+  onClose: () => void;
+  onEdit: (book: Book) => void;
+  onDelete: (book: Book) => void;
+}) {
+  if (!book) return null;
+  return (
+    <Modal visible={visible} transparent animationType="fade">
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/30">
+          <TouchableWithoutFeedback>
+            <View className="bg-white rounded-t-[28px] px-6 pt-6 pb-10">
+              <View className="items-center mb-4">
+                <View className="w-10 h-1 rounded-full bg-gray-300 mb-4" />
+                <Text className="text-base font-bold text-gray-800">{book.title}</Text>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => { onClose(); onEdit(book); }}
+                className="flex-row items-center gap-4 py-4 border-b border-gray-100"
+              >
+                <View className="w-10 h-10 rounded-full bg-primary-500/10 items-center justify-center">
+                  <FontAwesome6 name="pen-to-square" size={18} color="#6366F1" />
+                </View>
+                <View>
+                  <Text className="text-base font-medium text-gray-800">编辑书籍</Text>
+                  <Text className="text-xs text-gray-500 mt-0.5">修改书名、简介、分类</Text>
+                </View>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  onClose();
+                  Alert.alert("确认删除", `确定要删除「${book.title}」吗？所有章节内容将永久丢失。`, [
+                    { text: "取消", style: "cancel" },
+                    { text: "删除", style: "destructive", onPress: () => onDelete(book) },
+                  ]);
+                }}
+                className="flex-row items-center gap-4 py-4"
+              >
+                <View className="w-10 h-10 rounded-full bg-red-50 items-center justify-center">
+                  <FontAwesome6 name="trash-can" size={18} color="#EF4444" />
+                </View>
+                <View>
+                  <Text className="text-base font-medium text-red-500">删除书籍</Text>
+                  <Text className="text-xs text-gray-500 mt-0.5">不可恢复的操作</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
+/** 编辑书籍弹窗 */
+function EditBookModal({
+  visible,
+  book,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  book: Book | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [category, setCategory] = useState("玄幻");
+  const [status, setStatus] = useState("writing");
+  const [submitting, setSubmitting] = useState(false);
+
+  // 当 book 变化时同步数据
+  useEffect(() => {
+    if (book) {
+      setTitle(book.title);
+      setDescription(book.description);
+      setCategory(book.category);
+      setStatus(book.status);
+    }
+  }, [book]);
+
+  const handleSave = async () => {
+    if (!title.trim() || !book) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: title.trim(), description: description.trim(), category, status }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        onClose();
+        onSaved();
+      }
+    } catch (e) {
+      Alert.alert("错误", "保存失败");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const categories = ["玄幻", "仙侠", "都市", "科幻", "历史"];
+  const statuses = [
+    { key: "writing", label: "连载中" },
+    { key: "completed", label: "已完结" },
+    { key: "paused", label: "已暂停" },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide">
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === "web"}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <View className="flex-1 justify-end bg-black/40">
+            <View
+              className="bg-white rounded-t-[32px] px-6 pt-6 pb-8"
+              style={{
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: -4 },
+                shadowOpacity: 0.1,
+                shadowRadius: 24,
+                elevation: 10,
+              }}
+            >
+              <View className="flex-row items-center justify-between mb-5">
+                <View className="flex-row items-center gap-2">
+                  <View className="w-9 h-9 rounded-full bg-primary-500/10 items-center justify-center">
+                    <FontAwesome6 name="pen-to-square" size={16} color="#6366F1" />
+                  </View>
+                  <Text className="text-lg font-bold text-gray-800">编辑书籍</Text>
+                </View>
+                <TouchableOpacity onPress={onClose} className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center">
+                  <FontAwesome6 name="xmark" size={16} color="#6B7280" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView className="max-h-[420px]" showsVerticalScrollIndicator={false}>
+                <Text className="text-sm font-medium text-gray-700 mb-2">书名</Text>
+                <TextInput value={title} onChangeText={setTitle} placeholder="输入书名" className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4" />
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">分类</Text>
+                <View className="flex-row flex-wrap gap-2 mb-4">
+                  {categories.map((cat) => (
+                    <TouchableOpacity key={cat} onPress={() => setCategory(cat)}
+                      className={`px-4 py-2 rounded-full ${category === cat ? "bg-primary-500" : "bg-gray-100"}`}>
+                      <Text className={`text-sm font-medium ${category === cat ? "text-white" : "text-gray-600"}`}>{cat}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">状态</Text>
+                <View className="flex-row flex-wrap gap-2 mb-4">
+                  {statuses.map((s) => (
+                    <TouchableOpacity key={s.key} onPress={() => setStatus(s.key)}
+                      className={`px-4 py-2 rounded-full ${status === s.key ? "bg-primary-500" : "bg-gray-100"}`}>
+                      <Text className={`text-sm font-medium ${status === s.key ? "text-white" : "text-gray-600"}`}>{s.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text className="text-sm font-medium text-gray-700 mb-2">简介</Text>
+                <TextInput value={description} onChangeText={setDescription} placeholder="简介..." multiline numberOfLines={2} className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4 min-h-[64px]" />
+              </ScrollView>
+
+              <TouchableOpacity onPress={handleSave} disabled={submitting} className="w-full py-4 rounded-2xl mt-3" style={{ backgroundColor: "#6366F1" }}>
+                <Text className="text-white text-center font-bold text-base">{submitting ? "保存中..." : "保存修改"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 /** 单本书籍卡片组件 */
 function BookCard({
   book,
   onPress,
+  onLongPress,
 }: {
   book: Book;
   onPress: () => void;
+  onLongPress: () => void;
 }) {
-  const [c1, c2] = getCoverColors(book.cover);
   const catIcon = CATEGORY_ICONS[book.category] || "book";
-  const catEmoji = CATEGORY_EMOJIS[book.category] || "B";
   const chapterCount = book.chapters ? book.chapters.length : 0;
   const statusColor =
     book.status === "writing"
@@ -102,6 +278,8 @@ function BookCard({
   return (
     <TouchableOpacity
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={500}
       activeOpacity={0.85}
       className="bg-white rounded-3xl overflow-hidden"
       style={{
@@ -112,7 +290,7 @@ function BookCard({
         elevation: 3,
       }}
     >
-      {/* 封面 - 有图片则展示图片，否则用渐变 */}
+      {/* 封面 - 仅展示真实图片 */}
       {book.coverImage ? (
         <View className="h-44 relative">
           <Image
@@ -122,52 +300,27 @@ function BookCard({
           />
           <View className="absolute inset-0 bg-black/20" />
           <View className="absolute bottom-3 left-4">
-            <Text className="text-white/80 text-xs font-medium tracking-wider">
-              {book.category}
-            </Text>
-            <Text
-              className="text-white font-bold text-base mt-0.5"
-              numberOfLines={1}
-            >
-              {book.title}
-            </Text>
+            <Text className="text-white/80 text-xs font-medium tracking-wider">{book.category}</Text>
+            <Text className="text-white font-bold text-base mt-0.5" numberOfLines={1}>{book.title}</Text>
           </View>
         </View>
       ) : (
-        <View
-          className="px-5 py-6"
-          style={{ backgroundColor: c1 }}
-        >
-          <View className="items-center">
-            <FontAwesome6 name={catIcon} size={32} color="rgba(255,255,255,0.9)" />
-            <Text className="text-white/80 text-xs mt-2 font-medium tracking-wider">
-              {book.category}
-            </Text>
-            <Text
-              className="text-white font-bold text-base mt-1 text-center"
-              numberOfLines={1}
-            >
-              {book.title}
-            </Text>
-          </View>
+        <View className="h-44 bg-gradient-to-br from-indigo-400 to-purple-500 items-center justify-center">
+          <FontAwesome6 name={catIcon} size={40} color="rgba(255,255,255,0.7)" />
+          <Text className="text-white/80 text-xs mt-2 font-medium">{book.category}</Text>
+          <Text className="text-white font-bold text-base mt-1" numberOfLines={1}>{book.title}</Text>
         </View>
       )}
 
       {/* 底部信息 */}
       <View className="px-4 py-3.5 bg-white">
-        <Text className="text-xs text-gray-500 leading-relaxed" numberOfLines={2}>
-          {book.description}
-        </Text>
+        <Text className="text-xs text-gray-500 leading-relaxed" numberOfLines={2}>{book.description}</Text>
         <View className="flex-row items-center justify-between mt-3">
           <View className="flex-row items-center gap-1.5">
             <View className="px-2 py-0.5 rounded-full bg-primary-500/10">
-              <Text className="text-primary-500 text-[10px] font-medium">
-                {getStatusText(book.status)}
-              </Text>
+              <Text className="text-primary-500 text-[10px] font-medium">{getStatusText(book.status)}</Text>
             </View>
-            <Text className="text-[10px] text-gray-400">
-              {chapterCount}章 · {formatWordCount(book.wordCount)}字
-            </Text>
+            <Text className="text-[10px] text-gray-400">{chapterCount}章 · {formatWordCount(book.wordCount)}字</Text>
           </View>
           <Text className="text-[10px] text-gray-400">{book.createdAt}</Text>
         </View>
@@ -189,14 +342,15 @@ function NewBookModal({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("玄幻");
-  const [selectedCover, setSelectedCover] = useState("from-purple-500 to-blue-500");
+  const [coverTab, setCoverTab] = useState<"man" | "women">("man");
+  const [selectedCoverId, setSelectedCoverId] = useState<string>(COVER_IMAGES_MAN[0].id);
   const [submitting, setSubmitting] = useState(false);
 
+  const currentCovers = coverTab === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN;
+  const selectedCover = ALL_COVERS.find((c) => c.id === selectedCoverId);
+
   const handleCreate = async () => {
-    if (!title.trim()) {
-      Alert.alert("提示", "请输入书名");
-      return;
-    }
+    if (!title.trim()) { Alert.alert("提示", "请输入书名"); return; }
     setSubmitting(true);
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing`, {
@@ -206,23 +360,18 @@ function NewBookModal({
           title: title.trim(),
           description: description.trim(),
           category,
-          cover: selectedCover,
+          cover: "cover-image",
+          coverImage: selectedCover?.path || "",
         }),
       });
       const json = await res.json();
       if (json.success) {
-        setTitle("");
-        setDescription("");
-        setCategory("玄幻");
-        setSelectedCover("from-purple-500 to-blue-500");
-        onClose();
-        onCreated();
+        setTitle(""); setDescription(""); setCategory("玄幻");
+        setSelectedCoverId(COVER_IMAGES_MAN[0].id);
+        onClose(); onCreated();
       }
-    } catch (e) {
-      Alert.alert("错误", "创建失败");
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (e) { Alert.alert("错误", "创建失败"); }
+    finally { setSubmitting(false); }
   };
 
   const categories = ["玄幻", "仙侠", "都市", "科幻", "历史"];
@@ -230,22 +379,10 @@ function NewBookModal({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} disabled={Platform.OS === "web"}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
           <View className="flex-1 justify-end bg-black/40">
-            <View
-              className="bg-white rounded-t-[32px] px-6 pt-6 pb-8"
-              style={{
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: -4 },
-                shadowOpacity: 0.1,
-                shadowRadius: 24,
-                elevation: 10,
-              }}
-            >
-              {/* 头部 */}
+            <View className="bg-white rounded-t-[32px] px-6 pt-6 pb-8"
+              style={{ shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.1, shadowRadius: 24, elevation: 10 }}>
               <View className="flex-row items-center justify-between mb-5">
                 <View className="flex-row items-center gap-2">
                   <View className="w-9 h-9 rounded-full bg-primary-500/10 items-center justify-center">
@@ -253,107 +390,65 @@ function NewBookModal({
                   </View>
                   <Text className="text-lg font-bold text-gray-800">创建新书</Text>
                 </View>
-                <TouchableOpacity
-                  onPress={onClose}
-                  className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
-                >
+                <TouchableOpacity onPress={onClose} className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center">
                   <FontAwesome6 name="xmark" size={16} color="#6B7280" />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView className="max-h-[420px]" showsVerticalScrollIndicator={false}>
-                {/* 书名 */}
+              <ScrollView className="max-h-[480px]" showsVerticalScrollIndicator={false}>
                 <Text className="text-sm font-medium text-gray-700 mb-2">书名</Text>
-                <TextInput
-                  value={title}
-                  onChangeText={setTitle}
-                  placeholder="输入书名"
-                  className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4"
-                />
+                <TextInput value={title} onChangeText={setTitle} placeholder="输入书名"
+                  className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4" />
 
-                {/* 封面选择 */}
                 <Text className="text-sm font-medium text-gray-700 mb-2">选择封面</Text>
-                <View className="mb-4 -mx-2">
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row gap-2.5 px-2">
-                    {COVER_TEMPLATES.map((cover) => {
-                      const [c1] = cover.colors;
-                      const selected = selectedCover === cover.id;
-                      return (
-                        <TouchableOpacity
-                          key={cover.id}
-                          onPress={() => setSelectedCover(cover.id)}
-                          className="items-center gap-1"
-                        >
-                          <View
-                            className="w-16 h-22 rounded-xl items-center justify-center"
-                            style={{
-                              backgroundColor: c1,
-                              width: 60,
-                              height: 85,
-                              borderRadius: 12,
-                              borderWidth: selected ? 3 : 0,
-                              borderColor: selected ? "#6366F1" : "transparent",
-                            }}
-                          >
-                            <FontAwesome6
-                              name={CATEGORY_ICONS[category] || "book"}
-                              size={20}
-                              color="rgba(255,255,255,0.85)"
-                            />
-                          </View>
-                          <Text className="text-[10px] text-gray-500 mt-0.5">{cover.name}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </ScrollView>
+                {/* 封面切换标签 */}
+                <View className="flex-row gap-2 mb-3">
+                  <TouchableOpacity onPress={() => setCoverTab("man")}
+                    className={`px-4 py-2 rounded-full ${coverTab === "man" ? "bg-primary-500" : "bg-gray-100"}`}>
+                    <Text className={`text-sm font-medium ${coverTab === "man" ? "text-white" : "text-gray-600"}`}>男频封面</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setCoverTab("women")}
+                    className={`px-4 py-2 rounded-full ${coverTab === "women" ? "bg-primary-500" : "bg-gray-100"}`}>
+                    <Text className={`text-sm font-medium ${coverTab === "women" ? "text-white" : "text-gray-600"}`}>女频封面</Text>
+                  </TouchableOpacity>
+                </View>
+                {/* 封面网格 */}
+                <View className="flex-row flex-wrap gap-2.5 mb-4">
+                  {currentCovers.map((cover) => {
+                    const selected = selectedCoverId === cover.id;
+                    return (
+                      <TouchableOpacity key={cover.id} onPress={() => setSelectedCoverId(cover.id)}>
+                        <View className={`rounded-xl overflow-hidden ${selected ? "border-2 border-primary-500" : ""}`}>
+                          <Image source={{ uri: cover.url }} className="w-[68px] h-[96px]" resizeMode="cover" />
+                          {selected && (
+                            <View className="absolute top-1 right-1 w-5 h-5 rounded-full bg-primary-500 items-center justify-center">
+                              <FontAwesome6 name="check" size={10} color="white" />
+                            </View>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
 
-                {/* 分类 */}
                 <Text className="text-sm font-medium text-gray-700 mb-2">分类</Text>
                 <View className="flex-row flex-wrap gap-2 mb-4">
                   {categories.map((cat) => (
-                    <TouchableOpacity
-                      key={cat}
-                      onPress={() => setCategory(cat)}
-                      className={`px-4 py-2 rounded-full ${
-                        category === cat ? "bg-primary-500" : "bg-gray-100"
-                      }`}
-                    >
-                      <Text
-                        className={`text-sm font-medium ${
-                          category === cat ? "text-white" : "text-gray-600"
-                        }`}
-                      >
-                        {cat}
-                      </Text>
+                    <TouchableOpacity key={cat} onPress={() => setCategory(cat)}
+                      className={`px-4 py-2 rounded-full ${category === cat ? "bg-primary-500" : "bg-gray-100"}`}>
+                      <Text className={`text-sm font-medium ${category === cat ? "text-white" : "text-gray-600"}`}>{cat}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
 
-                {/* 简介 */}
                 <Text className="text-sm font-medium text-gray-700 mb-2">一句话简介</Text>
-                <TextInput
-                  value={description}
-                  onChangeText={setDescription}
-                  placeholder="简介..."
-                  multiline
-                  numberOfLines={2}
-                  className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4 min-h-[64px]"
-                />
+                <TextInput value={description} onChangeText={setDescription} placeholder="简介..." multiline numberOfLines={2}
+                  className="w-full px-4 py-3.5 rounded-2xl bg-gray-50 text-gray-800 mb-4 min-h-[64px]" />
               </ScrollView>
 
-              {/* 创建按钮 */}
-              <TouchableOpacity
-                onPress={handleCreate}
-                disabled={submitting}
-                className="w-full py-4 rounded-2xl mt-3"
-                style={{ backgroundColor: "#6366F1" }}
-              >
-                <Text className="text-white text-center font-bold text-base">
-                  {submitting ? "创建中..." : "创建作品"}
-                </Text>
+              <TouchableOpacity onPress={handleCreate} disabled={submitting}
+                className="w-full py-4 rounded-2xl mt-3" style={{ backgroundColor: "#6366F1" }}>
+                <Text className="text-white text-center font-bold text-base">{submitting ? "创建中..." : "创建作品"}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -368,6 +463,10 @@ export default function WorksScreen() {
   const [books, setBooks] = useState<Book[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [actionBook, setActionBook] = useState<Book | null>(null);
+  const [actionVisible, setActionVisible] = useState(false);
+  const [editBook, setEditBook] = useState<Book | null>(null);
+  const [editVisible, setEditVisible] = useState(false);
   const [pageInfo, setPageInfo] = useState({ total: 0, totalWords: 0 });
 
   const fetchBooks = useCallback(async () => {
@@ -380,83 +479,83 @@ export default function WorksScreen() {
         const totalWords = json.data.reduce((sum: number, b: Book) => sum + (b.wordCount || 0), 0);
         setPageInfo({ total, totalWords });
       }
-    } catch (e) {
-      console.error("获取作品列表失败", e);
-    }
+    } catch (e) { console.error("获取作品列表失败", e); }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchBooks();
-    }, [fetchBooks])
-  );
+  useFocusEffect(useCallback(() => { fetchBooks(); }, [fetchBooks]));
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await fetchBooks();
-    setRefreshing(false);
+    setRefreshing(true); await fetchBooks(); setRefreshing(false);
   }, [fetchBooks]);
+
+  const handleDelete = async (book: Book) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (json.success) fetchBooks();
+    } catch (e) { Alert.alert("错误", "删除失败"); }
+  };
+
+  const handleLongPress = (book: Book) => {
+    setActionBook(book);
+    setActionVisible(true);
+  };
+
+  const handleEdit = (book: Book) => {
+    setEditBook(book);
+    setEditVisible(true);
+  };
 
   return (
     <Screen>
-      <ScrollView
-        className="flex-1 px-4"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />
-        }
-      >
+      <ScrollView className="flex-1 px-4"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6366F1" />}>
         {/* 顶部统计 */}
         <View className="flex-row items-center justify-between mt-2 mb-5">
           <View>
             <Text className="text-2xl font-bold text-gray-800">作品</Text>
-            <Text className="text-sm text-gray-500 mt-0.5">
-              共 {pageInfo.total} 本 · {formatWordCount(pageInfo.totalWords)}字
-            </Text>
+            <Text className="text-sm text-gray-500 mt-0.5">共 {pageInfo.total} 本 · {formatWordCount(pageInfo.totalWords)}字</Text>
           </View>
-          <TouchableOpacity
-            onPress={() => setModalVisible(true)}
-            className="px-5 py-3 rounded-2xl flex-row items-center gap-2"
-            style={{ backgroundColor: "#6366F1" }}
-          >
+          <TouchableOpacity onPress={() => setModalVisible(true)}
+            className="px-5 py-3 rounded-2xl flex-row items-center gap-2" style={{ backgroundColor: "#6366F1" }}>
             <FontAwesome6 name="plus" size={14} color="white" />
             <Text className="text-white text-sm font-bold">新书</Text>
           </TouchableOpacity>
         </View>
 
-        {/* 书籍列表 */}
         {books.length === 0 ? (
           <View className="items-center py-20">
             <View className="w-20 h-20 rounded-full bg-primary-500/10 items-center justify-center mb-4">
               <FontAwesome6 name="book-open" size={32} color="#6366F1" />
             </View>
             <Text className="text-base text-gray-500 mb-2">还没有作品</Text>
-            <TouchableOpacity
-              onPress={() => setModalVisible(true)}
-              className="px-6 py-3 rounded-xl"
-              style={{ backgroundColor: "#6366F1" }}
-            >
+            <TouchableOpacity onPress={() => setModalVisible(true)}
+              className="px-6 py-3 rounded-xl" style={{ backgroundColor: "#6366F1" }}>
               <Text className="text-white font-medium">创建你的第一本书</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <View className="gap-4 pb-4">
             {books.map((book) => (
-              <BookCard
-                key={book.id}
-                book={book}
+              <BookCard key={book.id} book={book}
                 onPress={() => router.push("/detail", { id: book.id })}
+                onLongPress={() => handleLongPress(book)}
               />
             ))}
           </View>
         )}
-
         <View className="h-8" />
       </ScrollView>
 
-      <NewBookModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        onCreated={fetchBooks}
+      <NewBookModal visible={modalVisible} onClose={() => setModalVisible(false)} onCreated={fetchBooks} />
+      <BookActionSheet visible={actionVisible} book={actionBook}
+        onClose={() => setActionVisible(false)}
+        onEdit={(book) => { setEditBook(book); setEditVisible(true); }}
+        onDelete={handleDelete}
+      />
+      <EditBookModal visible={editVisible} book={editBook}
+        onClose={() => { setEditVisible(false); setEditBook(null); }}
+        onSaved={() => { setEditBook(null); fetchBooks(); }}
       />
     </Screen>
   );
