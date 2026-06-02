@@ -95,7 +95,7 @@ router.get("/:id", (req: Request, res: Response) => {
 });
 
 router.post("/", (req: Request, res: Response) => {
-  const { title, description, cover, coverImage, category } = req.body;
+  const { title, description, cover, coverImage, category, volumes } = req.body;
   if (!title) return res.status(400).json({ success: false, message: "书名不能为空" });
   const newBook: Book = {
     id: generateId(), title, category: category || "其他", status: "draft",
@@ -104,7 +104,21 @@ router.post("/", (req: Request, res: Response) => {
     description: description || "",
     createdAt: new Date().toISOString().split("T")[0],
     wordCount: 0,
-    volumes: [{ id: generateId(), title: "第一卷", order: 1, chapters: [] }],
+    volumes: volumes && volumes.length > 0
+      ? volumes.map((v: any, vi: number) => ({
+          id: v.id || generateId(),
+          title: v.title || `第${vi + 1}卷`,
+          order: v.order || vi + 1,
+          chapters: (v.chapters || []).map((c: any, ci: number) => ({
+            id: c.id || generateId(),
+            title: c.title || `第${ci + 1}章`,
+            wordCount: c.wordCount || 0,
+            createdAt: c.createdAt || new Date().toISOString().split("T")[0],
+            content: c.content || "",
+            volumeId: v.id || "",
+          })),
+        }))
+      : [{ id: generateId(), title: "第一卷", order: 1, chapters: [] }],
   };
   books.unshift(newBook);
   res.json({ success: true, data: newBook });
