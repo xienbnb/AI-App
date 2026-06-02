@@ -1,80 +1,92 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Dimensions } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
+import { FontAwesome6 } from "@expo/vector-icons";
 
-const FEATURES = [
-  { icon: "S", title: "智能润色", desc: "优化表达，更具文采", gradient: ["#8B5CF6", "#EC4899"] },
-  { icon: "G", title: "扩写缩写", desc: "扩展或压缩内容", gradient: ["#22C55E", "#14B8A6"] },
-  { icon: "I", title: "灵感生成", desc: "激发创作灵感", gradient: ["#F59E0B", "#F97316"] },
-  { icon: "M", title: "人设生成", desc: "快速生成人物设定", gradient: ["#06B6D4", "#0EA5E9"] },
-  { icon: "R", title: "大纲助手", desc: "智能搭建故事框架", gradient: ["#F43F5E", "#EF4444"] },
-  { icon: "Y", title: "AI检测", desc: "检测AI生成概率", gradient: ["#6366F1", "#8B5CF6"] },
+const { width } = Dimensions.get("window");
+const CARD_WIDTH = (width - 48) / 2;
+
+const TOOLS = [
+  { icon: "users", title: "AI角色库", desc: "快速生成原创角色", color: "#8B5CF6", bgColor: "#F3E8FF", route: "/ai-character" },
+  { icon: "sitemap", title: "大纲助手", desc: "智能搭建故事框架", color: "#06B6D4", bgColor: "#CFFAFE", route: "/ai-outline" },
+  { icon: "image", title: "封面生成器", desc: "AI 生成精美封面", color: "#F43F5E", bgColor: "#FFE4E6", route: "/ai-cover" },
+  { icon: "magnifying-glass", title: "AI检测", desc: "检测AI生成概率", color: "#F59E0B", bgColor: "#FEF3C7", route: "/ai-detect" },
+  { icon: "map", title: "地图生成器", desc: "生成奇幻世界地图", color: "#10B981", bgColor: "#D1FAE5", route: "/ai-map" },
+  { icon: "palette", title: "图片生成", desc: "生成小说精美插画", color: "#EC4899", bgColor: "#FCE7F3", route: "/ai-image-gen" },
+  { icon: "circle-nodes", title: "人物关系网", desc: "角色关系网络分析", color: "#6366F1", bgColor: "#E0E7FF", route: "/ai-relationship" },
+  { icon: "file-pen", title: "智能润色", desc: "优化表达提升文采", color: "#14B8A6", bgColor: "#CCFBF1", route: "/ai-character" },
+  { icon: "arrows-left-right", title: "扩写缩写", desc: "扩展或压缩内容", color: "#8B5CF6", bgColor: "#EDE9FE", route: "/ai-outline" },
+  { icon: "lightbulb", title: "灵感生成", desc: "激发创作灵感", color: "#F97316", bgColor: "#FFEDD5", route: "/ai-outline" },
 ];
 
 export default function AIWorkshopScreen() {
   const router = useSafeRouter();
 
+  const navigateTo = (route: string, title: string) => {
+    router.push(route as any);
+  };
+
   return (
     <Screen>
       <ScrollView className="flex-1 px-4">
-        {/* 头部Banner */}
-        <View
-          className="rounded-2xl p-5 mt-2 mb-4"
-          style={{
-            backgroundColor: "#6366F1",
-            shadowColor: "#6366F1",
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 12,
-            elevation: 8,
-          }}
+        {/* Header Banner */}
+        <View className="rounded-2xl p-6 mt-2 mb-5 overflow-hidden"
+          style={{ backgroundColor: "#6366F1" }}
         >
-          <View className="flex-row items-center justify-between mb-4">
-            <View className="flex-1">
+          {/* Decorative circles */}
+          <View className="absolute -top-6 -right-6 w-24 h-24 rounded-full opacity-20" style={{ backgroundColor: "#FFFFFF" }} />
+          <View className="absolute -bottom-4 -left-4 w-16 h-16 rounded-full opacity-10" style={{ backgroundColor: "#FFFFFF" }} />
+
+          <View className="flex-row items-center mb-4">
+            <View className="w-12 h-12 rounded-2xl items-center justify-center" style={{ backgroundColor: "rgba(255,255,255,0.2)" }}>
+              <FontAwesome6 name="wand-magic-sparkles" size={22} color="white" />
+            </View>
+            <View className="ml-3 flex-1">
               <Text className="text-xl font-bold text-white">AI 写作工坊</Text>
-              <Text className="text-sm text-white/80 mt-1">智能辅助，创作无忧</Text>
+              <Text className="text-sm text-white/80">智能辅助，创作无忧</Text>
             </View>
-            <Text className="text-4xl">A</Text>
           </View>
-          <View className="flex-row items-center justify-between">
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-white">98%</Text>
-              <Text className="text-xs text-white/80">AI检测通过率</Text>
+
+          <View className="flex-row items-center justify-between mt-2">
+            <View className="items-center flex-1">
+              <Text className="text-xl font-bold text-white">12</Text>
+              <Text className="text-xs text-white/80">AI工具</Text>
             </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-white">1000+</Text>
-              <Text className="text-xs text-white/80">模板可用</Text>
+            <View className="w-px h-8 bg-white/20" />
+            <View className="items-center flex-1">
+              <Text className="text-xl font-bold text-white">98%</Text>
+              <Text className="text-xs text-white/80">通过率</Text>
             </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold text-white">24/7</Text>
-              <Text className="text-xs text-white/80">全天服务</Text>
+            <View className="w-px h-8 bg-white/20" />
+            <View className="items-center flex-1">
+              <Text className="text-xl font-bold text-white">1000+</Text>
+              <Text className="text-xs text-white/80">模板</Text>
             </View>
           </View>
         </View>
 
-        {/* 功能网格 */}
-        <View className="flex-row flex-wrap gap-3 mb-8">
-          {FEATURES.map((feature) => (
+        {/* Tool Grid */}
+        <View className="flex-row flex-wrap justify-between mb-8">
+          {TOOLS.map((tool) => (
             <TouchableOpacity
-              key={feature.title}
-              onPress={() => router.push("/report")}
-              className="w-[48%] bg-white rounded-2xl p-4"
+              key={tool.title}
+              onPress={() => navigateTo(tool.route, tool.title)}
+              className="bg-white rounded-2xl p-4 mb-3"
               style={{
-                shadowColor: "#6366F1",
+                width: CARD_WIDTH,
+                shadowColor: tool.color,
                 shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.04,
+                shadowOpacity: 0.08,
                 shadowRadius: 8,
-                elevation: 1,
+                elevation: 2,
               }}
             >
-              <View
-                className="w-10 h-10 rounded-xl items-center justify-center mb-3"
-                style={{ backgroundColor: feature.gradient[0] }}
-              >
-                <Text className="text-lg text-white">{feature.icon}</Text>
+              <View className="w-10 h-10 rounded-xl items-center justify-center mb-3"
+                style={{ backgroundColor: tool.bgColor }}>
+                <FontAwesome6 name={tool.icon as any} size={18} color={tool.color} />
               </View>
-              <Text className="font-semibold text-sm text-gray-800 mb-1">{feature.title}</Text>
-              <Text className="text-xs text-gray-500">{feature.desc}</Text>
+              <Text className="font-semibold text-sm text-gray-800 mb-1">{tool.title}</Text>
+              <Text className="text-xs text-gray-500">{tool.desc}</Text>
             </TouchableOpacity>
           ))}
         </View>
