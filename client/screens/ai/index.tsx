@@ -18,6 +18,13 @@ const TOOLS = [
   { icon: "arrows-left-right", title: "扩写缩写", desc: "扩展或压缩内容", color: "#8B5CF6", bgColor: "#EDE9FE", route: "/ai-outline" },
   { icon: "lightbulb", title: "灵感生成", desc: "激发创作灵感", color: "#F97316", bgColor: "#FFEDD5", route: "/ai-outline" },
 ];
+const KNOWLEDGE_BASES = [
+  { name: "世界观库", icon: "globe", color: "#6366F1", count: 0 },
+  { name: "人物库", icon: "users", color: "#F59E0B", count: 0 },
+  { name: "大纲库", icon: "layers", color: "#10B981", count: 0 },
+  { name: "素材库", icon: "archive", color: "#EC4899", count: 0 },
+];
+
 
 export default function AIWorkshopScreen() {
   const router = useSafeRouter();
@@ -90,6 +97,27 @@ export default function AIWorkshopScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+          {/* 知识库 */}
+          <View className="mt-6 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <View className="flex-row justify-between items-center mb-4">
+              <Text className="text-base font-bold text-gray-900">知识库</Text>
+              <TouchableOpacity>
+                <Text className="text-xs text-indigo-500 font-medium">查看全部</Text>
+              </TouchableOpacity>
+            </View>
+            <View className="flex-row flex-wrap">
+              {KNOWLEDGE_BASES.map((kb, idx) => (
+                <TouchableOpacity key={idx}
+                  className="w-1/2 p-3 rounded-xl mb-2"
+                  style={{ backgroundColor: kb.color + "0f" }}>
+                  <FontAwesome6 name={kb.icon} size={18} color={kb.color} />
+                  <Text className="text-sm font-semibold text-gray-800 mt-1.5">{kb.name}</Text>
+                  <Text className="text-xs text-gray-500 mt-0.5">{kb.count} 个条目</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
       </ScrollView>
     </Screen>
   );

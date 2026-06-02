@@ -93,12 +93,6 @@ const SKILL_LIST = [
   { name: "爆款简介", icon: "L", desc: "生成爆款简介与章节标题" },
 ];
 
-const KNOWLEDGE_BASES = [
-  { label: "世界观库", subtitle: "完整世界设定", icon: "globe", color: "bg-amber-50 text-amber-600" },
-  { label: "人物库", subtitle: "角色档案", icon: "users", color: "bg-rose-50 text-rose-600" },
-  { label: "大纲库", subtitle: "已完成大纲", icon: "list", color: "bg-blue-50 text-blue-600" },
-  { label: "素材库", subtitle: "写作素材", icon: "box", color: "bg-emerald-50 text-emerald-600" },
-];
 
 const GENRE_OPTIONS = [
   { label: "玄幻", icon: "dragon", color: "bg-purple-50 text-purple-700 border-purple-200" },
@@ -762,26 +756,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Knowledge Base */}
-        <View className="mt-4 bg-white rounded-2xl p-5 shadow-sm">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-base font-bold text-gray-900">知识库</Text>
-            <Text className="text-xs text-indigo-500">管理</Text>
-          </View>
-          <View className="flex-row flex-wrap gap-3">
-            {KNOWLEDGE_BASES.map((kb) => (
-              <TouchableOpacity key={kb.label} className="flex-row items-center gap-3 bg-gray-50 rounded-xl p-3.5 flex-1 min-w-[140px]">
-                <View className={`w-9 h-9 rounded-lg items-center justify-center ${kb.color.split(" ")[0]}`}>
-                  <FontAwesome6 name={kb.icon as any} size={15} color={kb.color.includes("amber") ? "#D97706" : kb.color.includes("rose") ? "#E11D48" : kb.color.includes("blue") ? "#2563EB" : kb.color.includes("emerald") ? "#059669" : "#6366F1"} />
-                </View>
-                <View>
-                  <Text className="text-sm font-medium text-gray-900">{kb.label}</Text>
-                  <Text className="text-xs text-gray-400">{kb.subtitle}</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
       </View>
     </ScrollView>
   );
