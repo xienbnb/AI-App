@@ -30,12 +30,6 @@ type CreationStep =
   | "creating"
   | "completed";
 
-interface ChapterOutline {
-  index: number;
-  title: string;
-  summary: string;
-}
-
 // ===== Genre/Audience/Platform/Length Options =====
 const GENRE_OPTIONS = [
   { label: "玄幻", icon: "dragon", color: "bg-purple-50 text-purple-700 border-purple-200" },
@@ -153,11 +147,12 @@ export default function HomeScreen() {
   >([]);
 
   // Outline
-  const [outlineChapters, setOutlineChapters] = useState<ChapterOutline[]>([]);
+  const [outlineVolumes, setOutlineVolumes] = useState<{ id: string; title: string; summary: string; chapters: { title: string; summary: string }[] }[]>([]);
   const [outlineAnalysis, setOutlineAnalysis] = useState("");
   const [outlineFullText, setOutlineFullText] = useState("");
-  const [editingChapterIdx, setEditingChapterIdx] = useState<number | null>(null);
+  const [editingChapter, setEditingChapter] = useState<{ volIdx: number; chIdx: number } | null>(null);
   const [editingChapterText, setEditingChapterText] = useState("");
+  const [expandedVolumes, setExpandedVolumes] = useState<Set<number>>(new Set([0]));
 
   // Details
   const [bookTitle, setBookTitle] = useState("");
@@ -281,9 +276,19 @@ export default function HomeScreen() {
         if (parsed.type === "outline") {
           setStreamContent((prev) => prev + parsed.content);
         } else if (parsed.type === "outline_complete") {
-          setOutlineChapters(parsed.chapters || []);
+          const vols = (parsed.volumes || []).map((v: any, vi: number) => ({
+            id: `vol-${Date.now()}-${vi}`,
+            title: v.title || `第${vi + 1}卷`,
+            summary: v.summary || "",
+            chapters: (v.chapters || []).map((c: any) => ({
+              title: c.title || "",
+              summary: c.summary || "",
+            })),
+          }));
+          setOutlineVolumes(vols.length > 0 ? vols : []);
           setOutlineAnalysis(parsed.analysis || "");
           setOutlineFullText(parsed.fullOutline || streamContent);
+          setExpandedVolumes(new Set(vols.length > 0 ? vols.map((_: any, i: number) => i) : [0]));
           setStep("reviewing_outline");
           setLoading(false);
         }
@@ -300,24 +305,36 @@ export default function HomeScreen() {
   };
 
   // ===== Step 4: Edit Outline =====
-  const handleEditChapter = (idx: number) => {
-    setEditingChapterIdx(idx);
-    const ch = outlineChapters[idx];
-    setEditingChapterText(`${ch.title} - ${ch.summary}`);
+  const handleEditChapter = (volIdx: number, chIdx: number) => {
+    setEditingChapter({ volIdx, chIdx });
+    const ch = outlineVolumes[volIdx]?.chapters[chIdx];
+    if (ch) {
+      setEditingChapterText(`${ch.title} - ${ch.summary}`);
+    }
   };
 
   const handleSaveChapterEdit = () => {
-    if (editingChapterIdx === null) return;
+    if (!editingChapter) return;
+    const { volIdx, chIdx } = editingChapter;
     const parts = editingChapterText.split("-").map((s) => s.trim());
-    const updated = [...outlineChapters];
-    updated[editingChapterIdx] = {
-      ...updated[editingChapterIdx],
-      title: parts[0] || updated[editingChapterIdx].title,
-      summary: parts[1] || updated[editingChapterIdx].summary,
-    };
-    setOutlineChapters(updated);
-    setEditingChapterIdx(null);
+    const updated = [...outlineVolumes];
+    const ch = { ...updated[volIdx].chapters[chIdx] };
+    ch.title = parts[0] || ch.title;
+    ch.summary = parts[1] || ch.summary;
+    updated[volIdx] = { ...updated[volIdx], chapters: [...updated[volIdx].chapters] };
+    updated[volIdx].chapters[chIdx] = ch;
+    setOutlineVolumes(updated);
+    setEditingChapter(null);
     setEditingChapterText("");
+  };
+
+  const toggleVolume = (vi: number) => {
+    setExpandedVolumes((prev) => {
+      const next = new Set(prev);
+      if (next.has(vi)) next.delete(vi);
+      else next.add(vi);
+      return next;
+    });
   };
 
   const handleConfirmOutline = () => {
@@ -333,7 +350,7 @@ export default function HomeScreen() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         outline: outlineFullText,
-        chapters: outlineChapters,
+        volumes: outlineVolumes,
         genre,
         inspiration,
       }),
@@ -384,17 +401,17 @@ export default function HomeScreen() {
     setLoadingText("正在创建作品...");
 
     try {
-      const chapterList = outlineChapters.map((ch) => ({
-        id: Date.now().toString() + Math.random().toString(36).substring(2, 8),
-        title: ch.title,
-        wordCount: 0,
-        createdAt: new Date().toISOString().split("T")[0],
-        content: "",
-        volumeId: "",
+      const volumes = outlineVolumes.map((v) => ({
+        id: `${Date.now().toString(36)}_v${outlineVolumes.indexOf(v)}`,
+        title: v.title,
+        order: outlineVolumes.indexOf(v) + 1,
+        chapters: v.chapters.map((ch) => ({
+          id: `${Date.now().toString(36)}_${outlineVolumes.indexOf(v)}_${v.chapters.indexOf(ch)}`,
+          title: ch.title,
+          content: ch.summary || "",
+          wordCount: 0,
+        })),
       }));
-
-      const volumeId = Date.now().toString() + Math.random().toString(36).substring(2, 8);
-      chapterList.forEach((c: any) => { c.volumeId = volumeId; });
 
       const coverImage = `/api/v1/static/images/covers/${
         ["man", "women"][Math.floor(Math.random() * 2)]
@@ -409,7 +426,7 @@ export default function HomeScreen() {
           category: genre || "其他",
           cover: "from-purple-500 to-blue-500",
           coverImage,
-          volumes: [{ id: volumeId, title: "第一卷", order: 1, chapters: chapterList }],
+          volumes,
         }),
       });
       const result = await response.json();
@@ -437,7 +454,7 @@ export default function HomeScreen() {
     setLength("");
     setGuidingStep(0);
     setGuidingMessages([]);
-    setOutlineChapters([]);
+    setOutlineVolumes([]);
     setOutlineAnalysis("");
     setOutlineFullText("");
     setBookTitle("");
@@ -684,30 +701,52 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {/* Chapters */}
-        <View className="gap-2 mb-6">
-          {outlineChapters.map((ch, i) => (
-            <View key={i} className="bg-white rounded-xl p-4 border border-gray-100">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-1">
-                  <View className="flex-row items-center gap-2 mb-1">
-                    <View className="w-6 h-6 bg-primary-50 rounded-full items-center justify-center">
-                      <Text className="text-xs font-bold text-primary-600">{i + 1}</Text>
-                    </View>
-                    <Text className="text-sm font-semibold text-gray-900">{ch.title}</Text>
-                  </View>
-                  {ch.summary ? (
-                    <Text className="text-xs text-gray-500 ml-8">{ch.summary}</Text>
+        {/* Volumes & Chapters */}
+        <View className="gap-3 mb-6">
+          {outlineVolumes.map((vol, vi) => (
+            <View key={vi} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              <TouchableOpacity
+                onPress={() => toggleVolume(vi)}
+                className="flex-row items-center justify-between px-4 py-3 bg-gray-50"
+                activeOpacity={0.7}
+              >
+                <View className="flex-row items-center gap-2 flex-1">
+                  <FontAwesome6 name="book" size={14} color="#6366F1" />
+                  <Text className="text-sm font-bold text-gray-900">{vol.title}</Text>
+                  {vol.summary ? (
+                    <Text className="text-xs text-gray-400 ml-1 flex-1" numberOfLines={1}>{vol.summary}</Text>
                   ) : null}
                 </View>
-                <TouchableOpacity
-                  onPress={() => handleEditChapter(i)}
-                  className="w-8 h-8 items-center justify-center"
-                  activeOpacity={0.7}
-                >
-                  <FontAwesome6 name="pen" size={14} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
+                <FontAwesome6
+                  name={expandedVolumes.has(vi) ? "chevron-up" : "chevron-down"}
+                  size={12} color="#9CA3AF"
+                />
+              </TouchableOpacity>
+
+              {expandedVolumes.has(vi) && (
+                <View className="px-4 py-2 gap-1.5">
+                  {vol.chapters.map((ch, ci) => (
+                    <View key={ci} className="flex-row items-center py-2 border-b border-gray-50 last:border-0">
+                      <View className="w-6 h-6 bg-primary-50 rounded-full items-center justify-center mr-3">
+                        <Text className="text-[11px] font-bold text-primary-600">{vi * 99 + ci + 1}</Text>
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm font-medium text-gray-900">{ch.title}</Text>
+                        {ch.summary ? (
+                          <Text className="text-xs text-gray-500 mt-0.5" numberOfLines={2}>{ch.summary}</Text>
+                        ) : null}
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => handleEditChapter(vi, ci)}
+                        className="w-8 h-8 items-center justify-center"
+                        activeOpacity={0.7}
+                      >
+                        <FontAwesome6 name="pen" size={13} color="#9CA3AF" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           ))}
         </View>
@@ -849,7 +888,7 @@ export default function HomeScreen() {
       </View>
       <Text className="text-xl font-bold text-gray-900 mb-2">作品创建成功!</Text>
       <Text className="text-base text-gray-600 mb-1">{bookTitle}</Text>
-      <Text className="text-sm text-gray-400 mb-8">{genre} · {length} · {outlineChapters.length}章</Text>
+      <Text className="text-sm text-gray-400 mb-8">{genre} · {length} · {outlineVolumes.reduce((sum, v) => sum + v.chapters.length, 0)}章</Text>
 
       <View className="flex-row gap-3">
         <TouchableOpacity
@@ -872,7 +911,7 @@ export default function HomeScreen() {
 
   // ===== Edit Chapter Modal =====
   const renderEditModal = () => (
-    <Modal visible={editingChapterIdx !== null} transparent animationType="fade">
+    <Modal visible={editingChapter !== null} transparent animationType="fade">
       <View className="flex-1 bg-black/40 justify-center px-5">
         <View className="bg-white rounded-2xl p-5">
           <Text className="text-lg font-bold text-gray-900 mb-4">编辑章节</Text>
@@ -886,7 +925,7 @@ export default function HomeScreen() {
           />
           <View className="flex-row gap-3">
             <TouchableOpacity
-              onPress={() => { setEditingChapterIdx(null); setEditingChapterText(""); }}
+              onPress={() => { setEditingChapter(null); setEditingChapterText(""); }}
               className="flex-1 bg-gray-100 rounded-xl py-3 items-center"
               activeOpacity={0.7}
             >

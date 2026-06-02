@@ -371,19 +371,35 @@ router.post("/generate-outline", async (req: Request, res: Response) => {
 【目标平台】${platform || "待确定"}
 【篇幅规划】${length || "待确定"}
 
-请根据以上信息，生成一个详细的小说大纲。
+请根据以上信息，生成一个完整的小说创作大纲，要有分卷规划。
 
 要求：
-1. 先简要分析该创意的亮点和潜力（1-2句话）
-2. 然后给出完整的章节大纲
-3. 每章包含标题和核心内容概要（50字以内）
-4. 长篇建议8-12章，中篇5-8章，短篇3-5章
+1. 先分析该创意的亮点和潜力（50字以内）
+2. 给出主要角色设定（每个角色30字以内）
+3. 给出世界观设定简述（50字以内）
+4. 将大纲分为多卷，每卷4-6章
+5. 每章包含标题和核心内容概要（20字以内）
 
-格式：
-【分析】xxx
-【大纲】
-第1章：标题 - 内容概要
-第2章：标题 - 内容概要
+输出格式必须严格按以下结构：
+
+【亮点分析】
+xxx
+
+【角色设定】
+角色名（身份）：简介
+
+【世界观】
+xxx
+
+【第一卷·卷名】
+卷概要：xxx
+第1章：章名 - 内容概要
+第2章：章名 - 内容概要
+...
+
+【第二卷·卷名】
+卷概要：xxx
+第1章：章名 - 内容概要
 ...`;
 
     const stream = client.stream(
@@ -400,29 +416,84 @@ router.post("/generate-outline", async (req: Request, res: Response) => {
       }
     }
 
-    // Send the full parsed outline as structured data
-    const analysisMatch = fullContent.match(/【分析】\n?([\s\S]*?)(?=\n【大纲】|$)/);
-    const chapterLines = fullContent.split("\n").filter((l: string) => {
-      const trimmed = l.trim();
-      return /^(第?\d+[章节卷]|第\d+章)/.test(trimmed) || /^\d+[\.\s、]/.test(trimmed);
-    });
-
-    const chapters = chapterLines.map((l: string, i: number) => {
-      const clean = l.trim().replace(/^第?\d+[章节卷\.\s、]+/, "").replace(/^[\d\.\s、]+/, "");
-      const parts = clean.split(/[-–—]/);
-      return {
-        index: i + 1,
-        title: parts[0]?.trim() || `第${i + 1}章`,
-        summary: parts[1]?.trim() || "",
-      };
-    });
-
+    // Parse 【亮点分析】
+    const analysisMatch = fullContent.match(/【亮点分析】\n?([\s\S]*?)(?=\n【角色设定】|$)/);
     const analysis = analysisMatch?.[1]?.trim() || "";
+
+    // Parse 【角色设定】
+    const charMatch = fullContent.match(/【角色设定】\n?([\s\S]*?)(?=\n【世界观】|$)/);
+    const charactersRaw = charMatch?.[1]?.trim() || "";
+    const characters = charactersRaw.split("\n").filter((l: string) => l.trim()).map((l: string) => {
+      const parts = l.trim().replace(/^\d+[\.\s、]/, "").split(/[（(]/);
+      return { name: parts[0]?.trim() || "", desc: parts[1]?.replace(/[）)]/g, "")?.trim() || "" };
+    });
+
+    // Parse 【世界观】
+    const worldMatch = fullContent.match(/【世界观】\n?([\s\S]*?)(?=\n【第|$)/);
+    const worldBuilding = worldMatch?.[1]?.trim() || "";
+
+    // Parse volumes from blocks like 【第一卷·卷名】
+    const volumes: Array<{
+      id: string;
+      title: string;
+      summary: string;
+      order: number;
+      chapters: Array<{
+        id: string;
+        title: string;
+        wordCount: number;
+        createdAt: string;
+        content: string;
+        volumeId: string;
+        summary: string;
+      }>;
+    }> = [];
+
+    const volumeBlocks = fullContent.split(/\n(?=【第[一二三四五六七八九十]+卷)/g);
+    volumeBlocks.forEach((block: string, vi: number) => {
+      const titleMatch = block.match(/【(.+?)】\n/);
+      if (!titleMatch) return;
+      const fullTitle = titleMatch[1];
+      const summaryMatch = block.match(/卷概要[：:]\s*(.+?)(?:\n|$)/);
+      const cleanBlock = block.replace(/卷概要[：:].*?\n/, "");
+      const chapterLines = cleanBlock.split("\n").filter((l: string) => {
+        const trimmed = l.trim();
+        return /^第\d+章[：:]/.test(trimmed);
+      });
+
+      if (chapterLines.length === 0) return;
+
+      const volId = generateId();
+      const chapters = chapterLines.map((l: string, ci: number) => {
+        const trimmed = l.trim();
+        const afterPrefix = trimmed.replace(/^第\d+章[：:]\s*/, "");
+        const parts = afterPrefix.split(/[-–—]/);
+        return {
+          id: generateId(),
+          title: parts[0]?.trim() || `第${ci + 1}章`,
+          wordCount: 0,
+          createdAt: new Date().toISOString().split("T")[0],
+          content: "",
+          volumeId: volId,
+          summary: parts[1]?.trim() || "",
+        };
+      });
+
+      volumes.push({
+        id: volId,
+        title: fullTitle,
+        summary: summaryMatch?.[1]?.trim() || "",
+        order: vi + 1,
+        chapters,
+      });
+    });
 
     res.write(`data: ${JSON.stringify({
       type: "outline_complete",
       analysis,
-      chapters,
+      characters,
+      worldBuilding,
+      volumes,
       fullOutline: fullContent,
     })}\n\n`);
 
@@ -438,7 +509,7 @@ router.post("/generate-outline", async (req: Request, res: Response) => {
 
 // === AI Generate Book Details (SSE) ===
 router.post("/generate-details", async (req: Request, res: Response) => {
-  const { outline, chapters, genre, inspiration } = req.body;
+  const { outline, volumes, genre, inspiration } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
@@ -447,9 +518,11 @@ router.post("/generate-details", async (req: Request, res: Response) => {
   const client = new LLMClient();
 
   try {
-    const chapterList = chapters?.map((c: any, i: number) =>
-      `第${i + 1}章 ${c.title || c.name || ""}：${c.summary || ""}`
-    ).join("\n") || "";
+    const chapterList = volumes?.map((v: any) =>
+      `【${v.title || "卷"}】\n${(v.chapters || []).map((c: any, i: number) =>
+        `第${i + 1}章 ${c.title || ""}：${c.summary || ""}`
+      ).join("\n")}`
+    ).join("\n\n") || "";
 
     const prompt = `基于以下小说大纲，生成书名、简介和封面描述。
 
