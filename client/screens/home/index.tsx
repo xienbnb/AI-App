@@ -13,6 +13,7 @@ import {
   Alert,
 } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
 import RNSSE from "react-native-sse";
@@ -248,6 +249,7 @@ function ChapterEditorModal({ visible, title, summary, onTitleChange, onSummaryC
 // ===== Main Home Component =====
 export default function HomeScreen() {
   const router = useSafeRouter();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
   // -- Core chat state --
@@ -717,7 +719,7 @@ export default function HomeScreen() {
   return (
     <View className="flex-1 bg-white">
       {/* Header */}
-      <View className="bg-indigo-500 pt-12 pb-3 px-5 rounded-b-[24px]">
+      <View className="bg-indigo-500 pb-3 px-5 rounded-b-[24px]" style={{ paddingTop: insets.top + 8 }}>
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-2">
             <View className="w-8 h-8 rounded-xl bg-white/20 items-center justify-center">
