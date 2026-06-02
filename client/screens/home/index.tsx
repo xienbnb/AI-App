@@ -23,37 +23,11 @@ const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
 // ===== Types =====
-type CreationStep =
-  | "welcome"
-  | "guiding"
-  | "config_summary"
-  | "generating_outline"
-  | "reviewing_outline"
-  | "generating_details"
-  | "reviewing_details"
-  | "creating"
-  | "completed";
-
-interface OutlineVolume {
-  id: string;
-  title: string;
-  summary: string;
-  order: number;
-  chapters: OutlineChapter[];
-}
-
-interface OutlineChapter {
-  id: string;
-  title: string;
-  summary: string;
-  wordCount?: number;
-}
-
-interface ChatMessage {
+type ChatMessage = {
   role: "ai" | "user";
   content: string;
-  step?: CreationStep;
-}
+  step?: string;
+};
 
 // ===== Static Data =====
 const SKILL_LIST = [
@@ -69,38 +43,6 @@ const SKILL_LIST = [
   { name: "逻辑校验", icon: "J", desc: "检测逻辑漏洞与角色OOC" },
   { name: "批量润色", icon: "K", desc: "全文润色与文风统一" },
   { name: "爆款简介", icon: "L", desc: "生成爆款简介与章节标题" },
-];
-
-const GENRE_OPTIONS = [
-  { label: "玄幻", icon: "dragon", color: "bg-purple-50 text-purple-700 border-purple-200" },
-  { label: "言情", icon: "heart", color: "bg-pink-50 text-pink-700 border-pink-200" },
-  { label: "科幻", icon: "rocket", color: "bg-cyan-50 text-cyan-700 border-cyan-200" },
-  { label: "悬疑", icon: "magnifying-glass", color: "bg-gray-50 text-gray-700 border-gray-200" },
-  { label: "都市", icon: "building", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { label: "仙侠", icon: "wand-magic-sparkles", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-  { label: "历史", icon: "landmark", color: "bg-amber-50 text-amber-700 border-amber-200" },
-  { label: "轻小说", icon: "pen-fancy", color: "bg-rose-50 text-rose-700 border-rose-200" },
-];
-
-const AUDIENCE_OPTIONS = [
-  { label: "男频", subtitle: "男性向", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { label: "女频", subtitle: "女性向", color: "bg-pink-50 text-pink-700 border-pink-200" },
-  { label: "无差别", subtitle: "全民向", color: "bg-green-50 text-green-700 border-green-200" },
-];
-
-const PLATFORM_OPTIONS = [
-  { label: "起点中文网", color: "bg-orange-50 text-orange-700 border-orange-200" },
-  { label: "晋江文学城", color: "bg-pink-50 text-pink-700 border-pink-200" },
-  { label: "番茄小说", color: "bg-red-50 text-red-700 border-red-200" },
-  { label: "纵横中文网", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { label: "飞卢小说网", color: "bg-yellow-50 text-yellow-700 border-yellow-200" },
-  { label: "创世中文网", color: "bg-green-50 text-green-700 border-green-200" },
-];
-
-const LENGTH_OPTIONS = [
-  { label: "短篇", subtitle: "3-10万字", icon: "file-lines", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { label: "中篇", subtitle: "10-30万字", icon: "book", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { label: "长篇", subtitle: "30万字以上", icon: "book-open", color: "bg-purple-50 text-purple-700 border-purple-200" },
 ];
 
 const INSPIRATION_CHIPS = [
@@ -200,52 +142,6 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
   );
 }
 
-// ===== ChapterEditorModal =====
-function ChapterEditorModal({ visible, title, summary, onTitleChange, onSummaryChange, onSave, onClose }: {
-  visible: boolean;
-  title: string;
-  summary: string;
-  onTitleChange: (t: string) => void;
-  onSummaryChange: (s: string) => void;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity className="flex-1 bg-black/50 justify-center px-5" activeOpacity={1} onPress={onClose}>
-        <View className="bg-white rounded-2xl p-5" onStartShouldSetResponder={() => true}>
-          <Text className="text-lg font-bold text-gray-900 mb-4">编辑章节</Text>
-          <Text className="text-sm text-gray-500 mb-1">章节标题</Text>
-          <TextInput
-            className="bg-gray-50 rounded-xl px-4 py-3 text-gray-900 text-sm mb-3 border border-gray-200"
-            value={title}
-            onChangeText={onTitleChange}
-            placeholder="输入章节标题"
-            placeholderTextColor="#94A3B8"
-          />
-          <Text className="text-sm text-gray-500 mb-1">章节概要</Text>
-          <TextInput
-            className="bg-gray-50 rounded-xl px-4 py-3 text-gray-900 text-sm mb-5 border border-gray-200 min-h-[80px]"
-            value={summary}
-            onChangeText={onSummaryChange}
-            multiline
-            placeholder="输入章节概要"
-            placeholderTextColor="#94A3B8"
-          />
-          <View className="flex-row gap-3">
-            <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={onClose}>
-              <Text className="text-gray-600 font-medium">取消</Text>
-            </TouchableOpacity>
-            <TouchableOpacity className="flex-1 bg-indigo-500 rounded-xl py-3 items-center" onPress={onSave}>
-              <Text className="text-white font-medium">保存</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
 // ===== Main Home Component =====
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -269,25 +165,16 @@ export default function HomeScreen() {
   const [pendingBookData, setPendingBookData] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // -- Guided creation state --
-  const [creationStep, setCreationStep] = useState<CreationStep | null>(null);
-  const [inspiration, setInspiration] = useState("");
-  const [configValues, setConfigValues] = useState({ genre: "", audience: "", platform: "", length: "" });
-  const [configStep, setConfigStep] = useState(0);
-  const configSteps = [
-    { title: "选择小说类型", key: "genre", options: GENRE_OPTIONS },
-    { title: "选择受众定位", key: "audience", options: AUDIENCE_OPTIONS },
-    { title: "选择目标平台", key: "platform", options: PLATFORM_OPTIONS },
-    { title: "选择篇幅", key: "length", options: LENGTH_OPTIONS },
-  ];
-  const [bookTitle, setBookTitle] = useState("");
-  const [bookDesc, setBookDesc] = useState("");
-  const [outlineVolumes, setOutlineVolumes] = useState<OutlineVolume[]>([]);
-  const [expandedVolume, setExpandedVolume] = useState<string | null>(null);
-  const [editingVolumeIdx, setEditingVolumeIdx] = useState(-1);
-  const [editingChapterIdx, setEditingChapterIdx] = useState(-1);
-  const [editTitle, setEditTitle] = useState("");
-  const [editSummary, setEditSummary] = useState("");
+  // Simplified state - no guided creation, just free chat
+  const resetDialog = useCallback(() => {
+    cleanupSSE();
+    setStreamContent("");
+    setShowNewBookBtn(false);
+    setPendingBookData(null);
+    setMessages([
+      { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n随便聊——给我一个灵感、想个角色、或者直接说「帮我写本小说」，我来搞定一切。", step: "welcome" },
+    ]);
+  }, []);
 
   const [books, setBooks] = useState<any[]>([]);
   const fetchBooks = useCallback(async () => {
@@ -300,7 +187,7 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { fetchBooks(); }, [fetchBooks]));
 
-  const addMessage = (role: "ai" | "user", content: string, step?: CreationStep) => {
+  const addMessage = (role: "ai" | "user", content: string, step?: string) => {
     setMessages((prev) => [...prev, { role, content, step }]);
   };
 
@@ -407,241 +294,8 @@ export default function HomeScreen() {
     }
   };
 
-  // ===== Start guided creation =====
-  const startGuidedCreation = () => {
-    setCreationStep("guiding");
-    setConfigStep(0);
-    setConfigValues({ genre: "", audience: "", platform: "", length: "" });
-    addMessage("ai", "好的！让我来帮你完善创作设定。\n\n**第一步：选择小说类型**\n请点击下方选择你的创作方向：", "guiding");
-  };
-
-  const handleConfigSelect = (key: string, value: string) => {
-    const newValues = { ...configValues, [key]: value };
-    setConfigValues(newValues);
-    if (configStep < configSteps.length - 1) {
-      const nextStep = configStep + 1;
-      const msgs = [
-        "好的！让我来帮你完善创作设定。\n\n**第一步：选择小说类型**\n请点击下方选择你的创作方向：",
-        "**第二步：选择受众定位**\n确定目标读者群体：",
-        "**第三步：选择目标平台**\n选择主要发布平台：",
-        "**第四步：选择篇幅**\n规划故事的篇幅长度：",
-      ];
-      setConfigStep(nextStep);
-      addMessage("ai", "\n" + msgs[nextStep], "guiding");
-    } else {
-      setCreationStep("config_summary");
-      const summary = [
-        "**创作设定确认**\n",
-        `类型：${newValues.genre}`,
-        `受众：${newValues.audience}`,
-        `平台：${newValues.platform}`,
-        `篇幅：${newValues.length}`,
-      ].join("\n");
-      addMessage("ai", summary, "config_summary");
-    }
-  };
-
-  // ===== Generate outline =====
-  const handleGenerateOutline = async () => {
-    setCreationStep("generating_outline");
-    setStreamContent("");
-    setOutlineVolumes([]);
-    addMessage("ai", "**AI 正在分析你的灵感并生成大纲...**\n\n这可能需要 15-30 秒，请稍候...", "generating_outline");
-
-    try {
-      cleanupSSE();
-      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate-outline`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inspiration: inspiration || messages.find((m) => m.role === "user")?.content || "",
-          genre: configValues.genre,
-          audience: configValues.audience,
-          platform: configValues.platform,
-          length: configValues.length,
-        }),
-      });
-      sseRef.current = sse;
-      let fullContent = "";
-
-      sse.addEventListener("message", (event: any) => {
-        if (event.data === "[DONE]") {
-          sse.close();
-          setCreationStep("reviewing_outline");
-          setIsAiThinking(false);
-          addMessage("ai", "**大纲生成完成！**\n\n请查看下方的大纲内容，可以点击章节编辑修改，满意后点击「确认」继续。", "reviewing_outline");
-          return;
-        }
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed.content) {
-            fullContent += parsed.content;
-            setStreamContent(fullContent);
-          }
-          if (parsed.volumes && Array.isArray(parsed.volumes)) {
-            setOutlineVolumes(parsed.volumes);
-          }
-          if (parsed.type === "outline_complete") {
-            if (parsed.volumes && Array.isArray(parsed.volumes)) {
-              setOutlineVolumes(parsed.volumes);
-            }
-            if (parsed.fullOutline) {
-              fullContent = parsed.fullOutline;
-              setStreamContent(parsed.fullOutline);
-            }
-          }
-        } catch (e) {
-          fullContent += event.data;
-          setStreamContent(fullContent);
-        }
-      });
-    } catch (e) {
-      setIsAiThinking(false);
-      setCreationStep("config_summary");
-      addMessage("ai", "大纲生成失败，请重试");
-    }
-  };
-
-  // ===== Generate details =====
-  const handleGenerateDetails = async () => {
-    setCreationStep("generating_details");
-    setStreamContent("");
-    setBookTitle("");
-    setBookDesc("");
-    addMessage("ai", "**正在生成作品详情...**\n\nAI 正在为你构思书名、简介和完整内容...", "generating_details");
-
-    const volumesForPrompt = outlineVolumes.map((v) => ({
-      title: v.title, summary: v.summary,
-      chapters: v.chapters.map((c) => ({ title: c.title, summary: c.summary })),
-    }));
-
-    try {
-      cleanupSSE();
-      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate-details`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inspiration: inspiration || messages.find((m) => m.role === "user")?.content || "",
-          genre: configValues.genre,
-          volumes: volumesForPrompt,
-        }),
-      });
-      sseRef.current = sse;
-
-      sse.addEventListener("message", (event: any) => {
-        if (event.data === "[DONE]") {
-          sse.close();
-          setCreationStep("reviewing_details");
-          setIsAiThinking(false);
-          addMessage("ai", "**作品详情已生成！**\n\n请查看下方的书名和简介，可以手动修改，满意后点击「创建作品」。", "reviewing_details");
-          return;
-        }
-        try {
-          const parsed = JSON.parse(event.data);
-          if (parsed.content) setStreamContent((prev) => prev + parsed.content);
-          if (parsed.title) setBookTitle(parsed.title);
-          if (parsed.description) setBookDesc(parsed.description);
-        } catch (e) {
-          setStreamContent((prev) => prev + event.data);
-        }
-      });
-    } catch (e) {
-      setIsAiThinking(false);
-      setCreationStep("reviewing_outline");
-      addMessage("ai", "详情生成失败，请重试");
-    }
-  };
-
-  // ===== Create book =====
-  const handleCreateBook = async () => {
-    setCreationStep("creating");
-
-    const volumesForCreate = outlineVolumes.map((v, vi) => ({
-      id: v.id || "v_" + generateTempId(),
-      title: v.title,
-      order: vi + 1,
-      chapters: v.chapters.map((c, ci) => ({
-        id: c.id || "c_" + generateTempId(),
-        title: c.title,
-        content: "",
-        summary: c.summary || "",
-        wordCount: 0,
-        order: ci + 1,
-        volumeId: v.id || "v_" + generateTempId(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      })),
-    }));
-
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/writing`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: bookTitle || inspiration?.substring(0, 20) || "未命名作品",
-          category: configValues.genre || "玄幻",
-          description: bookDesc || inspiration || "",
-          volumes: volumesForCreate,
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setCreationStep("completed");
-        await fetchBooks();
-        const totalChapters = outlineVolumes.reduce((s, v) => s + v.chapters.length, 0);
-        addMessage("ai", "**创作成功！**\n\n《" + (bookTitle || "未命名") + "》已创建，共 " + totalChapters + " 章！\n\n你可以继续和我聊天，或前往「作品」页面查看。", "completed");
-      } else {
-        setCreationStep("reviewing_details");
-        addMessage("ai", "创建失败：" + (json.error || "未知错误"));
-      }
-    } catch (e) {
-      setCreationStep("reviewing_details");
-      addMessage("ai", "网络错误，请重试");
-    }
-  };
-
-  // ===== Edit chapter =====
-  const handleEditChapter = (vIdx: number, cIdx: number) => {
-    const chapter = outlineVolumes[vIdx].chapters[cIdx];
-    setEditingVolumeIdx(vIdx);
-    setEditingChapterIdx(cIdx);
-    setEditTitle(chapter.title);
-    setEditSummary(chapter.summary || "");
-  };
-
-  const saveChapter = () => {
-    if (editingVolumeIdx >= 0 && editingChapterIdx >= 0) {
-      const newVolumes = [...outlineVolumes];
-      newVolumes[editingVolumeIdx] = { ...newVolumes[editingVolumeIdx], chapters: [...newVolumes[editingVolumeIdx].chapters] };
-      newVolumes[editingVolumeIdx].chapters[editingChapterIdx] = {
-        ...newVolumes[editingVolumeIdx].chapters[editingChapterIdx],
-        title: editTitle,
-        summary: editSummary,
-      };
-      setOutlineVolumes(newVolumes);
-    }
-    setEditingVolumeIdx(-1);
-    setEditingChapterIdx(-1);
-  };
-
   // ===== Reset all =====
-  const resetAll = () => {
-    cleanupSSE();
-    setCreationStep(null);
-    setInspiration("");
-    setConfigValues({ genre: "", audience: "", platform: "", length: "" });
-    setConfigStep(0);
-    setStreamContent("");
-    setBookTitle("");
-    setBookDesc("");
-    setOutlineVolumes([]);
-    setExpandedVolume(null);
-    setShowNewBookBtn(false);
-    setPendingBookData(null);
-    setMessages([
-      { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n你可以随意和我聊任何创作相关的话题——给我一个灵感、让我帮你设计角色、或者直接开始创作一部小说。", step: "welcome" },
-    ]);
-  };
+  const resetAll = resetDialog;
 
   // ===== File Upload =====
   const handleFileUpload = async () => {
@@ -693,27 +347,7 @@ export default function HomeScreen() {
   // ===== Send button handler =====
   const handleSend = () => {
     if (!inputText.trim() || isAiThinking) return;
-
-    const text = inputText.trim();
-
-    // If in guided creation steps, treat all input as guided creation inspiration
-    if (creationStep === "guiding" || creationStep === "config_summary") {
-      // User typed something during guiding - use for inspiration and proceed
-      setInspiration(text);
-      sendFreeChat(text);
-      setInputText("");
-      return;
-    }
-
-    if (creationStep === "reviewing_outline" || creationStep === "reviewing_details") {
-      // User can type comments during review
-      sendFreeChat(text);
-      setInputText("");
-      return;
-    }
-
-    // Default: free-form chat
-    sendFreeChat(text);
+    sendFreeChat(inputText.trim());
   };
 
   // ===== Render =====
@@ -805,7 +439,7 @@ export default function HomeScreen() {
         )}
 
         {/* ===== Coze-style Suggestion Bars (only when idle) ===== */}
-        {!creationStep && !isAiThinking && messages.length <= 1 && (
+        {!isAiThinking && messages.length <= 1 && (
           <View className="mb-4">
             <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
             {SUGGESTIONS.map((s, i) => (
@@ -824,193 +458,6 @@ export default function HomeScreen() {
                 <FontAwesome6 name="arrow-up-right-from-square" size={11} color="#CBD5E1" />
               </TouchableOpacity>
             ))}
-          </View>
-        )}
-
-        {/* ===== Guiding Options ===== */}
-        {creationStep === "guiding" && (
-          <View className="mb-4 pl-10">
-            <Text className="text-sm font-medium text-gray-700 mb-2">{configSteps[configStep].title}</Text>
-            <View className="flex-row flex-wrap gap-2">
-              {configSteps[configStep].options.map((opt) => {
-                const isSelected = configValues[configSteps[configStep].key as keyof typeof configValues] === opt.label;
-                const [bg, textCls, border] = opt.color.split(" ");
-                return (
-                  <TouchableOpacity
-                    key={opt.label}
-                    className={`px-4 py-2.5 rounded-xl border flex-row items-center gap-2 ${isSelected ? bg + " " + border : "bg-white border-gray-200"}`}
-                    onPress={() => handleConfigSelect(configSteps[configStep].key, opt.label)}
-                  >
-                    {(opt as any).icon && (
-                      <FontAwesome6 name={(opt as any).icon as any} size={14} solid={isSelected} color={isSelected ? "#6366F1" : "#94A3B8"} />
-                    )}
-                    <Text className={`text-sm ${isSelected ? "font-semibold text-indigo-600" : "text-gray-600"}`}>{opt.label}</Text>
-                    {(opt as any).subtitle && (
-                      <Text className={`text-xs ${isSelected ? "text-indigo-400" : "text-gray-400"}`}>{(opt as any).subtitle}</Text>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        )}
-
-        {/* ===== Config Summary Actions ===== */}
-        {creationStep === "config_summary" && (
-          <View className="mb-4 pl-10 flex-row gap-3">
-            <TouchableOpacity
-              className="flex-1 bg-gray-100 rounded-xl py-2.5 items-center"
-              onPress={() => { setCreationStep("guiding"); setConfigStep(0); }}
-            >
-              <Text className="text-sm text-gray-600 font-medium">修改设定</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className="flex-1 bg-indigo-500 rounded-xl py-2.5 items-center"
-              onPress={() => {
-                setInputText(inspiration);
-                handleGenerateOutline();
-              }}
-            >
-              <Text className="text-sm text-white font-medium">开始生成大纲</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ===== Generating (streaming) ===== */}
-        {(creationStep === "generating_outline" || creationStep === "generating_details") && (
-          <View className="mb-4 pl-10">
-            <View className="bg-indigo-50 rounded-2xl p-4 border border-indigo-100">
-              <View className="flex-row items-center gap-2 mb-2">
-                <ActivityIndicator size="small" color="#6366F1" />
-                <Text className="text-sm font-medium text-indigo-700">
-                  {creationStep === "generating_outline" ? "AI 正在生成大纲..." : "AI 正在生成详情..."}
-                </Text>
-              </View>
-              {streamContent.length > 0 && (
-                <Text className="text-sm text-indigo-600 leading-5">{streamContent}</Text>
-              )}
-            </View>
-          </View>
-        )}
-
-        {/* ===== Review Outline ===== */}
-        {creationStep === "reviewing_outline" && outlineVolumes.length > 0 && (
-          <View className="mb-4 pl-10">
-            <Text className="text-sm text-gray-500 mb-2">
-              {outlineVolumes.length + " 卷, " + outlineVolumes.reduce((s, v) => s + v.chapters.length, 0) + " 章"}
-            </Text>
-            {outlineVolumes.map((volume, vIdx) => (
-              <View key={volume.id} className="bg-white rounded-2xl mb-2 border border-gray-100 overflow-hidden">
-                <TouchableOpacity
-                  className="flex-row items-center justify-between px-4 py-3"
-                  onPress={() => setExpandedVolume(expandedVolume === volume.id ? null : volume.id)}
-                >
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-gray-900">{volume.title}</Text>
-                    <Text className="text-xs text-gray-400 mt-0.5">{volume.chapters.length + "章"}</Text>
-                  </View>
-                  <FontAwesome6 name={expandedVolume === volume.id ? "chevron-up" : "chevron-down"} size={12} color="#94A3B8" />
-                </TouchableOpacity>
-                {expandedVolume === volume.id && (
-                  <View className="border-t border-gray-100 px-4 pb-2 pt-1">
-                    {volume.chapters.map((chapter, cIdx) => (
-                      <TouchableOpacity
-                        key={chapter.id}
-                        className="flex-row items-center py-2 border-b border-gray-50 last:border-b-0"
-                        onPress={() => handleEditChapter(vIdx, cIdx)}
-                      >
-                        <View className="w-5 h-5 rounded-full bg-gray-100 items-center justify-center mr-2">
-                          <Text className="text-[10px] font-medium text-gray-500">{cIdx + 1}</Text>
-                        </View>
-                        <Text className="text-sm text-gray-800 flex-1">{chapter.title}</Text>
-                        <FontAwesome6 name="pen" size={10} color="#CBD5E1" />
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-            ))}
-            <View className="flex-row gap-3 mt-3">
-              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-2.5 items-center" onPress={() => setCreationStep("config_summary")}>
-                <Text className="text-sm text-gray-600 font-medium">返回修改</Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-1 bg-indigo-500 rounded-xl py-2.5 items-center" onPress={handleGenerateDetails}>
-                <Text className="text-sm text-white font-medium">确认，下一步</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ===== Review Details ===== */}
-        {creationStep === "reviewing_details" && (
-          <View className="mb-4 pl-10">
-            <View className="bg-white rounded-2xl p-4 border border-gray-100 mb-3">
-              <Text className="text-xs text-gray-400 mb-1">作品名称</Text>
-              <TextInput
-                className="bg-gray-50 rounded-xl px-3 py-2 text-gray-900 text-sm border border-gray-100"
-                value={bookTitle}
-                onChangeText={setBookTitle}
-                placeholder="输入书名"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-            <View className="bg-white rounded-2xl p-4 border border-gray-100 mb-3">
-              <Text className="text-xs text-gray-400 mb-1">作品简介</Text>
-              <TextInput
-                className="bg-gray-50 rounded-xl px-3 py-2 text-gray-900 text-sm border border-gray-100 min-h-[80px]"
-                value={bookDesc}
-                onChangeText={setBookDesc}
-                multiline
-                placeholder="输入简介"
-                placeholderTextColor="#94A3B8"
-              />
-            </View>
-            <View className="flex-row gap-3">
-              <TouchableOpacity
-                className="flex-1 bg-gray-100 rounded-xl py-2.5 items-center"
-                onPress={() => setCreationStep("reviewing_outline")}
-              >
-                <Text className="text-sm text-gray-600 font-medium">上一步</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                className="flex-1 bg-indigo-500 rounded-xl py-2.5 items-center"
-                onPress={() => showConfirmDialog(
-                  "创建作品",
-                  `确定创建《${bookTitle || "未命名"}》？将包含 ${outlineVolumes.reduce((s, v) => s + v.chapters.length, 0)} 个章节`,
-                  handleCreateBook
-                )}
-              >
-                <Text className="text-sm text-white font-medium">创建作品</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
-        {/* ===== Creating ===== */}
-        {creationStep === "creating" && (
-          <View className="mb-4 pl-10">
-            <View className="bg-indigo-50 rounded-2xl p-4 items-center">
-              <ActivityIndicator size="small" color="#6366F1" />
-              <Text className="text-sm text-indigo-600 mt-2">正在创建作品...</Text>
-            </View>
-          </View>
-        )}
-
-        {/* ===== Completed ===== */}
-        {creationStep === "completed" && (
-          <View className="mb-4 pl-10">
-            <TouchableOpacity
-              className="bg-indigo-500 rounded-xl py-2.5 items-center mb-2"
-              onPress={() => {
-                const latestBook = books[0];
-                if (latestBook) router.push("/detail", { id: latestBook.id });
-              }}
-            >
-              <Text className="text-sm text-white font-medium">查看作品</Text>
-            </TouchableOpacity>
-            <TouchableOpacity className="bg-gray-100 rounded-xl py-2.5 items-center" onPress={resetAll}>
-              <Text className="text-sm text-gray-600 font-medium">继续创作</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -1038,8 +485,8 @@ export default function HomeScreen() {
 
       {/* Input Bar - ALWAYS visible */}
       <View className="border-t border-gray-100 px-4 pt-2 pb-4 bg-white">
-        {/* Inspiration Chips (when idle) */}
-        {!creationStep && !isAiThinking && messages.length <= 1 && (
+        {/* Quick chips (when idle) */}
+        {!isAiThinking && messages.length <= 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
             <View className="flex-row gap-2">
               {INSPIRATION_CHIPS.map((chip, i) => (
@@ -1114,16 +561,6 @@ export default function HomeScreen() {
         message={confirmMsg}
         onConfirm={handleConfirm}
         onClose={() => setShowConfirm(false)}
-      />
-
-      <ChapterEditorModal
-        visible={editingVolumeIdx >= 0 && editingChapterIdx >= 0}
-        title={editTitle}
-        summary={editSummary}
-        onTitleChange={setEditTitle}
-        onSummaryChange={setEditSummary}
-        onSave={saveChapter}
-        onClose={() => { setEditingVolumeIdx(-1); setEditingChapterIdx(-1); }}
       />
 
       {/* Sidebar Drawer */}
