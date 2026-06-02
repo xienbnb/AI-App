@@ -60,7 +60,12 @@ interface Book {
   description: string;
   createdAt: string;
   wordCount: number;
-  chapters: { id: string; title: string }[];
+  volumes: { id: string; title: string; chapters: { id: string; title: string }[] }[];
+}
+
+function getChapterCount(book: Book): number {
+  if (!book.volumes) return 0;
+  return book.volumes.reduce((sum, v) => sum + (v.chapters?.length || 0), 0);
 }
 
 // ========== 书籍卡片组件 ==========
@@ -124,7 +129,7 @@ function BookCard({
             <Text className="text-[10px] text-gray-400">|</Text>
             <Text className="text-[10px] text-gray-500">{book.category}</Text>
           </View>
-          <Text className="text-[10px] text-gray-400 mt-0.5">{book.chapters.length}章 · {formatWordCount(book.wordCount)}字</Text>
+          <Text className="text-[10px] text-gray-400 mt-0.5">{getChapterCount(book)}章 · {formatWordCount(book.wordCount)}字</Text>
         </View>
       </TouchableOpacity>
     );
@@ -173,7 +178,7 @@ function BookCard({
           <View className={`px-1.5 py-0.5 rounded-full ${book.status === "writing" ? "bg-green-500/10" : "bg-gray-100"}`}>
             <Text className={`text-[9px] ${book.status === "writing" ? "text-green-600" : "text-gray-500"}`}>{statusLabel}</Text>
           </View>
-          <Text className="text-[10px] text-gray-400">{book.chapters.length}章</Text>
+          <Text className="text-[10px] text-gray-400">{getChapterCount(book)}章</Text>
         </View>
       </TouchableOpacity>
     );
@@ -220,7 +225,7 @@ function BookCard({
         <View className="flex-row items-center gap-2 mt-1">
           <Text className="text-[10px] text-gray-400">{book.category}</Text>
           <Text className="text-[10px] text-gray-300">|</Text>
-          <Text className="text-[10px] text-gray-400">{book.chapters.length}章</Text>
+          <Text className="text-[10px] text-gray-400">{getChapterCount(book)}章</Text>
         </View>
         <Text className="text-[10px] text-gray-400 mt-0.5">{formatWordCount(book.wordCount)}字</Text>
       </View>
@@ -695,8 +700,8 @@ export default function WorksScreen() {
 
       {/* ======== 手动创建弹窗 ======== */}
       <Modal visible={modalVisible} transparent animationType="slide">
-        <TouchableWithoutFeedback onPress={() => {}}>
-          <KeyboardAvoidingView className="flex-1 justify-end" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <TouchableWithoutFeedback onPress={() => undefined}>
+          <KeyboardAvoidingView className="flex-1 justify-center px-6" behavior={Platform.OS === "ios" ? "padding" : undefined}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
                 <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
@@ -729,6 +734,7 @@ export default function WorksScreen() {
 
                   {/* 分类 */}
                   <Text className="text-xs font-semibold text-gray-500 mb-1.5">分类</Text>
+                  <View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
                     <View className="flex-row gap-2">
                       {CATEGORIES.map((cat) => (
@@ -746,6 +752,7 @@ export default function WorksScreen() {
                       ))}
                     </View>
                   </ScrollView>
+                  </View>
 
                   {/* 状态 */}
                   <Text className="text-xs font-semibold text-gray-500 mb-1.5">状态</Text>
@@ -781,6 +788,7 @@ export default function WorksScreen() {
                       <Text className={`text-sm ${coverTab === "women" ? "text-white" : "text-gray-600"}`}>女频封面</Text>
                     </TouchableOpacity>
                   </View>
+                  <View>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-5">
                     <View className="flex-row gap-2.5">
                       {(coverTab === "man" ? COVER_IMAGES_MAN : COVER_IMAGES_WOMEN).map((img) => (
@@ -801,6 +809,7 @@ export default function WorksScreen() {
                       ))}
                     </View>
                   </ScrollView>
+                  </View>
 
                   {/* 按钮 */}
                   <View className="flex-row gap-3 mb-4">
@@ -828,8 +837,8 @@ export default function WorksScreen() {
 
       {/* ======== AI创建弹窗 ======== */}
       <Modal visible={aiModalVisible} transparent animationType="slide">
-        <TouchableWithoutFeedback onPress={() => {}}>
-          <KeyboardAvoidingView className="flex-1 justify-center px-6" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <TouchableWithoutFeedback onPress={() => undefined}>
+          <KeyboardAvoidingView className="flex-1 justify-end" behavior={Platform.OS === "ios" ? "padding" : undefined}>
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
               <View className="bg-white rounded-[32px] p-6">
                 <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />

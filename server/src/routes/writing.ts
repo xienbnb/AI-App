@@ -217,7 +217,126 @@ router.get("/:id/chapters/:chapterId/export", (req: Request, res: Response) => {
   res.send(content);
 });
 
-// === AI Generate Book ===
+// === AI Book Creation Dialogue (SSE) ===
+router.post("/ai-dialogue", async (req: Request, res: Response) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
+  res.setHeader("Connection", "keep-alive");
+
+  const client = new LLMClient();
+  let fullContent = "";
+
+  try {
+    const systemPrompt = `你是一个专业的AI小说创作助手。你通过对话引导用户创作小说。
+
+用户的每条消息可能是一个灵感、想法或问题。你需要：
+1. 热情回应并肯定用户的创意
+2. 根据用户输入，逐步帮ta完善小说设定
+3. 当信息足够时（书名+类型+大纲雏形），主动提出帮用户创建书籍
+
+对话节奏：
+- 第一轮：用户给灵感 → 你给出3个书名建议，让用户选择或提供更详细的想法
+- 后续轮次：用户选择或补充 → 完善类型、简介、核心设定
+- 当信息充分时：生成完整大纲，通知用户准备好创建书籍
+
+回复格式（markdown）：
+- 用 **粗体** 强调关键信息
+- 用 > 引用用户的想法
+- 保持热情鼓励的语气
+- 每次回复末尾给出明确的下一步建议`;
+
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: message },
+    ];
+
+    const stream = client.stream(
+      messages,
+      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
+    );
+
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+      }
+    }
+
+    // Check if the AI suggests creating a book
+    const titleMatch = fullContent.match(/【书名】[\s]*\n?([^\n]+)/);
+    const genreMatch = fullContent.match(/【类型】[\s]*\n?([^\n]+)/);
+    const descMatch = fullContent.match(/【简介】[\s]*\n?([^\n]+)/);
+    const outlineMatch = fullContent.match(/【大纲】[\s]*\n?([\s\S]+?)(?:\n【|$)/);
+
+    if (titleMatch || genreMatch || descMatch) {
+      const title = titleMatch?.[1]?.trim() || "";
+      const category = genreMatch?.[1]?.trim() || "";
+      const description = descMatch?.[1]?.trim() || "";
+      const outlineText = outlineMatch?.[1]?.trim() || "";
+
+      const outlineChapters = outlineText
+        .split(/\n/)
+        .filter((l: string) => l.trim())
+        .map((l: string, i: number) => {
+          const clean = l.trim().replace(/^\d+[\.\s、]+/, "");
+          return {
+            id: generateId(),
+            title: clean || `第${i + 1}章`,
+            wordCount: 0,
+            createdAt: new Date().toISOString().split("T")[0],
+            content: "",
+            volumeId: "",
+          };
+        });
+
+      if (title || category || description) {
+        const volumeId = generateId();
+        outlineChapters.forEach((c: Chapter) => { c.volumeId = volumeId; });
+
+        const newBook: Book = {
+          id: generateId(), title: title || "未命名作品",
+          category: category || "其他",
+          status: "连载中",
+          cover: "from-purple-500 to-blue-500",
+          coverImage: `/api/v1/static/images/covers/${
+            ["man", "women"][Math.floor(Math.random() * 2)]
+          }/${Math.floor(Math.random() * 16) + 1}.jpg`,
+          description: description || "",
+          wordCount: 0,
+          createdAt: new Date().toISOString().split("T")[0],
+          volumes: [{
+            id: volumeId,
+            title: "第一卷",
+            order: 1,
+            chapters: outlineChapters,
+          }],
+        };
+
+        books.unshift(newBook);
+
+        res.write(`data: ${JSON.stringify({
+          bookCreated: true,
+          bookId: newBook.id,
+          bookTitle: newBook.title,
+          bookCategory: newBook.category,
+          bookDescription: newBook.description,
+          chaptersCount: outlineChapters.length,
+        })}\n\n`);
+      }
+    }
+
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err) {
+    console.error("AI dialogue error:", err);
+    res.write(`data: ${JSON.stringify({ error: "AI服务异常，请稍后重试" })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  }
+});
 router.post("/ai-generate", async (req: Request, res: Response) => {
   const { idea, theme, genre } = req.body;
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");

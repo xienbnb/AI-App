@@ -27,6 +27,13 @@ interface Chapter {
   content?: string;
 }
 
+interface Volume {
+  id: string;
+  title: string;
+  order: number;
+  chapters: Chapter[];
+}
+
 interface Book {
   id: string;
   title: string;
@@ -37,7 +44,12 @@ interface Book {
   description: string;
   createdAt: string;
   wordCount: number;
-  chapters: Chapter[];
+  volumes: Volume[];
+}
+
+function getChapterCount(book: Book): number {
+  if (!book.volumes) return 0;
+  return book.volumes.reduce((sum, v) => sum + (v.chapters?.length || 0), 0);
 }
 
 function formatWordCount(n: number) {
@@ -219,7 +231,9 @@ export default function DetailScreen() {
     );
   }
 
-  const sortedChapters = [...book.chapters].sort((a, b) =>
+  // Flatten all chapters from all volumes for sorting
+  const allChapters = book.volumes?.flatMap((v) => v.chapters || []) || [];
+  const sortedChapters = [...allChapters].sort((a, b) =>
     chapterSort === "asc" ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)
   );
   const statusConfig = getStatusConfig(book.status);
@@ -412,7 +426,7 @@ export default function DetailScreen() {
           <View className="px-3 py-1.5 rounded-full bg-white flex-row items-center gap-1.5"
             style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
             <FontAwesome6 name="file-lines" size={10} color="#6B7280" />
-            <Text className="text-xs text-gray-600">{book.chapters.length}章</Text>
+            <Text className="text-xs text-gray-600">{getChapterCount(book)}章</Text>
           </View>
           <View className="px-3 py-1.5 rounded-full bg-white flex-row items-center gap-1.5"
             style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
@@ -451,7 +465,7 @@ export default function DetailScreen() {
                   <FontAwesome6 name="list" size={12} color="#6366F1" />
                 </View>
                 <Text className="text-base font-bold text-gray-800">章节列表</Text>
-                <Text className="text-xs text-gray-400">({book.chapters.length})</Text>
+                <Text className="text-xs text-gray-400">({allChapters.length})</Text>
               </View>
               <View className="flex-row gap-1.5">
                 <TouchableOpacity
