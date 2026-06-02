@@ -10,6 +10,8 @@ import {
   Platform,
   Alert,
   Modal,
+  FlatList,
+  TouchableWithoutFeedback,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -74,6 +76,21 @@ const SKILLS = [
   { label: "逻辑校验", icon: "magnifying-glass", color: "bg-teal-50 text-teal-600" },
   { label: "批量润色", icon: "paintbrush", color: "bg-violet-50 text-violet-600" },
   { label: "爆款简介", icon: "bullhorn", color: "bg-pink-50 text-pink-600" },
+];
+
+const SKILL_LIST = [
+  { name: "赛道分析", icon: "A", desc: "分析爆款赛道与差异化定位" },
+  { name: "篇幅规划", icon: "B", desc: "规划作品篇幅与更新节奏" },
+  { name: "世界观构建", icon: "C", desc: "构建完整世界观底层规则" },
+  { name: "人物设定", icon: "D", desc: "生成核心人物三维设定" },
+  { name: "关系网构建", icon: "E", desc: "构建人物关系网络" },
+  { name: "分卷大纲", icon: "F", desc: "生成三幕式分卷大纲" },
+  { name: "单章大纲", icon: "G", desc: "生成单章精细化大纲" },
+  { name: "正文生成", icon: "H", desc: "生成单章正文初稿" },
+  { name: "场景优化", icon: "I", desc: "优化关键场景描写" },
+  { name: "逻辑校验", icon: "J", desc: "检测逻辑漏洞与角色OOC" },
+  { name: "批量润色", icon: "K", desc: "全文润色与文风统一" },
+  { name: "爆款简介", icon: "L", desc: "生成爆款简介与章节标题" },
 ];
 
 const KNOWLEDGE_BASES = [
@@ -279,6 +296,55 @@ function ConfirmModal({
   );
 }
 
+// ===== Skill Picker Modal =====
+function SkillPickerModal({ visible, onSelect, onClose }: {
+  visible: boolean;
+  onSelect: (skill: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/40">
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View className="bg-white rounded-t-3xl max-h-[70%] pb-8">
+              <View className="items-center pt-4 pb-2">
+                <View className="w-10 h-1 bg-gray-300 rounded-full" />
+              </View>
+              <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择技能</Text>
+              <Text className="text-sm text-gray-500 text-center mb-4">点击技能插入到输入框中</Text>
+              <FlatList
+                data={SKILL_LIST}
+                numColumns={2}
+                scrollEnabled
+                className="px-4"
+                columnWrapperStyle={{ gap: 10 }}
+                contentContainerStyle={{ gap: 10 }}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100 active:bg-primary-50 active:border-primary-200"
+                    onPress={() => {
+                      onSelect(item.name);
+                      onClose();
+                    }}
+                  >
+                    <View className="flex-row items-center gap-2 mb-1">
+                      <Text className="text-base">{item.icon}</Text>
+                      <Text className="font-semibold text-gray-900 text-sm">{item.name}</Text>
+                    </View>
+                    <Text className="text-xs text-gray-500 leading-tight">{item.desc}</Text>
+                  </TouchableOpacity>
+                )}
+                keyExtractor={(_, i) => String(i)}
+              />
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 // ===== Main Home Component =====
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -319,6 +385,7 @@ export default function HomeScreen() {
   const sseRef = useRef<any>(null);
   const confirmActionRef = useRef<(() => void) | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [showSkillPicker, setShowSkillPicker] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
   const [confirmMsg, setConfirmMsg] = useState("");
 
@@ -741,7 +808,7 @@ export default function HomeScreen() {
         />
         <View className="px-4 pb-3 flex-row items-center justify-between">
           <View className="flex-row gap-2">
-            <TouchableOpacity className="bg-purple-50 rounded-lg px-3 py-1.5 flex-row items-center gap-1.5">
+            <TouchableOpacity onPress={() => setShowSkillPicker(true)} className="bg-purple-50 rounded-lg px-3 py-1.5 flex-row items-center gap-1.5">
               <FontAwesome6 name="at" size={12} color="#9333EA" />
               <Text className="text-xs text-purple-600 font-medium">技能</Text>
             </TouchableOpacity>
@@ -1187,6 +1254,11 @@ export default function HomeScreen() {
         confirmText="确认创建"
         onConfirm={handleConfirm}
         onClose={() => setShowConfirm(false)}
+      />
+      <SkillPickerModal
+        visible={showSkillPicker}
+        onSelect={(skill) => setInspiration(`@${skill} `)}
+        onClose={() => setShowSkillPicker(false)}
       />
     </View>
   );

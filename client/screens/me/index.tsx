@@ -39,14 +39,18 @@ const presetModels = [
 ];
 
 const defaultSkills: Skill[] = [
-  { id: "outline", name: "大纲规划", desc: "智能构建故事框架和章节结构", enabled: true },
-  { id: "character", name: "角色塑造", desc: "生成性格鲜明的人物设定", enabled: true },
-  { id: "dialogue", name: "对话增强", desc: "优化角色对话，增加真实感", enabled: true },
-  { id: "polish", name: "文笔润色", desc: "优化表达，提升文采质感", enabled: false },
-  { id: "worldbuild", name: "世界观构建", desc: "构建完整的世界观体系", enabled: false },
-  { id: "plot", name: "情节推演", desc: "分析并优化剧情发展逻辑", enabled: false },
-  { id: "expand", name: "内容扩写", desc: "将短内容扩写为详细段落", enabled: false },
-  { id: "summary", name: "内容缩写", desc: "提炼核心，压缩篇幅", enabled: false },
+  { id: "market", name: "赛道分析", desc: "爆款赛道分析与差异化定位", enabled: true },
+  { id: "planning", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", enabled: true },
+  { id: "worldbuild", name: "世界观", desc: "构建完整世界观底层规则", enabled: true },
+  { id: "character", name: "人物设定", desc: "生成核心人物三维设定", enabled: true },
+  { id: "relations", name: "关系网", desc: "构建人物关系网络", enabled: true },
+  { id: "outline", name: "分卷大纲", desc: "生成三幕式分卷大纲", enabled: true },
+  { id: "chapter", name: "单章大纲", desc: "生成单章精细化大纲", enabled: false },
+  { id: "writing", name: "正文生成", desc: "生成单章正文初稿", enabled: false },
+  { id: "scene", name: "场景优化", desc: "优化关键场景描写", enabled: false },
+  { id: "logic", name: "逻辑校验", desc: "检测逻辑漏洞与人物OOC", enabled: false },
+  { id: "polish", name: "批量润色", desc: "全文批量润色与文风统一", enabled: false },
+  { id: "blurb", name: "爆款简介", desc: "生成爆款简介与章节标题", enabled: false },
 ];
 
 export default function ProfileScreen() {
