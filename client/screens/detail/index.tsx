@@ -11,6 +11,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   Image,
+  Linking,
 } from "react-native";
 import { Screen } from "@/components/Screen";
 import { useFocusEffect } from "expo-router";
@@ -318,16 +319,74 @@ export default function DetailScreen() {
       {/* AI 生成的大纲 */}
       {book.outline ? (
         <View className="mb-5">
-          <View className="flex-row items-center gap-2 mb-3">
-            <View className="w-7 h-7 rounded-full bg-amber-500/10 items-center justify-center">
-              <FontAwesome6 name="wand-magic-sparkles" size={12} color="#F59E0B" />
+          <View className="flex-row items-center justify-between mb-3">
+            <View className="flex-row items-center gap-2">
+              <View className="w-7 h-7 rounded-full bg-amber-500/10 items-center justify-center">
+                <FontAwesome6 name="wand-magic-sparkles" size={12} color="#F59E0B" />
+              </View>
+              <Text className="text-base font-bold text-gray-800">AI 生成大纲</Text>
             </View>
-            <Text className="text-base font-bold text-gray-800">AI 生成大纲</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const url = `${API_BASE}/api/v1/writing/${id}/outline/export`;
+                if (Platform.OS === "web") {
+                  window.open(url, "_blank");
+                } else {
+                  Linking.openURL(url);
+                }
+              }}
+              className="h-8 px-3 rounded-xl bg-amber-500/10 flex-row items-center gap-1.5"
+            >
+              <FontAwesome6 name="download" size={11} color="#F59E0B" />
+              <Text className="text-xs font-medium text-amber-600">导出MD</Text>
+            </TouchableOpacity>
           </View>
-          <View className="bg-amber-50 rounded-2xl p-4 border border-amber-200/50">
-            <Text className="text-sm text-gray-700 leading-6 font-mono">
-              {book.outline}
-            </Text>
+          <View className="bg-amber-50 rounded-2xl p-5 border border-amber-200/30">
+            {book.outline.split("\n").map((line: string, i: number) => {
+              if (line.startsWith("## ")) {
+                return (
+                  <Text key={i} className="text-base font-bold text-amber-900 mt-4 mb-2 first:mt-0 leading-6" selectable>
+                    {line.replace("## ", "")}
+                  </Text>
+                );
+              }
+              if (line.startsWith("### ")) {
+                return (
+                  <Text key={i} className="text-sm font-semibold text-amber-800 mt-3 mb-1.5 leading-6" selectable>
+                    {line.replace("### ", "")}
+                  </Text>
+                );
+              }
+              if (line.startsWith("**") && line.endsWith("**")) {
+                return (
+                  <Text key={i} className="text-sm font-bold text-amber-800 leading-6" selectable>
+                    {line.replace(/\*\*/g, "")}
+                  </Text>
+                );
+              }
+              if (line.startsWith("- ") || line.startsWith("* ")) {
+                return (
+                  <Text key={i} className="text-sm text-gray-700 leading-7 ml-3" selectable>
+                    {"• "}{line.substring(2)}
+                  </Text>
+                );
+              }
+              if (line.startsWith("1. ") || line.startsWith("2. ") || line.startsWith("3. ") || line.startsWith("4. ") || line.startsWith("5. ") || line.startsWith("6. ")) {
+                return (
+                  <Text key={i} className="text-sm text-gray-700 leading-7 ml-2" selectable>
+                    {line}
+                  </Text>
+                );
+              }
+              if (line.trim() === "") {
+                return <View key={i} className="h-1.5" />;
+              }
+              return (
+                <Text key={i} className="text-sm text-gray-700 leading-6" selectable>
+                  {line}
+                </Text>
+              );
+            })}
           </View>
         </View>
       ) : null}

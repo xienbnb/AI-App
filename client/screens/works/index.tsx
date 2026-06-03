@@ -346,6 +346,38 @@ export default function WorksScreen() {
 
   const displayBooks = searchVisible && searchText.trim() ? searchResults : getSortedBooks();
 
+  // 更新书籍
+  const handleUpdateBook = async () => {
+    if (!newTitle.trim()) {
+      Alert.alert("提示", "请输入书名");
+      return;
+    }
+    const b = longPressBook;
+    if (!b) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${b.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle.trim(),
+          description: newDesc.trim(),
+          category: newCategory,
+          status: newStatus,
+          coverImage: selectedCover,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setModalVisible(false);
+        setLongPressBook(null);
+        resetForm();
+        await fetchBooks();
+      }
+    } catch (e) {
+      Alert.alert("错误", "修改书籍失败");
+    }
+  };
+
   // 手动创建
   const handleCreateBook = async () => {
     if (!newTitle.trim()) {
@@ -754,8 +786,7 @@ export default function WorksScreen() {
       {/* ======== 手动创建弹窗 ======== */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <KeyboardAvoidingView className="flex-1 justify-center px-6" behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
+          <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
               <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
               <ScrollView className="px-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   <Text className="text-lg font-bold text-gray-900 text-center mb-5">
@@ -872,7 +903,7 @@ export default function WorksScreen() {
                       <Text className="text-sm font-medium text-gray-600">取消</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={handleCreateBook}
+                      onPress={longPressBook ? handleUpdateBook : handleCreateBook}
                       className="flex-[2] py-3.5 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}
                     >
                       <Text className="text-sm font-bold text-white">
@@ -882,15 +913,13 @@ export default function WorksScreen() {
                   </View>
                 </ScrollView>
               </View>
-            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
       </Modal>
 
       {/* ======== AI创建弹窗 ======== */}
       <Modal visible={aiModalVisible} transparent animationType="slide">
         <KeyboardAvoidingView className="flex-1 justify-end" behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View className="bg-white rounded-[32px] p-6">
+          <View className="bg-white rounded-[32px] p-6">
               <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
 
                 {/* 标题 */}
@@ -954,7 +983,6 @@ export default function WorksScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-            </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
       </Modal>
     </Screen>

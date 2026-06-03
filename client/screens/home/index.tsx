@@ -447,7 +447,7 @@ export default function HomeScreen() {
 
   // ===== Render =====
   return (
-    <View className="flex-1 bg-white">
+    <View className="flex-1 bg-white overflow-hidden">
       {/* Top Bar */}
       <View className="flex-row items-center justify-between px-4 border-b border-gray-100" style={{ paddingTop: insets.top + 4, paddingBottom: 10 }}>
         <TouchableOpacity

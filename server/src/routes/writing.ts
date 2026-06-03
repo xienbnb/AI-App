@@ -158,8 +158,8 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
       "title": "第一卷标题",
       "order": 1,
       "chapters": [
-        {"title": "第一章标题", "wordCount": 0, "content": ""},
-        {"title": "第二章标题", "wordCount": 0, "content": ""}
+        {"title": "第一章标题", "wordCount": 0, "content": "本章简要内容概述（50字左右）"},
+        {"title": "第二章标题", "wordCount": 0, "content": "本章简要内容概述（50字左右）"}
       ]
     }
   ],
@@ -433,6 +433,34 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
   }
 });
 
+// GET /:id/chapters/:chapterId - 获取单个章节内容
+router.get("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
+  try {
+    const client = getSupabaseClient();
+    const { data: book, error: fetchError } = await client
+      .from("books")
+      .select("volumes")
+      .eq("id", req.params.id)
+      .single();
+
+    if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+
+    const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
+    let chapter: any;
+    for (const v of volumes) {
+      chapter = v.chapters?.find((c: any) => c.id === req.params.chapterId);
+      if (chapter) break;
+    }
+    if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
+
+    res.json({ success: true, data: toCamelCase(chapter) });
+  } catch (err: any) {
+    console.error("获取章节错误:", err);
+    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+  }
+});
+
 router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
@@ -541,6 +569,31 @@ router.get("/:id/chapters/:chapterId/export", async (req: Request, res: Response
   } catch (err: any) {
     console.error("导出章节错误:", err);
     res.status(500).json({ success: false, message: err.message || "服务器错误" });
+  }
+});
+
+// GET /:id/outline/export - 导出大纲为MD文件
+router.get("/:id/outline/export", async (req: Request, res: Response) => {
+  try {
+    const client = getSupabaseClient();
+    const { data: book, error } = await client
+      .from("books")
+      .select("title, outline")
+      .eq("id", req.params.id)
+      .single();
+
+    if (error) throw new Error(`查询书籍失败: ${error.message}`);
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book.outline) return res.status(404).json({ success: false, message: "该书还没有大纲" });
+
+    const mdContent = `# 《${book.title}》大纲\n\n${book.outline}`;
+    const filename = `${book.title}_大纲.md`;
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.send(mdContent);
+  } catch (err: any) {
+    console.error("导出大纲错误:", err);
+    res.status(500).json({ success: false, message: err.message || "导出失败" });
   }
 });
 
