@@ -20,6 +20,7 @@ import { useFocusEffect } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
+import * as Haptics from "expo-haptics";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -96,7 +97,7 @@ function BookCard({
       <TouchableOpacity
         onPress={onPress}
         onLongPress={onLongPress}
-        delayLongPress={500}
+        delayLongPress={400}
         className="bg-white rounded-2xl flex-row overflow-hidden mb-2.5"
         style={{
           shadowColor: "#6366F1",
@@ -150,7 +151,7 @@ function BookCard({
       <TouchableOpacity
         onPress={onPress}
         onLongPress={onLongPress}
-        delayLongPress={500}
+        delayLongPress={400}
         className="w-[48%] mb-5"
       >
         {/* 3D书本效果 */}
@@ -207,7 +208,7 @@ function BookCard({
     <TouchableOpacity
       onPress={onPress}
       onLongPress={onLongPress}
-      delayLongPress={500}
+      delayLongPress={400}
       className="w-[48%] bg-white rounded-2xl overflow-hidden mb-3.5"
       style={{
         shadowColor: "#6366F1",
@@ -551,7 +552,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="grid"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => setLongPressBook(book)}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
               />
             ))}
           </View>
@@ -563,7 +564,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="book"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => setLongPressBook(book)}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
               />
             ))}
           </View>
@@ -575,7 +576,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="list"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => setLongPressBook(book)}
+                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
               />
             ))}
           </View>
