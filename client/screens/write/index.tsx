@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { Screen } from '@/components/Screen';
+import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FontAwesome6 } from '@expo/vector-icons';
 import RNSSE from 'react-native-sse';
@@ -146,13 +147,28 @@ export default function WriteScreen() {
 
     setSaving(true);
     try {
+      /**
+       * 服务端文件：server/src/routes/writing.ts
+       * 接口：POST /api/v1/writing
+       * Body 参数：title: string, description: string, category: string, coverImage: string, volumes: Volume[]
+       */
       const res = await fetch(`${API_BASE}/api/v1/writing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           title: finalTitle,
-          content: finalContent,
-          topic: topic.trim(),
+          description: topic.trim(),
+          category: '其他',
+          coverImage: '',
+          volumes: [{
+            title: '正文',
+            order: 1,
+            chapters: [{
+              title: finalTitle,
+              content: finalContent,
+              wordCount: finalContent.replace(/\s/g, '').length,
+            }],
+          }],
         }),
       });
       const json = await res.json();
@@ -174,10 +190,7 @@ export default function WriteScreen() {
   const handleCopy = async () => {
     try {
       const textToCopy = editableContent || generatedContent;
-      // 使用clipboard API
-      if (Platform.OS === 'web') {
-        await navigator.clipboard.writeText(textToCopy);
-      }
+      await Clipboard.setStringAsync(textToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import writingRouter from "./routes/writing.js";
 import aiRouter from "./routes/ai.js";
+import communityRouter from "./routes/community.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -22,6 +23,7 @@ app.get('/api/v1/health', (req, res) => {
 // Routes
 app.use('/api/v1/writing', writingRouter);
 app.use('/api/v1/ai', aiRouter);
+app.use('/api/v1/community', communityRouter);
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}/`);

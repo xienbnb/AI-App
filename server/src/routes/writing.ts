@@ -920,6 +920,71 @@ xxx
   }
 });
 
+// === AI Generate (Generic SSE) - 通用AI生成端点 ===
+router.post("/generate", async (req: Request, res: Response) => {
+  const { prompt, topic, context, style, writingStyle, wordCount } = req.body;
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
+  res.setHeader("Connection", "keep-alive");
+
+  const client = new LLMClient();
+
+  try {
+    let systemPrompt = "你是一个专业的网络小说写作助手，擅长创作精彩的小说内容。";
+    const effectiveStyle = style || writingStyle || "default";
+
+    if (effectiveStyle === "玄幻") systemPrompt += "你擅长玄幻小说创作，文风大气磅礴，想象力丰富。";
+    else if (effectiveStyle === "仙侠") systemPrompt += "你擅长仙侠小说创作，文风飘逸出尘，意境深远。";
+    else if (effectiveStyle === "都市") systemPrompt += "你擅长都市小说创作，文风贴近生活，情节紧凑。";
+    else if (effectiveStyle === "科幻") systemPrompt += "你擅长科幻小说创作，设定严谨，想象力丰富。";
+    else if (effectiveStyle === "历史") systemPrompt += "你擅长历史小说创作，考据严谨，文风典雅。";
+    else if (effectiveStyle === "言情") systemPrompt += "你擅长言情小说创作，情感细腻，文笔优美。";
+    else if (effectiveStyle === "悬疑") systemPrompt += "你擅长悬疑小说创作，逻辑严密，氛围感强。";
+    else systemPrompt += "你文笔流畅，创作内容精彩纷呈。";
+
+    let userPrompt = "";
+    if (topic) {
+      userPrompt = `请根据以下主题创作一段精彩的小说内容：\n\n主题：${topic}\n写作风格：${effectiveStyle}`;
+      if (wordCount) userPrompt += `\n字数要求：约${wordCount}字`;
+      userPrompt += `\n\n请直接输出小说正文内容，不要包含任何说明文字。`;
+    } else if (prompt) {
+      userPrompt = prompt;
+      if (context) {
+        userPrompt = `以下是当前小说的上下文：\n\n${context}\n\n---\n\n请根据以下指令继续创作：${prompt}`;
+      }
+      if (wordCount) userPrompt += `\n\n字数要求：约${wordCount}字`;
+    } else {
+      res.write(`data: ${JSON.stringify({ error: "请提供创作主题或指令" })}\n\n`);
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
+    const stream = client.stream(
+      [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
+      { model: "doubao-seed-2-0-lite-260215", temperature: 0.9 }
+    );
+
+    let fullContent = "";
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ content: chunk.content })}\n\n`);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true, fullContent })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err) {
+    console.error("Generate error:", err);
+    res.write(`data: ${JSON.stringify({ error: "生成失败，请重试" })}\n\n`);
+    res.write("data: [DONE]\n\n");
+    res.end();
+  }
+});
+
 // === AI Generate Book Details (SSE) ===
 router.post("/generate-details", async (req: Request, res: Response) => {
   const { outline, volumes, genre, inspiration } = req.body;

@@ -116,6 +116,10 @@ export default function DetailScreen() {
   const [editingChapter, setEditingChapter] = useState<{ id: string; title: string } | null>(null);
   const [editChapterTitle, setEditChapterTitle] = useState("");
 
+  // 卷编辑状态
+  const [editingVolume, setEditingVolume] = useState<{ id: string; title: string } | null>(null);
+  const [editVolumeTitle, setEditVolumeTitle] = useState("");
+
   // Tab 状态
   const [activeTab, setActiveTab] = useState<"章节" | "大纲" | "设定" | "灵感">("章节");
   const [chapterSort, setChapterSort] = useState<"asc" | "desc">("asc");
@@ -246,6 +250,38 @@ export default function DetailScreen() {
         text: "删除", style: "destructive",
         onPress: () => handleDeleteChapter(chapter.id, chapter.title),
       },
+      { text: "取消", style: "cancel" },
+    ]);
+  };
+
+  // 编辑卷名
+  const handleUpdateVolume = async (volumeId: string, currentTitle: string) => {
+    setEditingVolume({ id: volumeId, title: currentTitle });
+    setEditVolumeTitle(currentTitle);
+  };
+
+  // 删除卷
+  const handleDeleteVolume = (volumeId: string, volumeTitle: string) => {
+    Alert.alert("删除确认", `确定删除"${volumeTitle}"及其所有章节？`, [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除", style: "destructive",
+        onPress: async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${volumeId}`, { method: "DELETE" });
+            const json = await res.json();
+            if (json.success) await fetchBook();
+          } catch (e) { Alert.alert("错误", "删除卷失败"); }
+        },
+      },
+    ]);
+  };
+
+  // 长按卷 - 弹出操作选项
+  const handleLongPressVolume = (volume: Volume) => {
+    Alert.alert(volume.title, "选择操作", [
+      { text: "编辑卷名", onPress: () => handleUpdateVolume(volume.id, volume.title) },
+      { text: "删除卷", style: "destructive", onPress: () => handleDeleteVolume(volume.id, volume.title) },
       { text: "取消", style: "cancel" },
     ]);
   };
@@ -642,6 +678,8 @@ export default function DetailScreen() {
                       <TouchableOpacity
                         className="flex-row items-center justify-between px-4 py-3.5"
                         onPress={() => setCollapsedVolumes(prev => ({ ...prev, [volume.id]: !prev[volume.id] }))}
+                        onLongPress={() => handleLongPressVolume(volume)}
+                        delayLongPress={500}
                       >
                         <View className="flex-row items-center gap-2.5">
                           <View className="w-8 h-8 rounded-lg bg-primary-500/10 items-center justify-center">
@@ -778,6 +816,48 @@ export default function DetailScreen() {
                   disabled={!editingChapter && !selectedVolumeId}
                 >
                   <Text className="text-sm font-bold text-white">{editingChapter ? "保存" : "创建并编辑"}</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 编辑卷名弹窗 */}
+      <Modal visible={!!editingVolume} transparent animationType="fade">
+        <TouchableOpacity activeOpacity={1} onPress={() => setEditingVolume(null)} className="flex-1 bg-black/30 justify-center">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
+              <Text className="text-lg font-bold text-gray-800 mb-4">修改卷名</Text>
+              <TextInput
+                className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4"
+                placeholder="请输入新卷名"
+                value={editVolumeTitle}
+                onChangeText={setEditVolumeTitle}
+                autoFocus
+              />
+              <View className="flex-row gap-3">
+                <TouchableOpacity onPress={() => setEditingVolume(null)} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center">
+                  <Text className="text-sm font-semibold text-gray-600">取消</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={async () => {
+                    if (!editVolumeTitle.trim() || !editingVolume) return;
+                    try {
+                      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${editingVolume.id}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ title: editVolumeTitle.trim() }),
+                      });
+                      const json = await res.json();
+                      if (json.success) await fetchBook();
+                    } catch (e) { Alert.alert("错误", "修改卷名失败"); }
+                    setEditingVolume(null);
+                    setEditVolumeTitle("");
+                  }}
+                  className="flex-1 py-3 rounded-2xl bg-primary-500 items-center"
+                >
+                  <Text className="text-sm font-bold text-white">保存</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>

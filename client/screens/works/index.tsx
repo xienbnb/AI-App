@@ -300,6 +300,8 @@ export default function WorksScreen() {
   const [longPressBook, setLongPressBook] = useState<Book | null>(null);
   // 删除确认弹窗
   const [confirmDeleteBook, setConfirmDeleteBook] = useState<Book | null>(null);
+  // 编辑模式：记录正在编辑的书籍ID（独立于 longPressBook，避免时序竞态）
+  const [editingBookId, setEditingBookId] = useState<string | null>(null);
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -352,10 +354,9 @@ export default function WorksScreen() {
       Alert.alert("提示", "请输入书名");
       return;
     }
-    const b = longPressBook;
-    if (!b) return;
+    if (!editingBookId) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${b.id}`, {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${editingBookId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -441,6 +442,7 @@ export default function WorksScreen() {
     setNewCategory("玄幻");
     setNewStatus("writing");
     setSelectedCover(COVER_IMAGES_MAN[0].path);
+    setEditingBookId(null);
   };
 
   // 删除书籍
@@ -716,9 +718,9 @@ export default function WorksScreen() {
                     setNewCategory(b.category);
                     setNewStatus(b.status);
                     setSelectedCover(b.coverImage || COVER_IMAGES_MAN[0].path);
-                    // 先打开弹窗，再清除 longPressBook（保留引用供弹窗判断编辑模式）
+                    setEditingBookId(b.id);
+                    setLongPressBook(null);
                     setTimeout(() => setModalVisible(true), 200);
-                    setTimeout(() => setLongPressBook(null), 250);
                   }},
                   { icon: "trash-can", label: "删除书籍", color: "#EF4444", action: () => {
                     const b = longPressBook!;
@@ -791,7 +793,7 @@ export default function WorksScreen() {
               <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
               <ScrollView className="px-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   <Text className="text-lg font-bold text-gray-900 text-center mb-5">
-                    {longPressBook ? "修改信息" : "新建作品"}
+                    {editingBookId ? "修改信息" : "新建作品"}
                   </Text>
 
                   {/* 书名 */}
@@ -898,13 +900,13 @@ export default function WorksScreen() {
                   {/* 按钮 */}
                   <View className="flex-row gap-3 mb-4">
                     <TouchableOpacity
-                      onPress={() => { setModalVisible(false); setLongPressBook(null); }}
+                      onPress={() => { setModalVisible(false); setEditingBookId(null); }}
                       className="flex-1 py-3.5 rounded-2xl items-center bg-gray-100"
                     >
                       <Text className="text-sm font-medium text-gray-600">取消</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={longPressBook ? handleUpdateBook : handleCreateBook}
+                      onPress={editingBookId ? handleUpdateBook : handleCreateBook}
                       className="flex-[2] py-3.5 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}
                     >
                       <Text className="text-sm font-bold text-white">

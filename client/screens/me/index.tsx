@@ -1,9 +1,10 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, Platform, KeyboardAvoidingView, TextInput, Alert } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -77,6 +78,31 @@ export default function ProfileScreen() {
   const [customApiKey, setCustomApiKey] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
 
+  // 加载持久化的 AI 设置
+  useEffect(() => {
+    AsyncStorage.getItem("ai_settings").then((data) => {
+      if (data) {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.aiModel) setAiModel(parsed.aiModel);
+          if (parsed.temperature) setTemperature(parsed.temperature);
+          if (parsed.maxTokens) setMaxTokens(parsed.maxTokens);
+          if (parsed.skills) setSkills(parsed.skills);
+          if (parsed.customModels) setCustomModels(parsed.customModels);
+        } catch {}
+      }
+    });
+  }, []);
+
+  // 保存 AI 设置
+  const saveAISettings = useCallback((updates: Record<string, unknown>) => {
+    AsyncStorage.getItem("ai_settings").then((data) => {
+      const current = data ? JSON.parse(data) : {};
+      Object.assign(current, updates);
+      AsyncStorage.setItem("ai_settings", JSON.stringify(current));
+    });
+  }, []);
+
   // 数据统计弹窗
   const [showDataStats, setShowDataStats] = useState(false);
 
@@ -112,8 +138,10 @@ export default function ProfileScreen() {
       baseUrl: customBaseUrl.trim() || "https://api.openai.com/v1",
       createdAt: new Date().toLocaleDateString(),
     };
-    setCustomModels([...customModels, newModel]);
+    const updatedModels = [...customModels, newModel];
+    setCustomModels(updatedModels);
     setAiModel(newModel.id);
+    saveAISettings({ customModels: updatedModels, aiModel: newModel.id });
     setCustomName("");
     setCustomModelId("");
     setCustomApiKey("");
@@ -128,15 +156,23 @@ export default function ProfileScreen() {
         text: "删除",
         style: "destructive",
         onPress: () => {
-          setCustomModels(customModels.filter((m) => m.id !== id));
-          if (aiModel === id) setAiModel("doubao-seed-2-0-lite-260215");
+          const updatedModels = customModels.filter((m) => m.id !== id);
+          setCustomModels(updatedModels);
+          if (aiModel === id) {
+            setAiModel("doubao-seed-2-0-lite-260215");
+            saveAISettings({ customModels: updatedModels, aiModel: "doubao-seed-2-0-lite-260215" });
+          } else {
+            saveAISettings({ customModels: updatedModels });
+          }
         },
       },
     ]);
   };
 
   const toggleSkill = (id: string) => {
-    setSkills(skills.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
+    const updatedSkills = skills.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
+    setSkills(updatedSkills);
+    saveAISettings({ skills: updatedSkills });
   };
 
   const settingsSections = [
@@ -446,7 +482,7 @@ export default function ProfileScreen() {
                               ? "border-indigo-500 bg-indigo-50"
                               : "border-gray-100 bg-white"
                           }`}
-                          onPress={() => setAiModel(model.id)}
+                          onPress={() => { setAiModel(model.id); saveAISettings({ aiModel: model.id }); }}
                         >
                           <View className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${
                             aiModel === model.id ? "bg-indigo-100" : "bg-gray-50"
@@ -494,7 +530,7 @@ export default function ProfileScreen() {
                           </View>
                           <TouchableOpacity
                             className="flex-1"
-                            onPress={() => setAiModel(model.id)}
+                            onPress={() => { setAiModel(model.id); saveAISettings({ aiModel: model.id }); }}
                           >
                             <Text className="text-sm font-semibold text-gray-800">{model.name}</Text>
                             <Text className="text-xs text-gray-400 mt-0.5" numberOfLines={1}>

@@ -50,3 +50,17 @@ export const inspirations = pgTable("inspirations", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
+
+export const posts = pgTable("posts", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: text("user_id").notNull().default('default'),
+	userName: text("user_name").notNull().default('匿名用户'),
+	title: text().notNull().default(''),
+	content: text().notNull().default(''),
+	tag: text().notNull().default('B 全部'),
+	likes: integer("likes").notNull().default(0),
+	comments: integer("comments").notNull().default(0),
+	featured: integer("featured").notNull().default(0),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});

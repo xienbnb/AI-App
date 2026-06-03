@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface KnowledgeItem {
   id: string;
@@ -49,6 +50,23 @@ export default function AIKnowledgeScreen() {
   const [inputTitle, setInputTitle] = useState("");
   const [inputContent, setInputContent] = useState("");
 
+  const STORAGE_KEY = `ai_knowledge_${kbType}`;
+
+  // 加载持久化数据
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY).then((data) => {
+      if (data) {
+        try { setItems(JSON.parse(data)); } catch {}
+      }
+    });
+  }, [STORAGE_KEY]);
+
+  // 保存数据
+  const saveItems = useCallback((newItems: KnowledgeItem[]) => {
+    setItems(newItems);
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(newItems));
+  }, [STORAGE_KEY]);
+
   const openAdd = () => {
     setEditingItem(null);
     setInputTitle("");
@@ -69,8 +87,8 @@ export default function AIKnowledgeScreen() {
       return;
     }
     if (editingItem) {
-      setItems((prev) =>
-        prev.map((item) =>
+      saveItems(
+        items.map((item) =>
           item.id === editingItem.id
             ? { ...item, title: inputTitle.trim(), content: inputContent.trim() }
             : item
@@ -83,13 +101,13 @@ export default function AIKnowledgeScreen() {
         content: inputContent.trim(),
         createdAt: new Date().toLocaleDateString("zh-CN"),
       };
-      setItems((prev) => [newItem, ...prev]);
+      saveItems([newItem, ...items]);
     }
     setShowAddModal(false);
   };
 
   const handleDelete = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    saveItems(items.filter((item) => item.id !== id));
   };
 
   const handleSuggestionAdd = (suggestion: string) => {
@@ -99,7 +117,7 @@ export default function AIKnowledgeScreen() {
       content: "",
       createdAt: new Date().toLocaleDateString("zh-CN"),
     };
-    setItems((prev) => [newItem, ...prev]);
+    saveItems([newItem, ...items]);
   };
 
   return (
