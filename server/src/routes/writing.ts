@@ -560,10 +560,10 @@ router.get("/:id/chapters/:chapterId/export", async (req: Request, res: Response
     const content = `# ${chapter.title}\n\n${chapter.content}`;
     if (format === "md") {
       res.setHeader("Content-Type", "text/markdown; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${chapter.title}.md"`);
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(chapter.title)}.md`);
     } else {
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
-      res.setHeader("Content-Disposition", `attachment; filename="${chapter.title}.txt"`);
+      res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(chapter.title)}.txt`);
     }
     res.send(content);
   } catch (err: any) {
