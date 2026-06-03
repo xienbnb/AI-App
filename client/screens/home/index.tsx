@@ -418,6 +418,31 @@ export default function HomeScreen() {
     })();
   }, []);
 
+  // ===== Delete Session =====
+  const handleDeleteSession = useCallback((sid: string) => {
+    Alert.alert("删除确认", "确定删除该对话？删除后无法恢复。", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除", style: "destructive",
+        onPress: async () => {
+          try {
+            // Remove from AsyncStorage
+            await AsyncStorage.removeItem(`chat_messages_${sid}`);
+            const newList = sessionList.filter(s => s.id !== sid);
+            setSessionList(newList);
+            await AsyncStorage.setItem("chat_sessions", JSON.stringify(newList.slice(0, 20)));
+            // If deleted the active session, reset to new
+            if (sid === sessionIdRef.current) {
+              resetDialog();
+            }
+          } catch (e) {
+            Alert.alert("错误", "删除失败");
+          }
+        },
+      },
+    ]);
+  }, [sessionList, resetDialog]);
+
   // ===== Render =====
 
   // ===== Build session items for render =====
@@ -441,6 +466,12 @@ export default function HomeScreen() {
           </Text>
           <Text className="text-xs text-gray-400 mt-0.5">{dateStr}</Text>
         </View>
+        <TouchableOpacity
+          className="w-7 h-7 rounded-lg items-center justify-center"
+          onPress={() => handleDeleteSession(s.id)}
+        >
+          <FontAwesome6 name="trash-can" size={12} color="#EF4444" />
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   }

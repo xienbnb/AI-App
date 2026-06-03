@@ -158,8 +158,8 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
       "title": "第一卷标题",
       "order": 1,
       "chapters": [
-        {"title": "第一章标题", "wordCount": 0, "content": "本章简要内容概述（50字左右）"},
-        {"title": "第二章标题", "wordCount": 0, "content": "本章简要内容概述（50字左右）"}
+        {"title": "第一章标题", "wordCount": 0, "content": ""},
+        {"title": "第二章标题", "wordCount": 0, "content": ""}
       ]
     }
   ],

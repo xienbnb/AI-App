@@ -107,6 +107,14 @@ export default function DetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [chapterTitle, setChapterTitle] = useState("");
+  const [selectedVolumeId, setSelectedVolumeId] = useState("");
+
+  // 卷折叠状态
+  const [collapsedVolumes, setCollapsedVolumes] = useState<Record<string, boolean>>({});
+
+  // 章节编辑状态
+  const [editingChapter, setEditingChapter] = useState<{ id: string; title: string } | null>(null);
+  const [editChapterTitle, setEditChapterTitle] = useState("");
 
   // Tab 状态
   const [activeTab, setActiveTab] = useState<"章节" | "大纲" | "设定" | "灵感">("章节");
@@ -157,8 +165,13 @@ export default function DetailScreen() {
       Alert.alert("提示", "请输入章节标题");
       return;
     }
+    const volumeId = selectedVolumeId || (book?.volumes?.[0]?.id);
+    if (!volumeId) {
+      Alert.alert("提示", "请先创建卷");
+      return;
+    }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters`, {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${volumeId}/chapters`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title: chapterTitle.trim() }),
@@ -167,6 +180,7 @@ export default function DetailScreen() {
       if (json.success) {
         setModalVisible(false);
         setChapterTitle("");
+        setSelectedVolumeId("");
         await fetchBook();
         router.push("/editor", { bookId: id, chapterId: json.data.id });
       }
@@ -188,6 +202,51 @@ export default function DetailScreen() {
           } catch (e) { Alert.alert("错误", "删除章节失败"); }
         },
       },
+    ]);
+  };
+
+  // 编辑章节
+  const handleUpdateChapter = async (chapterId: string, newTitle: string) => {
+    if (!newTitle.trim()) {
+      Alert.alert("提示", "请输入章节标题");
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${chapterId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: newTitle.trim() }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setModalVisible(false);
+        setEditingChapter(null);
+        setEditChapterTitle("");
+        await fetchBook();
+      } else {
+        Alert.alert("错误", json.error || "修改失败");
+      }
+    } catch (e) {
+      Alert.alert("错误", "修改章节失败");
+    }
+  };
+
+  // 长按章节 - 弹出操作选项
+  const handleLongPressChapter = (chapter: Chapter) => {
+    Alert.alert(chapter.title, "选择操作", [
+      {
+        text: "编辑标题",
+        onPress: () => {
+          setEditingChapter({ id: chapter.id, title: chapter.title });
+          setEditChapterTitle(chapter.title);
+          setModalVisible(true);
+        },
+      },
+      {
+        text: "删除", style: "destructive",
+        onPress: () => handleDeleteChapter(chapter.id, chapter.title),
+      },
+      { text: "取消", style: "cancel" },
     ]);
   };
 
@@ -567,36 +626,88 @@ export default function DetailScreen() {
               </View>
             </View>
 
-            {sortedChapters.length === 0 ? (
+            {book.volumes && book.volumes.length > 0 ? (
+              <View className="gap-3">
+                {book.volumes.map((volume, vi) => {
+                  const isCollapsed = collapsedVolumes[volume.id] || false;
+                  const volChapters = volume.chapters || [];
+                  const sortedVolChapters = [...volChapters].sort((a, b) =>
+                    chapterSort === "asc" ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)
+                  );
+                  return (
+                    <View key={volume.id} className="bg-white rounded-2xl overflow-hidden"
+                      style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}
+                    >
+                      {/* Volume Header */}
+                      <TouchableOpacity
+                        className="flex-row items-center justify-between px-4 py-3.5"
+                        onPress={() => setCollapsedVolumes(prev => ({ ...prev, [volume.id]: !prev[volume.id] }))}
+                      >
+                        <View className="flex-row items-center gap-2.5">
+                          <View className="w-8 h-8 rounded-lg bg-primary-500/10 items-center justify-center">
+                            <FontAwesome6 name="folder" size={14} color="#6366F1" />
+                          </View>
+                          <View>
+                            <Text className="text-sm font-semibold text-gray-800">{volume.title}</Text>
+                            <Text className="text-xs text-gray-400">{volChapters.length}章</Text>
+                          </View>
+                        </View>
+                        <View className="flex-row items-center gap-2">
+                          <TouchableOpacity
+                            className="w-7 h-7 rounded-full bg-primary-500/10 items-center justify-center"
+                            onPress={(e) => {
+                              // Stop propagation to prevent collapse toggle
+                              setSelectedVolumeId(volume.id);
+                              setModalVisible(true);
+                            }}
+                          >
+                            <FontAwesome6 name="plus" size={11} color="#6366F1" />
+                          </TouchableOpacity>
+                          <FontAwesome6 name={isCollapsed ? "chevron-down" : "chevron-up"} size={12} color="#9CA3AF" />
+                        </View>
+                      </TouchableOpacity>
+
+                      {/* Chapters in this volume */}
+                      {!isCollapsed && (
+                        <View className="px-3 pb-3 gap-1.5">
+                          {sortedVolChapters.length === 0 ? (
+                            <View className="py-4 items-center">
+                              <Text className="text-xs text-gray-400">该卷暂无章节</Text>
+                            </View>
+                          ) : (
+                            sortedVolChapters.map((chapter, ci) => (
+                              <TouchableOpacity
+                                key={chapter.id}
+                                onPress={() => router.push("/editor", { bookId: id, chapterId: chapter.id })}
+                                onLongPress={() => handleLongPressChapter(chapter)}
+                                className="flex-row items-center px-3 py-2.5 rounded-xl bg-gray-50"
+                              >
+                                <View className="w-7 h-7 rounded-lg bg-primary-500/10 items-center justify-center mr-2.5">
+                                  <Text className="text-xs font-bold text-primary-500">
+                                    {chapterSort === "asc" ? ci + 1 : sortedVolChapters.length - ci}
+                                  </Text>
+                                </View>
+                                <View className="flex-1">
+                                  <Text className="text-sm font-medium text-gray-700">{chapter.title}</Text>
+                                  <Text className="text-xs text-gray-400 mt-0.5">{formatWordCount(chapter.wordCount)}字 · {chapter.createdAt}</Text>
+                                </View>
+                                <FontAwesome6 name="chevron-right" size={10} color="#D1D5DB" />
+                              </TouchableOpacity>
+                            ))
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : (
               <View className="bg-white rounded-3xl py-12 items-center"
                 style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}
               >
                 <FontAwesome6 name="file-pen" size={36} color="#D1D5DB" />
                 <Text className="text-sm text-gray-400 mt-3">还没有章节</Text>
                 <Text className="text-xs text-gray-300 mt-1">点击右上角 + 新建第一章</Text>
-              </View>
-            ) : (
-              <View className="gap-2.5">
-                {sortedChapters.map((chapter, i) => (
-                  <TouchableOpacity
-                    key={chapter.id}
-                    onPress={() => router.push("/editor", { bookId: id, chapterId: chapter.id })}
-                    onLongPress={() => handleDeleteChapter(chapter.id, chapter.title)}
-                    className="bg-white rounded-2xl p-4 flex-row items-center"
-                    style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}
-                  >
-                    <View className="w-10 h-10 rounded-xl bg-primary-500/10 items-center justify-center mr-3">
-                      <Text className="text-sm font-bold text-primary-500">
-                        {chapterSort === "asc" ? i + 1 : sortedChapters.length - i}
-                      </Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-800">{chapter.title}</Text>
-                      <Text className="text-xs text-gray-400 mt-0.5">{formatWordCount(chapter.wordCount)}字 · {chapter.createdAt}</Text>
-                    </View>
-                    <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
-                  </TouchableOpacity>
-                ))}
               </View>
             )}
           </View>
@@ -607,27 +718,59 @@ export default function DetailScreen() {
         {activeTab === "灵感" && renderInspirationTab()}
       </ScrollView>
 
-      {/* 新建章节弹窗 */}
+      {/* 新建/编辑章节弹窗 */}
       <Modal visible={modalVisible} transparent animationType="slide">
-        <TouchableOpacity activeOpacity={1} onPress={() => setModalVisible(false)} className="flex-1 bg-black/30 justify-center">
+        <TouchableOpacity activeOpacity={1} onPress={() => { setModalVisible(false); setEditingChapter(null); }} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
             <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6"
               style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 24, elevation: 10 }}
             >
-              <Text className="text-lg font-bold text-gray-800 mb-4">新建章节</Text>
+              <Text className="text-lg font-bold text-gray-800 mb-4">{editingChapter ? "编辑章节" : "新建章节"}</Text>
               <TextInput
                 className="bg-gray-50 rounded-2xl px-4 py-3.5 text-sm"
                 placeholder="输入章节标题"
-                value={chapterTitle}
-                onChangeText={setChapterTitle}
+                value={editingChapter ? editChapterTitle : chapterTitle}
+                onChangeText={editingChapter ? setEditChapterTitle : setChapterTitle}
                 autoFocus
               />
+              {/* Volume selector for new chapters */}
+              {!editingChapter && (
+                <View className="mt-3">
+                  <Text className="text-xs text-gray-500 mb-2">选择所属卷</Text>
+                  <View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View className="flex-row gap-2">
+                        {book?.volumes?.map((vol: any) => (
+                          <TouchableOpacity
+                            key={vol.id}
+                            onPress={() => setSelectedVolumeId(vol.id)}
+                            className={`px-4 py-2 rounded-full ${selectedVolumeId === vol.id ? "bg-primary-500" : "bg-gray-100"}`}
+                          >
+                          <Text className={`text-xs font-medium ${selectedVolumeId === vol.id ? "text-white" : "text-gray-600"}`}>{vol.title}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
+                  </View>
+                </View>
+              )}
               <View className="flex-row gap-3 mt-5">
-                <TouchableOpacity onPress={() => setModalVisible(false)} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center">
+                <TouchableOpacity onPress={() => { setModalVisible(false); setEditingChapter(null); }} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center">
                   <Text className="text-sm font-medium text-gray-600">取消</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleCreateChapter} className="flex-1 py-3 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}>
-                  <Text className="text-sm font-bold text-white">创建并编辑</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    if (editingChapter) {
+                      handleUpdateChapter(editingChapter.id, editChapterTitle);
+                    } else {
+                      handleCreateChapter();
+                    }
+                  }}
+                  className="flex-1 py-3 rounded-2xl items-center"
+                  style={{ backgroundColor: "#6366F1", opacity: (!editingChapter && !selectedVolumeId) ? 0.4 : 1 }}
+                  disabled={!editingChapter && !selectedVolumeId}
+                >
+                  <Text className="text-sm font-bold text-white">{editingChapter ? "保存" : "创建并编辑"}</Text>
                 </TouchableOpacity>
               </View>
             </TouchableOpacity>
