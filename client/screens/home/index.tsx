@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useFocusEffect } from "expo-router";
 import RNSSE from "react-native-sse";
 import * as DocumentPicker from "expo-document-picker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
@@ -148,9 +149,14 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
+  // Chat history session
+  const sessionIdRef = useRef<string>("init_0");
+  const sessionCounter = useRef(0);
+  const [sessionList, setSessionList] = useState<{ id: string; preview: string; ts: number }[]>([]);
+
   // -- Core chat state --
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n你可以随意和我聊任何创作相关的话题——给我一个灵感、让我帮你设计角色、或者直接开始创作一部小说。", step: "welcome" },
+    { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n随便聊——给我一个灵感、想个角色、或者直接说「帮我写本小说」，我来搞定一切。", step: "welcome" },
   ]);
   const [inputText, setInputText] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -163,8 +169,8 @@ export default function HomeScreen() {
   const [showNewBookBtn, setShowNewBookBtn] = useState(false);
   const [pendingBookData, setPendingBookData] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
 
-  // Simplified state - no guided creation, just free chat
   const sseRef = useRef<any>(null);
 
   // Clean up SSE
@@ -175,11 +181,55 @@ export default function HomeScreen() {
     }
   };
 
+  // Load last session on mount
+  useEffect(() => {
+    const load = async () => {
+        try {
+          const raw = await AsyncStorage.getItem("chat_sessions");
+          const list: { id: string; preview: string; ts: number }[] = raw ? JSON.parse(raw) : [];
+          setSessionList(list);
+          if (list.length > 0 && !historyLoaded) {
+            const last = list[0];
+            const msgRaw = await AsyncStorage.getItem(`chat_messages_${last.id}`);
+            if (msgRaw) {
+              const msgs = JSON.parse(msgRaw);
+              if (msgs.length > 0) {
+                setMessages(msgs);
+                sessionIdRef.current = last.id;
+              }
+            }
+          } else if (list.length === 0 && !sessionIdRef.current) {
+            sessionCounter.current += 1;
+            sessionIdRef.current = `chat_${sessionCounter.current}`;
+          }
+        } catch {}
+        setHistoryLoaded(true);
+      };
+      load();
+    }, []);
+
+  // Auto-save messages whenever they change
+  useEffect(() => {
+    if (!historyLoaded || messages.length === 0) return;
+    const timer = setTimeout(async () => {
+      try {
+        await AsyncStorage.setItem(`chat_messages_${sessionIdRef.current}`, JSON.stringify(messages));
+        const preview = messages.find(m => m.role === "user")?.content?.slice(0, 30) || "新对话";
+        const list = sessionList.filter(s => s.id !== sessionIdRef.current);
+        list.unshift({ id: sessionIdRef.current, preview, ts: Date.now() });
+        setSessionList(list);
+        await AsyncStorage.setItem("chat_sessions", JSON.stringify(list.slice(0, 20)));
+      } catch {}
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [messages, historyLoaded]);
+
   const resetDialog = useCallback(() => {
     cleanupSSE();
     setStreamContent("");
     setShowNewBookBtn(false);
     setPendingBookData(null);
+    sessionIdRef.current = `chat_${Date.now()}`;
     setMessages([
       { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n随便聊——给我一个灵感、想个角色、或者直接说「帮我写本小说」，我来搞定一切。", step: "welcome" },
     ]);
@@ -350,6 +400,50 @@ export default function HomeScreen() {
     if (!inputText.trim() || isAiThinking) return;
     sendFreeChat(inputText.trim());
   };
+
+  // ===== Load Session =====
+  const handleLoadSession = useCallback((sid: string) => {
+    (async () => {
+      try {
+        const msgRaw = await AsyncStorage.getItem(`chat_messages_${sid}`);
+        if (msgRaw) {
+          const msgs = JSON.parse(msgRaw);
+          if (msgs.length > 0) {
+            setMessages(msgs);
+            sessionIdRef.current = sid;
+          }
+        }
+      } catch {}
+      setSidebarOpen(false);
+    })();
+  }, []);
+
+  // ===== Render =====
+
+  // ===== Build session items for render =====
+  const curSid = sessionList.length > 0 ? sessionList[0].id : "new";
+  const sessionItems: React.ReactNode[] = [];
+  const sessionsToShow = sessionList.slice(0, 8);
+  for (let i = 0; i < sessionsToShow.length; i++) {
+    const s = sessionsToShow[i];
+    const isActive = s.id === curSid;
+    const dateStr = new Date(s.ts).toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    sessionItems.push(
+      <TouchableOpacity
+        key={s.id}
+        className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 ${isActive ? "bg-indigo-50" : "active:bg-gray-50"}`}
+        onPress={() => handleLoadSession(s.id)}
+      >
+        <FontAwesome6 name="comment" size={14} color={isActive ? "#6366F1" : "#9CA3AF"} />
+        <View className="flex-1">
+          <Text className={`text-sm ${isActive ? "text-indigo-600 font-medium" : "text-gray-600"}`} numberOfLines={1}>
+            {s.preview}
+          </Text>
+          <Text className="text-xs text-gray-400 mt-0.5">{dateStr}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  }
 
   // ===== Render =====
   return (
@@ -589,51 +683,38 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* Sidebar Menu Items */}
-                <View className="flex-1 px-3 py-3">
+                {/* Sidebar Menu Items - Chat History */}
+                <ScrollView className="flex-1 px-3 py-3">
                   <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3 rounded-xl bg-indigo-50 mb-1">
                     <FontAwesome6 name="message" size={16} color="#6366F1" />
                     <Text className="text-sm font-medium text-indigo-600">当前对话</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1">
-                    <FontAwesome6 name="clock-rotate-left" size={16} color="#6B7280" />
-                    <Text className="text-sm text-gray-600">历史记录</Text>
-                  </TouchableOpacity>
+                  {/* Recent Sessions */}
+                  {sessionList.length > 0 && (
+                    <>
+                      <View className="border-t border-gray-100 my-3" />
+                      <Text className="text-xs font-medium text-gray-400 px-3 mb-2">最近对话</Text>
+                      {sessionItems}
+                    </>
+                  )}
+                </ScrollView>
 
-                  <View className="border-t border-gray-100 my-3" />
-
+                {/* Sidebar Footer */}
+                <View className="px-5 py-3 border-t border-gray-100 gap-1">
                   <TouchableOpacity
-                    className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1"
-                    onPress={() => {
-                      setSidebarOpen(false);
-                      router.navigate('/');
-                    }}
+                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
+                    onPress={() => { setSidebarOpen(false); router.push('/'); }}
                   >
                     <FontAwesome6 name="book" size={16} color="#6B7280" />
                     <Text className="text-sm text-gray-600">我的作品</Text>
                   </TouchableOpacity>
-
                   <TouchableOpacity
-                    className="flex-row items-center gap-3 px-3 py-3 rounded-xl active:bg-gray-50 mb-1"
-                    onPress={() => {
-                      setSidebarOpen(false);
-                      router.navigate('/');
-                    }}
+                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
+                    onPress={() => { setSidebarOpen(false); router.push('/'); }}
                   >
                     <FontAwesome6 name="compass" size={16} color="#6B7280" />
                     <Text className="text-sm text-gray-600">AI 工坊</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Sidebar Footer */}
-                <View className="px-5 py-4 border-t border-gray-100">
-                  <TouchableOpacity
-                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
-                    onPress={() => setSidebarOpen(false)}
-                  >
-                    <FontAwesome6 name="gear" size={16} color="#9CA3AF" />
-                    <Text className="text-sm text-gray-400">设置</Text>
                   </TouchableOpacity>
                 </View>
               </View>
