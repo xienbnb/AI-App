@@ -115,6 +115,9 @@ export default function DetailScreen() {
   // 章节编辑状态
   const [editingChapter, setEditingChapter] = useState<{ id: string; title: string } | null>(null);
   const [editChapterTitle, setEditChapterTitle] = useState("");
+  
+  // 章节操作菜单状态
+  const [chapterActionChapter, setChapterActionChapter] = useState<Chapter | null>(null);
 
   // 卷编辑状态
   const [editingVolume, setEditingVolume] = useState<{ id: string; title: string } | null>(null);
@@ -237,21 +240,7 @@ export default function DetailScreen() {
 
   // 长按章节 - 弹出操作选项
   const handleLongPressChapter = (chapter: Chapter) => {
-    Alert.alert(chapter.title, "选择操作", [
-      {
-        text: "编辑标题",
-        onPress: () => {
-          setEditingChapter({ id: chapter.id, title: chapter.title });
-          setEditChapterTitle(chapter.title);
-          setModalVisible(true);
-        },
-      },
-      {
-        text: "删除", style: "destructive",
-        onPress: () => handleDeleteChapter(chapter.id, chapter.title),
-      },
-      { text: "取消", style: "cancel" },
-    ]);
+    setChapterActionChapter(chapter);
   };
 
   // 编辑卷名
@@ -923,6 +912,41 @@ export default function DetailScreen() {
               </View>
             </TouchableOpacity>
           </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 章节操作弹窗 */}
+      <Modal transparent visible={!!chapterActionChapter} animationType="fade" onRequestClose={() => setChapterActionChapter(null)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setChapterActionChapter(null)} className="flex-1 bg-black/30 justify-center">
+          <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-8 bg-white rounded-3xl overflow-hidden" style={{ elevation: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 24 }}>
+            {chapterActionChapter && (
+              <>
+                <View className="px-6 pt-5 pb-3 border-b border-gray-100">
+                  <Text className="text-base font-bold text-gray-800 text-center">{chapterActionChapter.title}</Text>
+                </View>
+                <TouchableOpacity onPress={() => {
+                  setEditingChapter({ id: chapterActionChapter.id, title: chapterActionChapter.title });
+                  setEditChapterTitle(chapterActionChapter.title);
+                  setChapterActionChapter(null);
+                  setTimeout(() => setModalVisible(true), 300);
+                }} className="flex-row items-center px-6 py-4 active:bg-gray-50">
+                  <FontAwesome6 name="pen-to-square" size={18} color="#6B7280" />
+                  <Text className="ml-4 text-[16px] text-gray-700 font-medium">编辑标题</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => {
+                  const c = chapterActionChapter;
+                  setChapterActionChapter(null);
+                  handleDeleteChapter(c.id, c.title);
+                }} className="flex-row items-center px-6 py-4 border-t border-gray-100 active:bg-gray-50">
+                  <FontAwesome6 name="trash-can" size={18} color="#EF4444" />
+                  <Text className="ml-4 text-[16px] text-red-500 font-medium">删除章节</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setChapterActionChapter(null)} className="border-t border-gray-100 py-4 items-center active:bg-gray-50">
+                  <Text className="text-[16px] text-gray-400 font-medium">取消</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     </Screen>
