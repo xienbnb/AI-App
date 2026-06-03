@@ -676,23 +676,30 @@ export default function DetailScreen() {
                             </View>
                           ) : (
                             sortedVolChapters.map((chapter, ci) => (
-                              <TouchableOpacity
-                                key={chapter.id}
-                                onPress={() => router.push("/editor", { bookId: id, chapterId: chapter.id })}
-                                onLongPress={() => handleLongPressChapter(chapter)}
-                                className="flex-row items-center px-3 py-2.5 rounded-xl bg-gray-50"
-                              >
-                                <View className="w-7 h-7 rounded-lg bg-primary-500/10 items-center justify-center mr-2.5">
-                                  <Text className="text-xs font-bold text-primary-500">
-                                    {chapterSort === "asc" ? ci + 1 : sortedVolChapters.length - ci}
-                                  </Text>
-                                </View>
-                                <View className="flex-1">
-                                  <Text className="text-sm font-medium text-gray-700">{chapter.title}</Text>
-                                  <Text className="text-xs text-gray-400 mt-0.5">{formatWordCount(chapter.wordCount)}字 · {chapter.createdAt}</Text>
-                                </View>
-                                <FontAwesome6 name="chevron-right" size={10} color="#D1D5DB" />
-                              </TouchableOpacity>
+                              <View key={chapter.id} className="flex-row items-center px-3 py-2.5 rounded-xl bg-gray-50">
+                                <TouchableOpacity
+                                  className="flex-1 flex-row items-center"
+                                  onPress={() => router.push("/editor", { bookId: id, chapterId: chapter.id })}
+                                  onLongPress={() => handleLongPressChapter(chapter)}
+                                  delayLongPress={400}
+                                >
+                                  <View className="w-7 h-7 rounded-lg bg-primary-500/10 items-center justify-center mr-2.5">
+                                    <Text className="text-xs font-bold text-primary-500">
+                                      {chapterSort === "asc" ? ci + 1 : sortedVolChapters.length - ci}
+                                    </Text>
+                                  </View>
+                                  <View className="flex-1">
+                                    <Text className="text-sm font-medium text-gray-700">{chapter.title}</Text>
+                                    <Text className="text-xs text-gray-400 mt-0.5">{formatWordCount(chapter.wordCount)}字 · {chapter.createdAt}</Text>
+                                  </View>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  className="w-7 h-7 rounded-lg items-center justify-center ml-1"
+                                  onPress={() => handleLongPressChapter(chapter)}
+                                >
+                                  <FontAwesome6 name="ellipsis-vertical" size={12} color="#9CA3AF" />
+                                </TouchableOpacity>
+                              </View>
                             ))
                           )}
                         </View>

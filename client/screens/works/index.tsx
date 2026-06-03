@@ -716,8 +716,9 @@ export default function WorksScreen() {
                     setNewCategory(b.category);
                     setNewStatus(b.status);
                     setSelectedCover(b.coverImage || COVER_IMAGES_MAN[0].path);
-                    setLongPressBook(null);
-                    setTimeout(() => setModalVisible(true), 300);
+                    // 先打开弹窗，再清除 longPressBook（保留引用供弹窗判断编辑模式）
+                    setTimeout(() => setModalVisible(true), 200);
+                    setTimeout(() => setLongPressBook(null), 250);
                   }},
                   { icon: "trash-can", label: "删除书籍", color: "#EF4444", action: () => {
                     const b = longPressBook!;
