@@ -134,7 +134,7 @@ function BookCard({
         </View>
         {/* 更多按钮（兼容Web鼠标操作） */}
         <TouchableOpacity
-          onPress={(e) => { e.stopPropagation?.(); onLongPress(); }}
+          onPress={(e) => { e?.stopPropagation?.(); onLongPress(); }}
           className="w-9 h-full items-center justify-center"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -178,7 +178,7 @@ function BookCard({
             <View className="absolute left-0 top-0 bottom-0 w-2 bg-black/20" />
             {/* 更多按钮（兼容Web鼠标操作） */}
             <TouchableOpacity
-              onPress={(e) => { e.stopPropagation?.(); onLongPress(); }}
+              onPress={(e) => { e?.stopPropagation?.(); onLongPress(); }}
               className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 items-center justify-center"
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
@@ -552,7 +552,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="grid"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
+                onLongPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} setLongPressBook(book); }}
               />
             ))}
           </View>
@@ -564,7 +564,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="book"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
+                onLongPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} setLongPressBook(book); }}
               />
             ))}
           </View>
@@ -576,7 +576,7 @@ export default function WorksScreen() {
                 book={book}
                 viewMode="list"
                 onPress={() => router.push("/detail", { id: book.id })}
-                onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setLongPressBook(book); }}
+                onLongPress={() => { try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {} setLongPressBook(book); }}
               />
             ))}
           </View>
