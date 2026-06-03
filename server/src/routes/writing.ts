@@ -140,6 +140,91 @@ router.post("/", async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/v1/writing/ai-generate - AI自动创建书籍
+router.post("/ai-generate", async (req: Request, res: Response) => {
+  try {
+    const { topic } = req.body;
+    if (!topic) return res.status(400).json({ success: false, message: "请输入创作主题" });
+
+    const client = new LLMClient();
+    const prompt = `你是一位资深网文作家。根据用户提供的主题"${topic}"，创作一部完整的小说方案。
+
+请严格按照以下JSON格式返回，不要包含任何其他文字：
+{
+  "title": "小说书名（要有吸引力）",
+  "category": "分类（从以下选择：玄幻、仙侠、都市、科幻、历史、言情、悬疑、游戏、武侠、奇幻）",
+  "description": "小说简介（100字以内）",
+  "volumes": [
+    {
+      "title": "第一卷标题",
+      "order": 1,
+      "chapters": [
+        {"title": "第一章标题", "wordCount": 0, "content": ""},
+        {"title": "第二章标题", "wordCount": 0, "content": ""}
+      ]
+    }
+  ],
+  "outline": "全书大纲（Markdown格式，包含故事背景、主要角色、剧情主线）"
+}`;
+
+    const stream = client.stream(
+      [{ role: "user", content: prompt }],
+      { model: "doubao-seed-2-0-lite-260215", temperature: 0.9 }
+    );
+
+    let fullContent = "";
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        fullContent += chunk.content;
+      }
+    }
+
+    let bookData: any;
+    try {
+      const cleaned = fullContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      bookData = JSON.parse(cleaned);
+    } catch {
+      throw new Error("AI 返回格式错误，请重试");
+    }
+
+    const sb = getSupabaseClient();
+    const volumeId = generateId();
+    const chapters = bookData.volumes?.[0]?.chapters || [];
+
+    const { data, error } = await sb.from("books").insert({
+      title: bookData.title || topic,
+      category: bookData.category || "其他",
+      status: "draft",
+      description: bookData.description || "",
+      outline: bookData.outline || "",
+      word_count: 0,
+      chapter_count: chapters.length,
+      volumes: JSON.stringify(bookData.volumes?.length > 0
+        ? bookData.volumes.map((v: any, vi: number) => ({
+            id: v.id || generateId(),
+            title: v.title || `第${vi + 1}卷`,
+            order: v.order || vi + 1,
+            chapters: v.chapters?.map((c: any, ci: number) => ({
+              id: c.id || generateId(),
+              title: c.title || `第${ci + 1}章`,
+              wordCount: c.wordCount || 0,
+              createdAt: new Date().toISOString(),
+              content: c.content || "",
+              volumeId: v.id || volumeId,
+            })) || [],
+          }))
+        : [{ id: volumeId, title: "第一卷", order: 1, chapters: [] }]
+      ),
+    }).select().single();
+
+    if (error) throw new Error(`创建书籍失败: ${error.message}`);
+    res.json({ success: true, data: toCamelCase(data) });
+  } catch (err: any) {
+    console.error("AI创建书籍错误:", err);
+    res.status(500).json({ success: false, message: err.message || "AI生成失败" });
+  }
+});
+
 router.put("/:id", async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();

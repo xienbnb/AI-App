@@ -753,12 +753,11 @@ export default function WorksScreen() {
 
       {/* ======== 手动创建弹窗 ======== */}
       <Modal visible={modalVisible} transparent animationType="slide">
-        <TouchableWithoutFeedback onPress={() => undefined}>
-          <KeyboardAvoidingView className="flex-1 justify-center px-6" behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
-                <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
-                <ScrollView className="px-6" showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView className="flex-1 justify-center px-6" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
+              <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
+              <ScrollView className="px-6" showsVerticalScrollIndicator={false}>
                   <Text className="text-lg font-bold text-gray-900 text-center mb-5">
                     {longPressBook ? "修改信息" : "新建作品"}
                   </Text>
@@ -885,16 +884,14 @@ export default function WorksScreen() {
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
       </Modal>
 
       {/* ======== AI创建弹窗 ======== */}
       <Modal visible={aiModalVisible} transparent animationType="slide">
-        <TouchableWithoutFeedback onPress={() => undefined}>
-          <KeyboardAvoidingView className="flex-1 justify-end" behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-              <View className="bg-white rounded-[32px] p-6">
-                <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
+        <KeyboardAvoidingView className="flex-1 justify-end" behavior={Platform.OS === "ios" ? "padding" : undefined}>
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View className="bg-white rounded-[32px] p-6">
+              <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
 
                 {/* 标题 */}
                 <View className="flex-row items-center gap-3 mb-4">
@@ -959,7 +956,6 @@ export default function WorksScreen() {
               </View>
             </TouchableWithoutFeedback>
           </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
       </Modal>
     </Screen>
   );
