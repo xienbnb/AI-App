@@ -40,6 +40,10 @@ interface Book {
   createdAt: string;
   wordCount: number;
   volumes: Volume[];
+  outline?: string;       // Markdown 格式的大纲全文
+  outlineAnalysis?: string; // 亮点分析
+  outlineCharacters?: Array<{ name: string; desc: string }>; // 角色设定
+  outlineWorldBuilding?: string; // 世界观设定
 }
 
 // --- In-memory store ---
@@ -257,13 +261,27 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
 对话节奏：
 - 自由对话模式：用户可能提出任何创作相关的问题
 - 如果用户给了小说灵感，引导ta完善设定
-- 当信息充分时：生成完整大纲，通知用户准备好创建书籍
+- 当信息充分时：必须按标准格式输出完整书籍信息，系统自动创建
 
-回复格式（markdown）：
-- 用 **粗体** 强调关键信息
-- 用 > 引用用户的想法
-- 保持热情鼓励的语气
-- 每次回复末尾给出明确的下一步建议`;
+【重要】当你要创建书籍时，回复末尾必须附加以下格式的元数据块：
+
+【书名】《小说标题》
+【类型】玄幻/言情/悬疑/科幻/都市/仙侠/历史/游戏
+【简介】一段精彩的简介（100字左右）
+【大纲】
+第1章 标题 - 内容概要
+第2章 标题 - 内容概要
+第3章 标题 - 内容概要
+...
+
+注意：
+- 元数据块用空行与正文隔开
+- 大纲每章一行，格式"第N章 标题 - 概要"
+- 系统会自动解析并创建书籍，大纲保存为Markdown
+- 用户还在构思阶段则不输出元数据块
+- 用户明确要创作某部作品时才输出
+
+【非常重要】如果用户说"帮我写本书"、"创作一本小说"、"写本XX小说"等明确要求创作的话，你必须输出完整的元数据块。如果用户只给了模糊想法，先帮ta完善，然后再输出元数据块。`;
 
     // Build message array with history context
     const msgs: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
@@ -301,7 +319,7 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
     const outlineMatch = fullContent.match(/【大纲】[\s]*\n?([\s\S]+?)(?:\n【|$)/);
 
     if (titleMatch || genreMatch || descMatch) {
-      const title = titleMatch?.[1]?.trim() || "";
+      const title = titleMatch?.[1]?.trim()?.replace(/[《》]/g, "") || "";
       const category = genreMatch?.[1]?.trim() || "";
       const description = descMatch?.[1]?.trim() || "";
       const outlineText = outlineMatch?.[1]?.trim() || "";
@@ -336,6 +354,7 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
           description: description || "",
           wordCount: 0,
           createdAt: new Date().toISOString().split("T")[0],
+          outline: `# 大纲\n\n${outlineText || "(待完善)"}`,
           volumes: [{
             id: volumeId,
             title: "第一卷",
@@ -353,6 +372,15 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
           bookCategory: newBook.category,
           bookDescription: newBook.description,
           chaptersCount: outlineChapters.length,
+        })}\n\n`);
+      }
+    } else {
+      // Fallback: if user explicitly asked to create a book but AI didn't output markers
+      const createKeywords = /(?:帮我写|创作|写本|写一本|创建|新建).*(?:书|小说|作品|故事)/;
+      if (createKeywords.test(message)) {
+        // Try to be helpful - send a hint back to the user
+        res.write(`data: ${JSON.stringify({
+          content: "\n\n（提示：下次开始创作时，可以直接告诉我你的小说灵感，比如：\n👉 \"我想写一本玄幻小说\"\n👉 \"帮我创作一个关于重生复仇的故事\"\n我会自动为你生成小说！）"
         })}\n\n`);
       }
     }
@@ -594,12 +622,14 @@ ${chapterList || outline || ""}
 
 // === Outlines ===
 router.get("/:id/outlines", (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  res.json({ success: true, data: outlines[id] || [] });
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  res.json({ success: true, data: book.outline || "" });
 });
 router.put("/:id/outlines", (req: Request, res: Response) => {
-  const id = req.params.id as string;
-  outlines[id] = req.body.data || [];
+  const book = books.find((b) => b.id === req.params.id);
+  if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+  book.outline = req.body.outline || "";
   res.json({ success: true });
 });
 

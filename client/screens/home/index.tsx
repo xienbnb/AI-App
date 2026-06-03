@@ -46,7 +46,7 @@ const SKILL_LIST = [
 ];
 
 const INSPIRATION_CHIPS = [
-  "穿越到修仙世界获得签到系统",
+  "创作一本玄幻修仙小说",
   "重生回到高中改写人生",
   "末日废土上的异能觉醒",
   "在星际时代开了一家美食店",
@@ -156,7 +156,6 @@ export default function HomeScreen() {
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const sseRef = useRef<any>(null);
   const confirmActionRef = useRef<(() => void) | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState("");
@@ -166,6 +165,16 @@ export default function HomeScreen() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Simplified state - no guided creation, just free chat
+  const sseRef = useRef<any>(null);
+
+  // Clean up SSE
+  const cleanupSSE = () => {
+    if (sseRef.current) {
+      try { sseRef.current.close(); } catch (e) { /* ignore */ }
+      sseRef.current = null;
+    }
+  };
+
   const resetDialog = useCallback(() => {
     cleanupSSE();
     setStreamContent("");
@@ -203,14 +212,6 @@ export default function HomeScreen() {
     if (confirmActionRef.current) {
       confirmActionRef.current();
       confirmActionRef.current = null;
-    }
-  };
-
-  // Clean up SSE
-  const cleanupSSE = () => {
-    if (sseRef.current) {
-      try { sseRef.current.close(); } catch (e) { /* ignore */ }
-      sseRef.current = null;
     }
   };
 
