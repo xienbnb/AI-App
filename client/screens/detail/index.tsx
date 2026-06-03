@@ -118,6 +118,7 @@ export default function DetailScreen() {
   
   // 章节操作菜单状态
   const [chapterActionChapter, setChapterActionChapter] = useState<Chapter | null>(null);
+  const [deleteConfirmInfo, setDeleteConfirmInfo] = useState<{ id: string; title: string; type: "chapter" | "volume" } | null>(null);
 
   // 卷编辑状态
   const [editingVolume, setEditingVolume] = useState<{ id: string; title: string } | null>(null);
@@ -197,19 +198,23 @@ export default function DetailScreen() {
   };
 
   const handleDeleteChapter = (chapterId: string, chapterTitle: string) => {
-    Alert.alert("删除确认", `确定删除"${chapterTitle}"？`, [
-      { text: "取消", style: "cancel" },
-      {
-        text: "删除", style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${chapterId}`, { method: "DELETE" });
-            const json = await res.json();
-            if (json.success) await fetchBook();
-          } catch (e) { Alert.alert("错误", "删除章节失败"); }
-        },
-      },
-    ]);
+    setDeleteConfirmInfo({ id: chapterId, title: chapterTitle, type: "chapter" });
+  };
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmInfo) return;
+    const { id: itemId, type } = deleteConfirmInfo;
+    setDeleteConfirmInfo(null);
+    try {
+      if (type === "chapter") {
+        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${itemId}`, { method: "DELETE" });
+        const json = await res.json();
+        if (json.success) await fetchBook();
+      } else if (type === "volume") {
+        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE" });
+        const json = await res.json();
+        if (json.success) await fetchBook();
+      }
+    } catch (e) { Alert.alert("错误", `删除${type === "chapter" ? "章节" : "卷"}失败`); }
   };
 
   // 编辑章节
@@ -249,30 +254,15 @@ export default function DetailScreen() {
     setEditVolumeTitle(currentTitle);
   };
 
-  // 删除卷
+  // 删除卷 - 改用 Modal 确认，跨平台兼容
   const handleDeleteVolume = (volumeId: string, volumeTitle: string) => {
-    Alert.alert("删除确认", `确定删除"${volumeTitle}"及其所有章节？`, [
-      { text: "取消", style: "cancel" },
-      {
-        text: "删除", style: "destructive",
-        onPress: async () => {
-          try {
-            const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${volumeId}`, { method: "DELETE" });
-            const json = await res.json();
-            if (json.success) await fetchBook();
-          } catch (e) { Alert.alert("错误", "删除卷失败"); }
-        },
-      },
-    ]);
+    setDeleteConfirmInfo({ id: volumeId, title: volumeTitle, type: "volume" });
   };
 
-  // 长按卷 - 弹出操作选项
+  // 长按卷 - 弹出操作选项（用 Modal 替代 Alert，跨平台兼容）
   const handleLongPressVolume = (volume: Volume) => {
-    Alert.alert(volume.title, "选择操作", [
-      { text: "编辑卷名", onPress: () => handleUpdateVolume(volume.id, volume.title) },
-      { text: "删除卷", style: "destructive", onPress: () => handleDeleteVolume(volume.id, volume.title) },
-      { text: "取消", style: "cancel" },
-    ]);
+    setEditVolumeTitle(volume.title);
+    setEditingVolume({ id: volume.id, title: volume.title });
   };
 
   // 新增设定
@@ -947,6 +937,25 @@ export default function DetailScreen() {
               </>
             )}
           </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 删除确认弹窗 */}
+      <Modal visible={!!deleteConfirmInfo} transparent animationType="fade" onRequestClose={() => setDeleteConfirmInfo(null)}>
+        <TouchableOpacity style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 } as any} className="flex-1 bg-black/30 justify-center items-center" onPress={() => setDeleteConfirmInfo(null)} activeOpacity={1}>
+          <View className="bg-white rounded-2xl w-[280px] p-6 items-center">
+            <FontAwesome6 name="triangle-exclamation" size={36} color="#ef4444" />
+            <Text className="text-[17px] font-bold text-gray-900 mt-3 mb-1">确认删除</Text>
+            <Text className="text-[14px] text-gray-500 text-center mb-5">{deleteConfirmInfo ? `确定删除"${deleteConfirmInfo.title}"？此操作不可撤销。` : ""}</Text>
+            <View className="flex-row gap-3 w-full">
+              <TouchableOpacity onPress={() => setDeleteConfirmInfo(null)} className="flex-1 py-3 rounded-xl bg-gray-100 items-center active:bg-gray-200">
+                <Text className="text-[15px] font-medium text-gray-600">取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => { const info = deleteConfirmInfo; setDeleteConfirmInfo(null); handleConfirmDelete(); }} className="flex-1 py-3 rounded-xl bg-red-500 items-center active:bg-red-600">
+                <Text className="text-[15px] font-medium text-white">删除</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </TouchableOpacity>
       </Modal>
     </Screen>
