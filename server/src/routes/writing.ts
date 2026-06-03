@@ -107,7 +107,7 @@ router.post("/", async (req: Request, res: Response) => {
       description: description || "",
       word_count: 0,
       chapter_count: chapters.length,
-      volumes: JSON.stringify(volumes && volumes.length > 0
+      volumes: volumes && volumes.length > 0
         ? volumes.map((v: any, vi: number) => ({
             id: v.id || generateId(),
             title: v.title || `第${vi + 1}卷`,
@@ -121,8 +121,7 @@ router.post("/", async (req: Request, res: Response) => {
               volumeId: v.id || "",
             })),
           }))
-        : [{ id: volumeId, title: "第一卷", order: 1, chapters: [] }]
-      ),
+        : [{ id: volumeId, title: "第一卷", order: 1, chapters: [] }],
     };
 
     const client = getSupabaseClient();
@@ -199,7 +198,7 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
       outline: bookData.outline || "",
       word_count: 0,
       chapter_count: chapters.length,
-      volumes: JSON.stringify(bookData.volumes?.length > 0
+      volumes: bookData.volumes?.length > 0
         ? bookData.volumes.map((v: any, vi: number) => ({
             id: v.id || generateId(),
             title: v.title || `第${vi + 1}卷`,
@@ -213,8 +212,7 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
               volumeId: v.id || volumeId,
             })) || [],
           }))
-        : [{ id: volumeId, title: "第一卷", order: 1, chapters: [] }]
-      ),
+        : [{ id: volumeId, title: "第一卷", order: 1, chapters: [] }],
     }).select().single();
 
     if (error) throw new Error(`创建书籍失败: ${error.message}`);
@@ -257,10 +255,6 @@ router.put("/:id", async (req: Request, res: Response) => {
       delete updateData.outlineWorldBuilding;
     }
     // Handle volumes as JSON string if it's an array
-    if (updateData.volumes && Array.isArray(updateData.volumes)) {
-      updateData.volumes = JSON.stringify(updateData.volumes);
-    }
-
     const { data, error } = await client
       .from("books")
       .update(updateData)
@@ -321,7 +315,7 @@ router.post("/:id/volumes", async (req: Request, res: Response) => {
 
     const { data, error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id)
       .select()
       .single();
@@ -353,7 +347,7 @@ router.put("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
 
     const { data, error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id)
       .select()
       .single();
@@ -385,7 +379,7 @@ router.delete("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
 
     const { error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id);
 
     if (error) throw new Error(`删除卷失败: ${error.message}`);
@@ -426,7 +420,7 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
 
     const { data, error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id)
       .select()
       .single();
@@ -463,7 +457,7 @@ router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
 
     const { error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id);
 
     if (error) throw new Error(`更新章节失败: ${error.message}`);
@@ -502,7 +496,7 @@ router.delete("/:id/chapters/:chapterId", async (req: Request, res: Response) =>
 
     const { error } = await client
       .from("books")
-      .update({ volumes: JSON.stringify(volumes) })
+      .update({ volumes: volumes })
       .eq("id", req.params.id);
 
     if (error) throw new Error(`删除章节失败: ${error.message}`);
@@ -667,12 +661,12 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
           word_count: 0,
           chapter_count: outlineChapters.length,
           outline: `# 大纲\n\n${outlineText || "(待完善)"}`,
-          volumes: JSON.stringify([{
+          volumes: [{
             id: volumeId,
             title: "第一卷",
             order: 1,
             chapters: outlineChapters,
-          }]),
+          }],
         };
 
         // Save to Supabase

@@ -757,7 +757,7 @@ export default function WorksScreen() {
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
             <View className="bg-white rounded-[32px] pt-6 pb-8 max-h-[85%]">
               <View className="w-10 h-1 rounded-full bg-gray-300 mx-auto mb-5" />
-              <ScrollView className="px-6" showsVerticalScrollIndicator={false}>
+              <ScrollView className="px-6" showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                   <Text className="text-lg font-bold text-gray-900 text-center mb-5">
                     {longPressBook ? "修改信息" : "新建作品"}
                   </Text>
