@@ -481,6 +481,33 @@ export default function EditorScreen() {
     // 不再自动追加，由用户手动"采用"决定
   };
 
+  const handleAIMode = useCallback((mode: 'polish' | 'expand' | 'continue') => {
+    if (!selectedText) return;
+    setShowFloatingAI(false);
+    setIsGenerating(true);
+    setGeneratedContent("");
+    let prompt = '';
+    if (mode === 'polish') {
+      prompt = `你是一个专业的小说编辑。请润色以下文字，优化句式结构和用词，使表达更优美流畅，保持原意不变。不要添加新内容：\n${selectedText}`;
+    } else if (mode === 'expand') {
+      prompt = `你是一个专业的小说作家。请扩写以下内容，增加环境描写、心理活动和细节刻画，使场景更生动丰满，保持原叙事风格：\n${selectedText}`;
+    } else if (mode === 'continue') {
+      prompt = `请根据以下内容续写一段小说，保持相同的风格和叙事节奏，自然地延续情节发展：\n${selectedText}`;
+    }
+    const url = `${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/generate`;
+    const sse = new RNSSE(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ aiPrompt: prompt }),
+    });
+    sseRef.current = sse;
+    sse.addEventListener('message', (e: any) => {
+      if (e.data === '[DONE]') { sse.close(); return; }
+      setGeneratedContent(prev => prev + e.data);
+    });
+    sse.addEventListener('error', () => { setIsGenerating(false); });
+  }, [selectedText]);
+
   const applyGeneratedContent = () => {
     if (generatedContent) { pushUndo(content); setContent(prev => prev + "\n\n" + generatedContent); setGeneratedContent(""); setIsGenerating(false); }
   };
@@ -535,6 +562,7 @@ export default function EditorScreen() {
     accent: "#6366F1",
     accentBg: nightMode ? "#2D2D4A" : "#EEF2FF",
     inputBg: nightMode ? "#1E1E38" : "#F5F0E8",
+    muted: nightMode ? "#6B6B8A" : "#A89880",
     shadow: nightMode ? "transparent" : "rgba(99,102,241,0.06)",
   };
 
@@ -677,67 +705,32 @@ export default function EditorScreen() {
           <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#F8F4ED" }}>
             {/* ===== 浮动AI栏（选中文字时显示，浮层不推挤内容） ===== */}
             {showFloatingAI && selectedText && (
-              <View style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
-                backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
-                shadowColor: "#6366F1",
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: nightMode ? 0 : 0.08,
-                shadowRadius: 12, elevation: 8,
-              }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
-                  <View className="flex-row items-center gap-0.5">
-                    {/* 编辑操作 */}
-                    <FloatingAIBtn icon="scissors" label="剪切" color="#6B7280" onPress={() => replaceSelectedText("")} />
-                    <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
-                    <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
-                    {/* AI 写作 */}
-                    <FloatingAIBtn icon="pen" label="润色" color="#EC4899" onPress={() => {
-                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
-                      const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
-                      });
-                      sseRef.current = sse;
-                      sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
-                      });
-                    }} />
-                    <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
-                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
-                      const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
-                      });
-                      sseRef.current = sse;
-                      sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
-                      });
-                    }} />
-                    <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
-                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
-                      const context = content.slice(-1500);
-                      const prompt = `请根据以上上下文风格，自然地续写接下来的内容。保持叙事节奏、人物性格和文风一致，不要重复已有内容：\n---上下文---\n${context}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
-                      });
-                      sseRef.current = sse;
-                      sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
-                      });
-                    }} />
-                    <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
-                    {/* 标记工具 */}
-                    <FloatingAIBtn icon="highlighter" label="高亮" color="#F59E0B" onPress={() => { setHighlights(prev => [...prev, { start: selectionStart, end: selectionEnd, color: "#FDE68A" }]); setShowFloatingAI(false); Alert.alert("已高亮"); }} />
-                    <FloatingAIBtn icon="flag" label="批注" color="#3B82F6" onPress={() => { replaceSelectedText(selectedText + "〔批注〕"); Alert.alert("已添加批注"); }} />
-                  </View>
-                </ScrollView>
+              <View style={{ position: "absolute", bottom: 10, left: 0, right: 0, zIndex: 100, alignItems: "center" }}>
+                <View className="flex-row items-center" style={{
+                  backgroundColor: "rgba(40,40,60,0.92)", borderRadius: 32,
+                  paddingHorizontal: 6, paddingVertical: 6, gap: 2,
+                  shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25, shadowRadius: 16, elevation: 12,
+                }}>
+                  <TouchableOpacity onPress={() => handleAIMode("polish")}
+                    className="flex-row items-center px-3.5 py-2.5 rounded-full"
+                    style={{ backgroundColor: "rgba(244,114,182,0.25)" }}>
+                    <FontAwesome6 name="wand-magic-sparkles" size={13} color="#F472B6" />
+                    <Text className="text-xs font-medium ml-1.5" style={{ color: "#F9A8D4" }}>润色</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleAIMode("expand")}
+                    className="flex-row items-center px-3.5 py-2.5 rounded-full"
+                    style={{ backgroundColor: "rgba(52,211,153,0.25)" }}>
+                    <FontAwesome6 name="expand" size={13} color="#34D399" />
+                    <Text className="text-xs font-medium ml-1.5" style={{ color: "#6EE7B7" }}>扩写</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleAIMode("continue")}
+                    className="flex-row items-center px-3.5 py-2.5 rounded-full"
+                    style={{ backgroundColor: "rgba(139,92,246,0.25)" }}>
+                    <FontAwesome6 name="arrow-trend-up" size={13} color="#A78BFA" />
+                    <Text className="text-xs font-medium ml-1.5" style={{ color: "#C4B5FD" }}>续写</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
 
