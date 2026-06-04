@@ -1089,6 +1089,48 @@ router.put("/:id/outlines", async (req: Request, res: Response) => {
   }
 });
 
+// === Outline Items (structured manual outlines) ===
+router.get("/:id/outline-items", async (req: Request, res: Response) => {
+  try {
+    const client = getSupabaseClient();
+    const { data, error } = await client
+      .from("outlines")
+      .select("content")
+      .eq("book_id", req.params.id)
+      .maybeSingle();
+    if (error) throw new Error(`查询大纲条目失败: ${error.message}`);
+    let items: any[] = [];
+    if (data?.content) { try { items = JSON.parse(data.content); } catch {} }
+    res.json({ success: true, data: items });
+  } catch (err: any) {
+    console.error("查询大纲条目错误:", err);
+    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+  }
+});
+
+router.put("/:id/outline-items", async (req: Request, res: Response) => {
+  try {
+    const client = getSupabaseClient();
+    const contentStr = JSON.stringify(req.body.items || []);
+    const { data: existing } = await client
+      .from("outlines")
+      .select("id")
+      .eq("book_id", req.params.id)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await client.from("outlines").update({ content: contentStr }).eq("book_id", req.params.id);
+      if (error) throw new Error(`更新大纲条目失败: ${error.message}`);
+    } else {
+      const { error } = await client.from("outlines").insert({ book_id: req.params.id, content: contentStr });
+      if (error) throw new Error(`创建大纲条目失败: ${error.message}`);
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("更新大纲条目错误:", err);
+    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+  }
+});
+
 // === Settings ===
 router.get("/:id/settings", async (req: Request, res: Response) => {
   try {

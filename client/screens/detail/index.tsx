@@ -124,6 +124,12 @@ export default function DetailScreen() {
   const [editingVolume, setEditingVolume] = useState<{ id: string; title: string } | null>(null);
   const [editVolumeTitle, setEditVolumeTitle] = useState("");
 
+  // +菜单: 选择创建卷或章节
+  const [plusMenuVolumeId, setPlusMenuVolumeId] = useState<string | null>(null);
+  // 创建卷
+  const [volumeCreateVisible, setVolumeCreateVisible] = useState(false);
+  const [volumeName, setVolumeName] = useState("");
+
   // Tab 状态
   const [activeTab, setActiveTab] = useState<"章节" | "大纲" | "设定" | "灵感">("章节");
   const [chapterSort, setChapterSort] = useState<"asc" | "desc">("asc");
@@ -151,6 +157,31 @@ export default function DetailScreen() {
   // 更多操作弹窗
   const [actionModal, setActionModal] = useState(false);
 
+  // === 大纲折叠状态 ===
+  const [collapsedOutlines, setCollapsedOutlines] = useState<Record<string, boolean>>({});
+  // 大纲编辑状态
+  const [editingOutline, setEditingOutline] = useState<Outline | null>(null);
+  const [editOutlineTitle, setEditOutlineTitle] = useState("");
+  const [editOutlineContent, setEditOutlineContent] = useState("");
+  const [editOutlineType, setEditOutlineType] = useState<"大纲" | "细纲">("大纲");
+  // 大纲导入弹窗
+  const [importOutlineVisible, setImportOutlineVisible] = useState(false);
+  const [importOutlineText, setImportOutlineText] = useState("");
+
+  // === 设定编辑状态 ===
+  const [editingSettingItem, setEditingSettingItem] = useState<WorldSetting | null>(null);
+  const [editSettingType, setEditSettingType] = useState("角色");
+  const [editSettingName, setEditSettingName] = useState("");
+  const [editSettingDesc, setEditSettingDesc] = useState("");
+  const [editSettingVisible, setEditSettingVisible] = useState(false);
+
+  // === 灵感折叠状态 ===
+  const [collapsedInspirations, setCollapsedInspirations] = useState(false);
+  // 灵感编辑
+  const [editingInspiration, setEditingInspiration] = useState<Inspiration | null>(null);
+  const [editInspirationContent, setEditInspirationContent] = useState("");
+  const [editInspirationVisible, setEditInspirationVisible] = useState(false);
+
   const fetchBook = useCallback(async () => {
     if (!id) return;
     try {
@@ -162,10 +193,79 @@ export default function DetailScreen() {
     }
   }, [id]);
 
+  // ===== 大纲 API =====
+  const fetchOutlines = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`);
+      const json = await res.json();
+      if (json.success) setOutlines(json.data || []);
+    } catch (e) { console.error("获取大纲失败", e); }
+  }, [id]);
+
+  const saveOutlines = async (newOutlines: Outline[]) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: newOutlines }),
+      });
+      const json = await res.json();
+      if (json.success) setOutlines(newOutlines);
+    } catch (e) { Alert.alert("错误", "保存大纲失败"); }
+  };
+
+  // ===== 设定 API =====
+  const fetchSettings = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`);
+      const json = await res.json();
+      if (json.success) setSettings(json.data || []);
+    } catch (e) { console.error("获取设定失败", e); }
+  }, [id]);
+
+  const saveSettings = async (newSettings: WorldSetting[]) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: newSettings }),
+      });
+      const json = await res.json();
+      if (json.success) setSettings(newSettings);
+    } catch (e) { Alert.alert("错误", "保存设定失败"); }
+  };
+
+  // ===== 灵感 API =====
+  const fetchInspirations = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`);
+      const json = await res.json();
+      if (json.success) setInspirations(json.data || []);
+    } catch (e) { console.error("获取灵感失败", e); }
+  }, [id]);
+
+  const saveInspirations = async (newInspirations: Inspiration[]) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: newInspirations }),
+      });
+      const json = await res.json();
+      if (json.success) setInspirations(newInspirations);
+    } catch (e) { Alert.alert("错误", "保存灵感失败"); }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchBook();
-    }, [fetchBook])
+      fetchOutlines();
+      fetchSettings();
+      fetchInspirations();
+    }, [fetchBook, fetchOutlines, fetchSettings, fetchInspirations])
   );
 
   const handleCreateChapter = async () => {
@@ -194,6 +294,26 @@ export default function DetailScreen() {
       }
     } catch (e) {
       Alert.alert("错误", "创建章节失败");
+    }
+  };
+
+  const handleCreateVolume = async () => {
+    const name = volumeName.trim();
+    if (!name) { Alert.alert("提示", "请输入卷名"); return; }
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: name }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setVolumeCreateVisible(false);
+        setVolumeName("");
+        await fetchBook();
+      }
+    } catch (e) {
+      Alert.alert("错误", "创建卷失败");
     }
   };
 
@@ -269,32 +389,93 @@ export default function DetailScreen() {
   const handleAddSetting = () => {
     if (!newSetting.name.trim()) { Alert.alert("提示", "请输入名称"); return; }
     const item: WorldSetting = { id: Date.now().toString(), ...newSetting };
-    setSettings([...settings, item]);
+    saveSettings([...settings, item]);
     setSettingModal(false);
     setNewSetting({ type: "角色", name: "", description: "" });
   };
 
+  // 编辑设定
+  const handleSaveEditSetting = () => {
+    if (!editSettingName.trim() || !editingSettingItem) return;
+    const updated = settings.map(s =>
+      s.id === editingSettingItem.id
+        ? { ...s, type: editSettingType, name: editSettingName.trim(), description: editSettingDesc.trim() }
+        : s
+    );
+    saveSettings(updated);
+    setEditSettingVisible(false);
+    setEditingSettingItem(null);
+  };
+
   // 删除设定
   const handleDeleteSetting = (settingId: string) => {
-    setSettings(settings.filter((s) => s.id !== settingId));
+    saveSettings(settings.filter((s) => s.id !== settingId));
   };
 
   // 新增大纲
   const handleAddOutline = () => {
     if (!newOutline.title.trim()) { Alert.alert("提示", "请输入标题"); return; }
     const item: Outline = { id: Date.now().toString(), ...newOutline };
-    setOutlines([...outlines, item]);
+    saveOutlines([...outlines, item]);
     setOutlineModal(false);
     setNewOutline({ type: "大纲", title: "", content: "" });
+  };
+
+  // 编辑大纲
+  const handleSaveEditOutline = () => {
+    if (!editOutlineTitle.trim() || !editingOutline) return;
+    const updated = outlines.map(o =>
+      o.id === editingOutline.id
+        ? { ...o, type: editOutlineType, title: editOutlineTitle.trim(), content: editOutlineContent.trim() }
+        : o
+    );
+    saveOutlines(updated);
+    setEditingOutline(null);
+  };
+
+  // 删除大纲
+  const handleDeleteOutline = (outlineId: string) => {
+    saveOutlines(outlines.filter(o => o.id !== outlineId));
+  };
+
+  // 导入大纲
+  const handleImportOutline = () => {
+    if (!importOutlineText.trim()) { Alert.alert("提示", "请输入大纲内容"); return; }
+    const lines = importOutlineText.trim().split("\n").filter(l => l.trim());
+    const newOnes: Outline[] = lines.map((line, i) => ({
+      id: Date.now().toString() + "_" + i,
+      type: "大纲" as "大纲" | "细纲",
+      title: line.length > 40 ? line.substring(0, 40) + "..." : line,
+      content: line,
+    }));
+    saveOutlines([...outlines, ...newOnes]);
+    setImportOutlineVisible(false);
+    setImportOutlineText("");
   };
 
   // 新增灵感
   const handleAddInspiration = () => {
     if (!newInspiration.trim()) { Alert.alert("提示", "请输入内容"); return; }
     const item: Inspiration = { id: Date.now().toString(), content: newInspiration, createdAt: new Date().toISOString().split("T")[0] };
-    setInspirations([inspirations[0] || item, ...inspirations.filter((i) => i !== inspirations[0])]);
+    saveInspirations([...inspirations, item]);
     setInspirationModal(false);
     setNewInspiration("");
+  };
+
+  // 编辑灵感
+  const handleSaveEditInspiration = () => {
+    if (!editInspirationContent.trim() || !editingInspiration) return;
+    const updated = inspirations.map(i =>
+      i.id === editingInspiration.id ? { ...i, content: editInspirationContent.trim() } : i
+    );
+    saveInspirations(updated);
+    setEditInspirationVisible(false);
+    setEditingInspiration(null);
+  };
+
+  // 删除灵感
+  const handleDeleteInspiration = (inspirationId: string) => {
+    saveInspirations(inspirations.filter(i => i.id !== inspirationId));
   };
 
   if (!book) {
@@ -333,21 +514,44 @@ export default function DetailScreen() {
         const items = settings.filter((s) => s.type === type);
         return (
           <View key={type} className="mb-4">
-            <Text className="text-sm font-semibold text-gray-600 mb-2">{type}</Text>
-            {items.length === 0 ? (
+            <TouchableOpacity
+              className="flex-row items-center justify-between mb-2"
+              onPress={() => setCollapsedOutlines(prev => ({ ...prev, ["setting_" + type]: !prev["setting_" + type] }))}
+            >
+              <Text className="text-sm font-semibold text-gray-600">{type} ({items.length})</Text>
+              <FontAwesome6 name={collapsedOutlines["setting_" + type] ? "chevron-down" : "chevron-up"} size={10} color="#9CA3AF" />
+            </TouchableOpacity>
+            {collapsedOutlines["setting_" + type] ? null : items.length === 0 ? (
               <Text className="text-xs text-gray-400 ml-1">暂无{type}</Text>
             ) : (
               items.map((item) => (
                 <View key={item.id} className="bg-white rounded-xl p-3 mb-2 flex-row items-center justify-between"
                   style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
                 >
-                  <View className="flex-1 mr-2">
+                  <TouchableOpacity className="flex-1 mr-2" onPress={() => {
+                    setEditingSettingItem(item);
+                    setEditSettingType(item.type);
+                    setEditSettingName(item.name);
+                    setEditSettingDesc(item.description);
+                    setEditSettingVisible(true);
+                  }}>
                     <Text className="text-sm font-medium text-gray-800">{item.name}</Text>
                     {item.description ? <Text className="text-xs text-gray-500 mt-0.5">{item.description}</Text> : null}
-                  </View>
-                  <TouchableOpacity onPress={() => handleDeleteSetting(item.id)}>
-                    <FontAwesome6 name="trash-can" size={14} color="#EF4444" />
                   </TouchableOpacity>
+                  <View className="flex-row gap-2">
+                    <TouchableOpacity onPress={() => {
+                      setEditingSettingItem(item);
+                      setEditSettingType(item.type);
+                      setEditSettingName(item.name);
+                      setEditSettingDesc(item.description);
+                      setEditSettingVisible(true);
+                    }}>
+                      <FontAwesome6 name="pen-to-square" size={13} color="#6366F1" />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDeleteSetting(item.id)}>
+                      <FontAwesome6 name="trash-can" size={13} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))
             )}
@@ -485,19 +689,50 @@ export default function DetailScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* 导入按钮 */}
+      <TouchableOpacity
+        onPress={() => { setImportOutlineText(""); setImportOutlineVisible(true); }}
+        className="flex-row items-center gap-1.5 mb-4"
+      >
+        <FontAwesome6 name="file-import" size={12} color="#6366F1" />
+        <Text className="text-xs text-primary-500">批量导入大纲</Text>
+      </TouchableOpacity>
+
       {["大纲", "细纲"].map((type) => {
         const items = outlines.filter((o) => o.type === type);
+        const collapsedKey = "outline_" + type;
         return (
           <View key={type} className="mb-4">
-            <Text className="text-sm font-semibold text-gray-700 mb-2">{type}</Text>
-            {items.length === 0 ? (
+            <TouchableOpacity
+              className="flex-row items-center justify-between mb-2"
+              onPress={() => setCollapsedOutlines(prev => ({ ...prev, [collapsedKey]: !prev[collapsedKey] }))}
+            >
+              <Text className="text-sm font-semibold text-gray-700">{type} ({items.length})</Text>
+              <FontAwesome6 name={collapsedOutlines[collapsedKey] ? "chevron-down" : "chevron-up"} size={10} color="#9CA3AF" />
+            </TouchableOpacity>
+            {collapsedOutlines[collapsedKey] ? null : items.length === 0 ? (
               <Text className="text-xs text-gray-400 ml-1">暂无{type}</Text>
             ) : (
               items.map((item) => (
                 <View key={item.id} className="bg-white rounded-2xl p-4 mb-2"
                   style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}
                 >
-                  <Text className="text-sm font-bold text-gray-800">{item.title}</Text>
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-sm font-bold text-gray-800 flex-1 mr-2">{item.title}</Text>
+                    <View className="flex-row gap-2.5">
+                      <TouchableOpacity onPress={() => {
+                        setEditingOutline(item);
+                        setEditOutlineType(item.type);
+                        setEditOutlineTitle(item.title);
+                        setEditOutlineContent(item.content);
+                      }}>
+                        <FontAwesome6 name="pen-to-square" size={13} color="#6366F1" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteOutline(item.id)}>
+                        <FontAwesome6 name="trash-can" size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                   {item.content ? <Text className="text-xs text-gray-500 mt-1.5 leading-relaxed">{item.content}</Text> : null}
                 </View>
               ))
@@ -519,7 +754,16 @@ export default function DetailScreen() {
         <Text className="text-sm font-bold text-white">记录灵感</Text>
       </TouchableOpacity>
 
-      {inspirations.length === 0 ? (
+      {/* 折叠切换 */}
+      <TouchableOpacity
+        className="flex-row items-center gap-2 mb-3"
+        onPress={() => setCollapsedInspirations(!collapsedInspirations)}
+      >
+        <FontAwesome6 name={collapsedInspirations ? "chevron-down" : "chevron-up"} size={10} color="#9CA3AF" />
+        <Text className="text-xs font-medium text-gray-500">灵感笔记 ({inspirations.length})</Text>
+      </TouchableOpacity>
+
+      {!collapsedInspirations && (inspirations.length === 0 ? (
         <View className="bg-white rounded-3xl py-12 items-center"
           style={{ shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}
         >
@@ -532,11 +776,27 @@ export default function DetailScreen() {
           <View key={item.id} className="bg-white rounded-2xl p-4 mb-2"
             style={{ shadowColor: "#8B5CF6", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}
           >
-            <Text className="text-sm text-gray-700 leading-relaxed">{item.content}</Text>
-            <Text className="text-xs text-gray-400 mt-2">{item.createdAt}</Text>
+            <View className="flex-row items-start justify-between">
+              <View className="flex-1 mr-2">
+                <Text className="text-sm text-gray-700 leading-relaxed">{item.content}</Text>
+                <Text className="text-xs text-gray-400 mt-2">{item.createdAt}</Text>
+              </View>
+              <View className="flex-row gap-2.5 mt-1">
+                <TouchableOpacity onPress={() => {
+                  setEditingInspiration(item);
+                  setEditInspirationContent(item.content);
+                  setEditInspirationVisible(true);
+                }}>
+                  <FontAwesome6 name="pen-to-square" size={13} color="#8B5CF6" />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleDeleteInspiration(item.id)}>
+                  <FontAwesome6 name="trash-can" size={13} color="#EF4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         ))
-      )}
+      ))}
     </View>
   );
 
@@ -633,10 +893,16 @@ export default function DetailScreen() {
                   <Text className={`text-xs ${chapterSort === "desc" ? "text-white" : "text-gray-500"}`}>倒序</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  onPress={() => setModalVisible(true)}
+                  onPress={() => { setPlusMenuVolumeId("__section__"); }}
                   className="w-8 h-8 rounded-full bg-primary-500/10 items-center justify-center ml-1"
                 >
                   <FontAwesome6 name="plus" size={14} color="#6366F1" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setVolumeCreateVisible(true); setVolumeName(""); }}
+                  className="w-8 h-8 rounded-full bg-green-500/10 items-center justify-center ml-1"
+                >
+                  <Text className="text-xs text-green-500 font-medium">卷</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -673,9 +939,8 @@ export default function DetailScreen() {
                           <TouchableOpacity
                             className="w-7 h-7 rounded-full bg-primary-500/10 items-center justify-center"
                             onPress={(e) => {
-                              // Stop propagation to prevent collapse toggle
-                              setSelectedVolumeId(volume.id);
-                              setModalVisible(true);
+                              e.stopPropagation?.();
+                              setPlusMenuVolumeId(volume.id);
                             }}
                           >
                             <FontAwesome6 name="plus" size={11} color="#6366F1" />
@@ -956,6 +1221,139 @@ export default function DetailScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 创建卷/章节选择弹窗 */}
+      <Modal visible={plusMenuVolumeId !== null} transparent animationType="fade">
+        <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center" onPress={() => setPlusMenuVolumeId(null)} activeOpacity={1}>
+          <View className="bg-white rounded-2xl w-[240px] p-4 gap-1" onStartShouldSetResponder={() => true}>
+            <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3.5 rounded-xl bg-gray-50 active:bg-gray-100" onPress={() => {
+              const volId = plusMenuVolumeId;
+              setPlusMenuVolumeId(null);
+              if (volId && volId !== "__section__") setSelectedVolumeId(volId);
+              setChapterTitle("");
+              setModalVisible(true);
+            }}>
+              <FontAwesome6 name="file-pen" size={16} color="#4F46E5" />
+              <Text className="text-base text-gray-800 font-medium">创建章节</Text>
+            </TouchableOpacity>
+            <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3.5 rounded-xl bg-gray-50 active:bg-gray-100" onPress={() => {
+              setPlusMenuVolumeId(null);
+              setVolumeName("");
+              setVolumeCreateVisible(true);
+            }}>
+              <FontAwesome6 name="folder-open" size={16} color="#059669" />
+              <Text className="text-base text-gray-800 font-medium">创建卷</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 创建卷弹窗 */}
+      <Modal visible={volumeCreateVisible} transparent animationType="fade">
+        <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center" onPress={() => setVolumeCreateVisible(false)} activeOpacity={1}>
+          <View className="bg-white rounded-2xl w-[300px] p-5 gap-4" onStartShouldSetResponder={() => true}>
+            <Text className="text-lg font-bold text-gray-900">创建新卷</Text>
+            <TextInput
+              className="w-full px-4 py-3 bg-gray-50 rounded-xl text-base text-gray-900 border border-gray-200"
+              placeholder="输入卷名称"
+              placeholderTextColor="#999"
+              value={volumeName}
+              onChangeText={setVolumeName}
+            />
+            <View className="flex-row gap-3">
+              <TouchableOpacity className="flex-1 px-4 py-3 bg-gray-100 rounded-xl items-center" onPress={() => setVolumeCreateVisible(false)}>
+                <Text className="text-base text-gray-600 font-medium">取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-1 px-4 py-3 bg-primary-500 rounded-xl items-center" onPress={handleCreateVolume}>
+                <Text className="text-base text-white font-medium">创建</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 编辑大纲弹窗 */}
+      <Modal visible={!!editingOutline} transparent animationType="fade">
+        <TouchableOpacity activeOpacity={1} onPress={() => setEditingOutline(null)} className="flex-1 bg-black/30 justify-center">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
+              <Text className="text-lg font-bold text-gray-800 mb-4">编辑{editOutlineType}</Text>
+              <View className="flex-row gap-2 mb-3">
+                {(["大纲", "细纲"] as const).map((t) => (
+                  <TouchableOpacity key={t} onPress={() => setEditOutlineType(t)}
+                    className={`px-3 py-1.5 rounded-full ${editOutlineType === t ? "bg-primary-500" : "bg-gray-100"}`}>
+                    <Text className={`text-xs ${editOutlineType === t ? "text-white" : "text-gray-600"}`}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-2" placeholder="标题" value={editOutlineTitle} onChangeText={setEditOutlineTitle} />
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4" placeholder="内容（可选）" value={editOutlineContent} onChangeText={setEditOutlineContent} multiline />
+              <View className="flex-row gap-3">
+                <TouchableOpacity onPress={() => setEditingOutline(null)} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center"><Text className="text-sm font-medium text-gray-600">取消</Text></TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveEditOutline} className="flex-1 py-3 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}><Text className="text-sm font-bold text-white">保存</Text></TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 导入大纲弹窗 */}
+      <Modal visible={importOutlineVisible} transparent animationType="slide">
+        <TouchableOpacity activeOpacity={1} onPress={() => setImportOutlineVisible(false)} className="flex-1 bg-black/30 justify-center">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
+              <Text className="text-lg font-bold text-gray-800 mb-4">批量导入大纲</Text>
+              <Text className="text-xs text-gray-500 mb-3">每行一个大纲条目，将自动逐行创建</Text>
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4 min-h-[120px]" placeholder={"第一章 初入异世\n第二章 神秘邂逅\n第三章 觉醒之力"} value={importOutlineText} onChangeText={setImportOutlineText} multiline />
+              <View className="flex-row gap-3">
+                <TouchableOpacity onPress={() => setImportOutlineVisible(false)} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center"><Text className="text-sm font-medium text-gray-600">取消</Text></TouchableOpacity>
+                <TouchableOpacity onPress={handleImportOutline} className="flex-1 py-3 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}><Text className="text-sm font-bold text-white">导入</Text></TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 编辑设定弹窗 */}
+      <Modal visible={editSettingVisible} transparent animationType="fade">
+        <TouchableOpacity activeOpacity={1} onPress={() => { setEditSettingVisible(false); setEditingSettingItem(null); }} className="flex-1 bg-black/30 justify-center">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
+              <Text className="text-lg font-bold text-gray-800 mb-4">编辑设定</Text>
+              <View className="flex-row flex-wrap gap-2 mb-3">
+                {allSettingTypes.map((type) => (
+                  <TouchableOpacity key={type} onPress={() => setEditSettingType(type)}
+                    className={`px-3 py-1.5 rounded-full ${editSettingType === type ? "bg-primary-500" : "bg-gray-100"}`}>
+                    <Text className={`text-xs ${editSettingType === type ? "text-white" : "text-gray-600"}`}>{type}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-2" placeholder="名称" value={editSettingName} onChangeText={setEditSettingName} />
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4" placeholder="描述（可选）" value={editSettingDesc} onChangeText={setEditSettingDesc} multiline />
+              <View className="flex-row gap-3">
+                <TouchableOpacity onPress={() => { setEditSettingVisible(false); setEditingSettingItem(null); }} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center"><Text className="text-sm font-medium text-gray-600">取消</Text></TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveEditSetting} className="flex-1 py-3 rounded-2xl items-center" style={{ backgroundColor: "#6366F1" }}><Text className="text-sm font-bold text-white">保存</Text></TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 编辑灵感弹窗 */}
+      <Modal visible={editInspirationVisible} transparent animationType="fade">
+        <TouchableOpacity activeOpacity={1} onPress={() => { setEditInspirationVisible(false); setEditingInspiration(null); }} className="flex-1 bg-black/30 justify-center">
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined} className="mx-6 bg-white rounded-3xl p-6">
+              <Text className="text-lg font-bold text-gray-800 mb-4">编辑灵感</Text>
+              <TextInput className="bg-gray-50 rounded-2xl px-4 py-3 text-sm mb-4" placeholder="写下你的灵感..." value={editInspirationContent} onChangeText={setEditInspirationContent} multiline />
+              <View className="flex-row gap-3">
+                <TouchableOpacity onPress={() => { setEditInspirationVisible(false); setEditingInspiration(null); }} className="flex-1 py-3 rounded-2xl bg-gray-100 items-center"><Text className="text-sm font-medium text-gray-600">取消</Text></TouchableOpacity>
+                <TouchableOpacity onPress={handleSaveEditInspiration} className="flex-1 py-3 rounded-2xl items-center" style={{ backgroundColor: "#8B5CF6" }}><Text className="text-sm font-bold text-white">保存</Text></TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
     </Screen>
