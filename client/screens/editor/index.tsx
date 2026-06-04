@@ -742,7 +742,7 @@ export default function EditorScreen() {
             )}
 
             {/* ===== 全屏沉浸编辑区 ===== */}
-            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1}}>
+            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2}} resizeMode="cover" />
               ) : null}
@@ -778,7 +778,7 @@ export default function EditorScreen() {
                   placeholderTextColor={nightMode ? "#4A4A6A" : "#C4B8A0"}
                   selectionColor={nightMode ? "#6366F1" : "#A58B72"}
                 />
-                <View style={{ height: 80 }} />
+                {/* spacer removed - using paddingBottom instead */}
               </View>
             </ScrollView>
 
