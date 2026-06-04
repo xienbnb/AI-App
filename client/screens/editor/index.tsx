@@ -56,16 +56,79 @@ export default function EditorScreen() {
 
   // ===== 更多菜单 =====
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
+  const [appearanceModalVisible, setAppearanceModalVisible] = useState(false);
+  const [addModalVisible, setAddModalVisible] = useState(false);
+
+  // ===== 外观设置 =====
+  const [editorSettings, setEditorSettings] = useState({
+    theme: "light" as "light" | "dark" | "sepia" | "green",
+    bg: "",
+    fontFamily: "System",
+    fontSize: 16,
+    lineHeight: 1.8,
+    pagePadding: 20,
+    alignment: "left" as "left" | "center" | "justify",
+  });
+
+  const loadEditorSettings = async () => {
+    try {
+      const saved = await AsyncStorage.getItem("editor_settings");
+      if (saved) setEditorSettings(prev => ({ ...prev, ...JSON.parse(saved) }));
+    } catch {}
+  };
+  const saveEditorSettings = async (s: typeof editorSettings) => {
+    setEditorSettings(s);
+    try { await AsyncStorage.setItem("editor_settings", JSON.stringify(s)); } catch {}
+  };
+
+  const themePalette = (() => {
+    const t = editorSettings.theme;
+    if (t === "sepia") return { isDark: false, bg: "#F5EDE0", text: "#5C4033", text2: "#8B7355", surface: "#FDF8F0", accent: "#B8860B", accentBg: "#FAEBD7", inputBg: "#FEFCF3", border: "#E8DCC8" };
+    if (t === "green") return { isDark: false, bg: "#E8F5E9", text: "#1B5E20", text2: "#4A7C4F", surface: "#F1F8E9", accent: "#2E7D32", accentBg: "#C8E6C9", inputBg: "#F9FBE7", border: "#C5E1A5" };
+    if (t === "dark") return { isDark: true, bg: "#12122A", text: "#E8E8F0", text2: "#8888A8", surface: "#1A1A36", accent: "#818CF8", accentBg: "rgba(129,140,248,0.15)", inputBg: "#252550", border: "#2D2D4A" };
+    return { isDark: false, bg: "#FAFAFE", text: "#1F2937", text2: "#6B7280", surface: "#FFFFFF", accent: "#6366F1", accentBg: "#EEF2FF", inputBg: "#F9FAFB", border: "#E5E7EB" };
+  })();
 
   // ===== 悬浮AI助手 =====
   const [selectedText, setSelectedText] = useState("");
   const [showFloatingAI, setShowFloatingAI] = useState(false);
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const contentInputRef = useRef<TextInput>(null);
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
+  
+  // ===== 外观设置状态 =====
+  type AppTheme = "light" | "dark" | "sepia" | "green";
+  type AppFont = "sans" | "serif" | "mono";
+  type LineSpacing = "tight" | "normal" | "relaxed" | "wide";
+  type PageMargin = "narrow" | "comfortable" | "wide";
+  
+  const [appTheme, setAppTheme] = useState<AppTheme>("light");
+  const [appFont, setAppFont] = useState<AppFont>("sans");
+  const [fontSizeIndex, setFontSizeIndex] = useState(1); // 0-3
+  const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
+  const [pageMargin, setPageMargin] = useState<PageMargin>("comfortable");
+  const [appearanceVisible, setAppearanceVisible] = useState(false);
+  const [addContentVisible, setAddContentVisible] = useState(false);
+
+  const handleInsertContent = (type: "divider" | "timestamp" | "dialogue" | "quote" | "heading") => {
+    const inserts: Record<string, string> = {
+      divider: "\n\n---\n\n",
+      timestamp: `\n\n[${new Date().toLocaleString("zh-CN")}]\n\n`,
+      dialogue: "\n\n「」\n\n",
+      quote: "\n\n> \n\n",
+      heading: "\n\n## \n\n",
+    };
+    const text = inserts[type] || "";
+    const start = content.slice(0, cursorPosition);
+    const end = content.slice(cursorPosition);
+    setContent(start + text + end);
+    setAddContentVisible(false);
+    setUnsaved(true);
+  };
 
   // ===== 撤销/恢复 =====
   const [undoStack, setUndoStack] = useState<string[]>([]);
@@ -141,6 +204,9 @@ export default function EditorScreen() {
       if (wordTimerRef.current) clearInterval(wordTimerRef.current);
     };
   }, []);
+
+  // ===== 加载外观设置 =====
+  useEffect(() => { loadEditorSettings(); }, []);
 
   const wordCount = content.replace(/\s/g, "").length;
   const charCount = content.length;
@@ -577,6 +643,9 @@ export default function EditorScreen() {
                 <ToolbarButton icon="wand-sparkles" label="AI创作" color={theme.accent} bg={theme.accentBg} onPress={() => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="search" label="搜索" color={theme.text2} bg={theme.surface2} onPress={() => setSearchVisible(true)} textColor={theme.text2} nightMode={nightMode} />
                 <ToolbarButton icon="eye" label="预览" color={theme.text2} bg={theme.surface2} onPress={handlePreview} textColor={theme.text2} nightMode={nightMode} />
+                <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
+                <ToolbarButton icon="plus" label="添加" color="#10B981" bg="rgba(16,185,129,0.1)" onPress={() => setAddContentVisible(true)} textColor={theme.text} nightMode={nightMode} />
+                <ToolbarButton icon="font" label="外观" color={theme.accent} bg={theme.accentBg} onPress={() => setAppearanceVisible(true)} textColor={theme.text} nightMode={nightMode} />
               </View>
             </ScrollView>
           </View>
@@ -661,8 +730,11 @@ export default function EditorScreen() {
                   multiline
                   className="w-full"
                   style={{
-                    color: theme.text, fontSize: 17, lineHeight: 32,
+                    color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
+                    fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,
                     flex: 1, minHeight: 600, textAlignVertical: "top",
+                    textAlign: pageMargin === "center" ? "center" : pageMargin === "justify" ? "justify" : "left",
+                    paddingHorizontal: pageMargin === "narrow" ? 16 : pageMargin === "wide" ? 36 : 24,
                   }}
                   placeholder="开始创作你的故事..."
                   placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
@@ -1229,6 +1301,160 @@ export default function EditorScreen() {
               <Text className="text-xs font-bold mb-3" style={{ color: theme.accent }}>上一章</Text>
               <ScrollView><Text className="text-sm leading-relaxed" style={{ color: theme.text2 }}>{prevChapterContent || "(暂无内容)"}</Text></ScrollView>
             </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* ===== 外观设置 ===== */}
+        <Modal visible={appearanceVisible} transparent animationType="slide" onRequestClose={() => setAppearanceVisible(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => setAppearanceVisible(false)} className="flex-1 bg-black/40 justify-end">
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+              <TouchableOpacity activeOpacity={1} onPress={() => undefined}
+                className="mx-0" style={{ backgroundColor: theme.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: "85%" }}>
+                {/* 标题 */}
+                <View className="flex-row items-center gap-2.5 mb-6">
+                  <View className="w-8 h-8 rounded-2xl items-center justify-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                    <FontAwesome6 name="palette" size={14} color={theme.accent} />
+                  </View>
+                  <Text className="text-lg font-bold" style={{ color: theme.text }}>外观设置</Text>
+                </View>
+                <ScrollView showsVerticalScrollIndicator={false} className="mb-4">
+                  {/* 主题 */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>主题模式</Text>
+                  <View className="flex-row gap-2.5 mb-5">
+                    {[
+                      { key: "light" as const, label: "明亮" },
+                      { key: "dark" as const, label: "暗黑" },
+                      { key: "sepia" as const, label: "羊皮纸" },
+                      { key: "green" as const, label: "护眼" },
+                    ].map((item) => (
+                      <TouchableOpacity key={item.key} onPress={() => setAppTheme(item.key)}
+                        className={`flex-1 py-4 rounded-2xl items-center ${appTheme === item.key ? '' : ''}`}
+                        style={{ backgroundColor: appTheme === item.key ? `${theme.accent}20` : (nightMode ? "#2D2D4A" : "#F3F4F6") }}>
+                        <FontAwesome6 name={item.key === "light" ? "sun" : item.key === "dark" ? "moon" : item.key === "sepia" ? "scroll" : "leaf"} size={18} color={appTheme === item.key ? theme.accent : theme.text} />
+                        <Text className="text-xs font-medium mt-1.5" style={{ color: appTheme === item.key ? theme.accent : theme.text }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* 字体 */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>字体</Text>
+                  <View className="flex-row gap-2.5 mb-5">
+                    {[
+                      { key: "sans" as const, label: "无衬线", sample: "Aa" },
+                      { key: "serif" as const, label: "衬线体", sample: "Aa" },
+                      { key: "mono" as const, label: "等宽", sample: "Aa" },
+                    ].map((item) => (
+                      <TouchableOpacity key={item.key} onPress={() => setAppFont(item.key)}
+                        className="flex-1 py-3 rounded-2xl items-center"
+                        style={{ backgroundColor: appFont === item.key ? `${theme.accent}20` : (nightMode ? "#2D2D4A" : "#F3F4F6") }}>
+                        <Text className="text-xl mb-0.5" style={{
+                          fontFamily: item.key === "sans" ? undefined : (item.key === "serif" ? "Times New Roman" : "monospace"),
+                          color: appFont === item.key ? theme.accent : theme.text,
+                        }}>{item.sample}</Text>
+                        <Text className="text-xs font-medium" style={{ color: appFont === item.key ? theme.accent : theme.text }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* 字号 */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>字号</Text>
+                  <View className="flex-row items-center gap-3 mb-5">
+                    <FontAwesome6 name="font" size={12} color={theme.text2} />
+                    <View className="flex-1 h-2 rounded-full" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#E5E7EB" }}>
+                      <View className="h-full rounded-full" style={{ width: `${((fontSizeIndex) / 4) * 100}%`, backgroundColor: theme.accent }} />
+                    </View>
+                    <FontAwesome6 name="font" size={18} color={theme.text2} />
+                    <TouchableOpacity onPress={() => setFontSizeIndex(Math.min(4, fontSizeIndex + 1))}
+                      className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                      <FontAwesome6 name="plus" size={12} color={theme.text} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setFontSizeIndex(Math.max(0, fontSizeIndex - 1))}
+                      className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                      <FontAwesome6 name="minus" size={12} color={theme.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 行间距 */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>行间距</Text>
+                  <View className="flex-row gap-2.5 mb-5">
+                    {[
+                      { key: 1.4, label: "紧凑" },
+                      { key: 1.8, label: "舒适" },
+                      { key: 2.2, label: "宽松" },
+                      { key: 2.8, label: "极宽" },
+                    ].map((item) => (
+                      <TouchableOpacity key={item.key} onPress={() => setLineSpacing(item.key)}
+                        className="flex-1 py-3 rounded-2xl items-center"
+                        style={{ backgroundColor: lineSpacing === item.key ? `${theme.accent}20` : (nightMode ? "#2D2D4A" : "#F3F4F6") }}>
+                        <View className="gap-[2px] mb-1.5">
+                          {[1,2,3].map(i => <View key={i} style={{ width: 16, height: 1.5, backgroundColor: lineSpacing === item.key ? theme.accent : theme.text2, opacity: 0.5 }} />)}
+                        </View>
+                        <Text className="text-xs font-medium" style={{ color: lineSpacing === item.key ? theme.accent : theme.text }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* 页面边距 */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>页面布局</Text>
+                  <View className="flex-row gap-2.5 mb-2">
+                    {[
+                      { key: "narrow" as const, label: "窄边" },
+                      { key: "normal" as const, label: "适中" },
+                      { key: "wide" as const, label: "宽边" },
+                      { key: "center" as const, label: "居中" },
+                    ].map((item) => (
+                      <TouchableOpacity key={item.key} onPress={() => setPageMargin(item.key)}
+                        className="flex-1 py-3 rounded-2xl items-center"
+                        style={{ backgroundColor: pageMargin === item.key ? `${theme.accent}20` : (nightMode ? "#2D2D4A" : "#F3F4F6") }}>
+                        <Text className="text-xs font-medium" style={{ color: pageMargin === item.key ? theme.accent : theme.text }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </TouchableOpacity>
+            </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* ===== 更多添加 ===== */}
+        <Modal visible={addContentVisible} transparent animationType="slide" onRequestClose={() => setAddContentVisible(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => setAddContentVisible(false)} className="flex-1 bg-black/40 justify-end">
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+              <TouchableOpacity activeOpacity={1} onPress={() => undefined}
+                className="mx-0" style={{ backgroundColor: theme.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, maxHeight: "80%" }}>
+                <View className="flex-row items-center gap-2.5 mb-6">
+                  <View className="w-8 h-8 rounded-2xl items-center justify-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                    <FontAwesome6 name="plus" size={14} color={theme.accent} />
+                  </View>
+                  <Text className="text-lg font-bold" style={{ color: theme.text }}>更多添加</Text>
+                </View>
+                <View className="flex-row flex-wrap gap-3 mb-4">
+                  {[
+                    { icon: "minus", label: "分隔线", insert: "\n\n---\n\n", color: "#F59E0B", bg: "#FEF3C7" },
+                    { icon: "clock", label: "时间戳", insert: `\n\n[${new Date().toLocaleString("zh-CN")}]\n\n`, color: "#3B82F6", bg: "#DBEAFE" },
+                    { icon: "quote-left", label: "引用", insert: "\n> ", color: "#10B981", bg: "#D1FAE5" },
+                    { icon: "message", label: "对话", insert: "\n「」\n", color: "#8B5CF6", bg: "#EDE9FE" },
+                    { icon: "asterisk", label: "脚注", insert: "\n* * *\n", color: "#EC4899", bg: "#FCE7F3" },
+                    { icon: "list", label: "列表", insert: "\n- ", color: "#F97316", bg: "#FFEDD5" },
+                    { icon: "hashtag", label: "标题", insert: "\n# ", color: "#6366F1", bg: "#E0E7FF" },
+                    { icon: "align-left", label: "缩进", insert: "\n  ", color: "#14B8A6", bg: "#CCFBF1" },
+                  ].map((item) => (
+                    <TouchableOpacity key={item.label} onPress={() => {
+                      const pos = cursorPosition ?? content.length;
+                      const newContent = content.slice(0, pos) + item.insert + content.slice(pos);
+                      setContent(newContent);
+                      setAddContentVisible(false);
+                      setStatus("unsaved");
+                    }}
+                      className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl"
+                      style={{ backgroundColor: nightMode ? "#2D2D4A" : item.bg, width: "47%" }}>
+                      <FontAwesome6 name={item.icon as any} size={13} color={item.color} />
+                      <Text className="text-sm font-medium" style={{ color: nightMode ? "#E5E7EB" : "#374151" }}>{item.label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </TouchableOpacity>
+            </KeyboardAvoidingView>
           </TouchableOpacity>
         </Modal>
 
