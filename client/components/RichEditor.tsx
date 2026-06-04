@@ -40,6 +40,10 @@ function RichEditorWeb({
   const toolbarBg = nightMode ? "#2D2D4A" : "#FFF8E7";
   const borderColor = nightMode ? "#3D3D5A" : "#EDE4D4";
 
+  // 用 useRef 保持 onChange 始终最新
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   // 加载 Quill CSS 和 JS
   useEffect(() => {
     if (!document.querySelector("#quill-css")) {
@@ -77,7 +81,7 @@ function RichEditorWeb({
         placeholder: "开始编写大纲...",
       });
       quillRef.current = quill;
-      quill.on("text-change", () => onChange?.(quill.root.innerHTML));
+      quill.on("text-change", () => onChangeRef.current?.(quill.root.innerHTML));
       if (initialContent) {
         quill.root.innerHTML = initialContent;
         quill.history.clear();
@@ -95,7 +99,7 @@ function RichEditorWeb({
       quill.root.innerHTML = initialContent;
       quill.history.clear();
       // 同步到父组件的 content 状态
-      onChange?.(initialContent);
+      onChangeRef.current?.(initialContent);
     }
   }, [initialContent]);
 

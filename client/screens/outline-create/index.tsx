@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
@@ -21,9 +21,15 @@ export default function OutlineCreateScreen() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"" | "saving" | "success" | "error">("");
   const [allOutlines, setAllOutlines] = useState<OutlineItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const isEditing = !!outlineId;
+  const contentRef = useRef(content);
+  const quillReadyRef = useRef(false);
+
+  // 始终同步 contentRef
+  useEffect(() => { contentRef.current = content; }, [content]);
 
   // 加载已有大纲列表，如果是编辑模式则填充数据
   useEffect(() => {
@@ -53,27 +59,36 @@ export default function OutlineCreateScreen() {
       Alert.alert("提示", "请输入大纲标题");
       return;
     }
-    if (!content.trim() || content === "<p><br></p>") {
+
+    // 直接从 DOM 读取 Quill 内容（绕过 React state 可能的延迟）
+    let currentContent = contentRef.current;
+    try {
+      if (typeof document !== "undefined") {
+        const editorEl = document.querySelector(".ql-editor");
+        if (editorEl) currentContent = editorEl.innerHTML;
+      }
+    } catch {}
+
+    if (!currentContent.trim() || currentContent === "<p><br></p>") {
       Alert.alert("提示", "请编写大纲内容");
       return;
     }
     setSaving(true);
+    setSaveStatus("saving");
     try {
       let updatedItems: OutlineItem[];
       if (isEditing) {
-        // 编辑模式：更新已有条目
         updatedItems = allOutlines.map((o) =>
           o.id === outlineId
-            ? { ...o, title: title.trim(), content }
+            ? { ...o, title: title.trim(), content: currentContent }
             : o
         );
       } else {
-        // 新建模式：添加新条目
         const newItem: OutlineItem = {
           id: Date.now().toString(),
           type: "大纲",
           title: title.trim(),
-          content,
+          content: currentContent,
         };
         updatedItems = [...allOutlines, newItem];
       }
@@ -84,19 +99,23 @@ export default function OutlineCreateScreen() {
         body: JSON.stringify({ items: updatedItems }),
       });
       const json = await res.json();
+      console.log("大纲保存响应:", json);
       if (json.success) {
+        setSaveStatus("success");
         Alert.alert("保存成功", "大纲已保存", [
           { text: "返回", onPress: () => router.back() },
         ]);
       } else {
+        setSaveStatus("error");
         Alert.alert("错误", json.message || "保存失败，请重试");
       }
     } catch (e) {
       console.error("保存大纲失败", e);
+      setSaveStatus("error");
       Alert.alert("错误", "保存失败，请重试");
     }
     setSaving(false);
-  }, [bookId, outlineId, title, content, allOutlines, isEditing, router]);
+  }, [bookId, outlineId, title, allOutlines, isEditing, router]);
 
   const nightMode = false;
 
