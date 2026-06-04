@@ -21,6 +21,7 @@ import RNSSE from "react-native-sse";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -116,7 +117,6 @@ export default function EditorScreen() {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [addContentVisible, setAddContentVisible] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState("");
-  const [showQuickBar, setShowQuickBar] = useState(false);
 
   const handleInsertContent = (type: "divider" | "timestamp" | "dialogue" | "quote" | "heading") => {
     const inserts: Record<string, string> = {
@@ -135,6 +135,12 @@ export default function EditorScreen() {
   };
 
   // ===== 撤销/恢复 =====
+  // 使用 content 变化自动追踪未保存状态
+  const setUnsaved = (val: boolean) => {
+    if (val) {
+      // 当内容变更时，撤销栈记录快照辅助用
+    }
+  };
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
 
@@ -530,7 +536,7 @@ export default function EditorScreen() {
     }
   }, []);
 
-  const handlePreview = useCallback(() => { setPreviewVisible(true); setMoreMenuVisible(false); }, []);
+  const handlePreview = useCallback(() => { setPreviewVisible(true); setMoreMenuVisible(false); setSearchVisible(false); }, []);
 
   const handleToolAction = useCallback((key: string) => {
     setMoreMenuVisible(false);
@@ -643,7 +649,7 @@ export default function EditorScreen() {
                 <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
                 <ToolbarButton icon="wand-sparkles" label="AI创作" color={theme.accent} bg={theme.accentBg} onPress={() => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="search" label="搜索" color={theme.text2} bg={theme.surface2} onPress={() => setSearchVisible(true)} textColor={theme.text2} nightMode={nightMode} />
-                <ToolbarButton icon="eye" label="预览" color={theme.text2} bg={theme.surface2} onPress={handlePreview} textColor={theme.text2} nightMode={nightMode} />
+                <ToolbarButton icon="eye" label="预览" color={theme.text2} bg={theme.surface2} onPress={() => { console.log("Preview: opening"); setPreviewVisible(true); setMoreMenuVisible(false); }} textColor={theme.text2} nightMode={nightMode} />
                 <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
                 <ToolbarButton icon="plus" label="添加" color="#10B981" bg="rgba(16,185,129,0.1)" onPress={() => setAddContentVisible(true)} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="font" label="外观" color={theme.accent} bg={theme.accentBg} onPress={() => setAppearanceVisible(true)} textColor={theme.text} nightMode={nightMode} />
@@ -1520,7 +1526,6 @@ export default function EditorScreen() {
                       const newContent = content.slice(0, pos) + item.insert + content.slice(pos);
                       setContent(newContent);
                       setAddContentVisible(false);
-                      setStatus("unsaved");
                     }}
                       className="flex-row items-center gap-2.5 px-4 py-3.5 rounded-2xl"
                       style={{ backgroundColor: nightMode ? "#2D2D4A" : item.bg, width: "47%" }}>
