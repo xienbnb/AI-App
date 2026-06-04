@@ -654,57 +654,69 @@ export default function EditorScreen() {
 
           {/* ===== 编辑区(全屏) ===== */}
           <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#FAFAFA" }}>
+            {/* ===== 浮动AI栏（选中文字时显示，浮层不推挤内容） ===== */}
             {showFloatingAI && selectedText && (
-              <View className="px-4 pt-2 pb-0" style={{
-                borderBottomWidth: 1, borderBottomColor: nightMode ? "#2D2D4A" : "rgba(99,102,241,0.08)",
-                backgroundColor: nightMode ? "#16162A" : "#FFFFFF",
+              <View style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
+                backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
+                borderTopWidth: 1, borderTopColor: nightMode ? "#2D2D4A" : "rgba(99,102,241,0.08)",
                 shadowColor: "#6366F1",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: nightMode ? 0 : 0.06,
-                shadowRadius: 8,
-                elevation: 3,
-                zIndex: 100,
+                shadowOffset: { width: 0, height: -2 },
+                shadowOpacity: nightMode ? 0 : 0.08,
+                shadowRadius: 12, elevation: 8,
               }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2.5">
-                  <View className="flex-row items-center gap-1">
-                    <FloatingAIBtn icon="scissors" label="裁剪" color="#6B7280" onPress={() => replaceSelectedText("")} />
-                  <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
-                  <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
-                  <FloatingAIBtn icon="text-width" label="全选" color="#6B7280" onPress={() => contentInputRef.current?.focus()} />
-                  <View className="w-px h-6 mx-1" style={{ backgroundColor: theme.border }} />
-                  <FloatingAIBtn icon="highlighter" label="高亮" color="#F59E0B" onPress={() => { setHighlights(prev => [...prev, { start: selectionStart, end: selectionEnd, color: "#FDE68A" }]); setShowFloatingAI(false); Alert.alert("已高亮"); }} />
-                  <FloatingAIBtn icon="flag" label="伏笔" color="#8B5CF6" onPress={() => { replaceSelectedText(selectedText + "（伏笔）"); Alert.alert("已标记"); }} />
-                  <FloatingAIBtn icon="user" label="角色" color="#3B82F6" onPress={() => { setAssistType("characters"); setAssistModalVisible(true); setShowFloatingAI(false); }} />
-                  <FloatingAIBtn icon="gear" label="设定" color="#10B981" onPress={() => { setAssistType("settings"); setAssistModalVisible(true); setShowFloatingAI(false); }} />
-                  <View className="w-px h-6 mx-1" style={{ backgroundColor: theme.border }} />
-                  <FloatingAIBtn icon="pen" label="润写" color="#EC4899" onPress={() => {
-                    setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
-                    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ prompt: `润色以下文字，更优美流畅:\n${selectedText}`, style: "default", wordCount: 500 }),
-                    });
-                    sseRef.current = sse;
-                    sse.addEventListener("message", (e: any) => {
-                      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-                      try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
-                    });
-                  }} />
-                  <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
-                    setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
-                    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                      method: "POST", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ prompt: `扩写以下内容，增加细节不改变原意:\n${selectedText}`, style: "default", wordCount: 500 }),
-                    });
-                    sseRef.current = sse;
-                    sse.addEventListener("message", (e: any) => {
-                      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-                      try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
-                    });
-                  }} />
-                </View>
-              </ScrollView>
-            </View>
-          )}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
+                  <View className="flex-row items-center gap-0.5">
+                    {/* 编辑操作 */}
+                    <FloatingAIBtn icon="scissors" label="剪切" color="#6B7280" onPress={() => replaceSelectedText("")} />
+                    <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
+                    <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
+                    <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
+                    {/* AI 写作 */}
+                    <FloatingAIBtn icon="pen" label="润写" color="#EC4899" onPress={() => {
+                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt: `润色以下文字，更优美流畅:\n${selectedText}`, style: "default", wordCount: 500 }),
+                      });
+                      sseRef.current = sse;
+                      sse.addEventListener("message", (e: any) => {
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                      });
+                    }} />
+                    <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
+                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt: `扩写以下内容，增加细节不改变原意:\n${selectedText}`, style: "default", wordCount: 500 }),
+                      });
+                      sseRef.current = sse;
+                      sse.addEventListener("message", (e: any) => {
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                      });
+                    }} />
+                    <FloatingAIBtn icon="magic" label="改写" color="#8B5CF6" onPress={() => {
+                      setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ prompt: `用不同风格重写以下内容，保持原意:\n${selectedText}`, style: "default", wordCount: 500 }),
+                      });
+                      sseRef.current = sse;
+                      sse.addEventListener("message", (e: any) => {
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                      });
+                    }} />
+                    <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
+                    {/* 标记工具 */}
+                    <FloatingAIBtn icon="highlighter" label="高亮" color="#F59E0B" onPress={() => { setHighlights(prev => [...prev, { start: selectionStart, end: selectionEnd, color: "#FDE68A" }]); setShowFloatingAI(false); Alert.alert("已高亮"); }} />
+                    <FloatingAIBtn icon="flag" label="批注" color="#3B82F6" onPress={() => { replaceSelectedText(selectedText + "〔批注〕"); Alert.alert("已添加批注"); }} />
+                  </View>
+                </ScrollView>
+              </View>
+            )}
 
             {/* ===== 全屏编辑区 ===== */}
             <ScrollView className="flex-1" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled">
