@@ -802,6 +802,12 @@ export default function DetailScreen() {
 
   return (
     <Screen>
+      {loading ? (
+        <View className="flex-1 items-center justify-center py-32">
+          <ActivityIndicator size="large" color="#6366F1" />
+          <Text className="text-gray-400 mt-4 text-sm">加载中...</Text>
+        </View>
+      ) : (
       <ScrollView
         className="flex-1 px-4"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await fetchBook(); setRefreshing(false); }} tintColor="#6366F1" />}
@@ -1006,8 +1012,8 @@ export default function DetailScreen() {
         {activeTab === "设定" && renderSettingTab()}
         {activeTab === "灵感" && renderInspirationTab()}
       </ScrollView>
+      )}
 
-      {/* 新建/编辑章节弹窗 */}
       <Modal visible={modalVisible} transparent animationType="slide">
         <TouchableOpacity activeOpacity={1} onPress={() => { setModalVisible(false); setEditingChapter(null); }} className="flex-1 bg-black/30 justify-center">
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>

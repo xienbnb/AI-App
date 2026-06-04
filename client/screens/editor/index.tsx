@@ -18,6 +18,8 @@ import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
 import * as Clipboard from "expo-clipboard";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -82,6 +84,8 @@ export default function EditorScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [replaceTerm, setReplaceTerm] = useState("");
+  const [searchResultCount, setSearchResultCount] = useState(0);
+  const [currentSearchIdx, setCurrentSearchIdx] = useState(0);
 
   // ===== 悬浮时速 =====
   const [showSpeed, setShowSpeed] = useState(false);
@@ -139,6 +143,9 @@ export default function EditorScreen() {
   }, []);
 
   const wordCount = content.replace(/\s/g, "").length;
+  const charCount = content.length;
+  const paraCount = content.split("\n").filter(line => line.trim().length > 0).length;
+  const sentenceCount = content.split(/[。！？.!?]+/).filter(s => s.trim().length > 0).length;
 
   // ===== 保存 =====
   const handleSave = async (isAuto = false) => {
@@ -250,14 +257,64 @@ export default function EditorScreen() {
     } catch { Alert.alert("错误", "创建失败"); }
   };
 
+  // ===== 导出 =====
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+
+  const handleExport = async (format: "txt" | "md") => {
+    setExportModalVisible(false);
+    setMoreMenuVisible(false);
+    try {
+      const header = format === "md" ? `# ${chapterTitle}\n\n---\n\n` : `${chapterTitle}\n${"━".repeat(20)}\n\n`;
+      const text = header + content;
+      const fileName = `${chapterTitle || "未命名章节"}.${format}`;
+      const uri = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(uri, text, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, {
+          mimeType: format === "md" ? "text/markdown" : "text/plain",
+          dialogTitle: `导出 ${fileName}`,
+        });
+      } else {
+        Alert.alert("导出完成", `文件已保存到: ${uri}`);
+      }
+    } catch (e) {
+      Alert.alert("导出失败", "请稍后重试");
+    }
+  };
+
+  // ===== 搜索增强 =====
+  useEffect(() => {
+    if (!searchTerm.trim()) { setSearchResultCount(0); setCurrentSearchIdx(0); return; }
+    const matches = content.match(new RegExp(searchTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"));
+    setSearchResultCount(matches ? matches.length : 0);
+    setCurrentSearchIdx(prev => Math.min(prev, (matches?.length || 1) - 1));
+  }, [searchTerm, content]);
+
+  const scrollToSearchIndex = useCallback((dir: "prev" | "next") => {
+    if (searchResultCount === 0) return;
+    if (dir === "next") {
+      setCurrentSearchIdx(prev => (prev + 1) % searchResultCount);
+    } else {
+      setCurrentSearchIdx(prev => (prev - 1 + searchResultCount) % searchResultCount);
+    }
+  }, [searchResultCount]);
+
   const handleSearchReplace = () => {
     if (!searchTerm.trim()) return;
     pushUndo(content);
-    setContent(content.split(searchTerm).join(replaceTerm));
+    const parts = content.split(searchTerm);
+    setContent(parts.join(replaceTerm));
     setSearchVisible(false);
     setSearchTerm(""); setReplaceTerm("");
-    Alert.alert("替换完成", `已将"${searchTerm}"替换为"${replaceTerm}"`);
+    setSearchResultCount(0);
+    Alert.alert("替换完成", `已将"${searchTerm}"替换为"${replaceTerm}"${parts.length > 1 ? "，共" + (parts.length - 1) + "处" : ""}`);
   };
+
+  // ===== 增强统计弹窗 =====
+  const [statsModalVisible, setStatsModalVisible] = useState(false);
 
   // ===== 悬浮相关 =====
   const handleFloatingChapter = () => {
@@ -418,6 +475,8 @@ export default function EditorScreen() {
       case "preview": handlePreview(); break;
       case "night": setNightMode(!nightMode); break;
       case "speed": setShowSpeed(!showSpeed); break;
+      case "export": setExportModalVisible(true); break;
+      case "stats": setStatsModalVisible(true); break;
       case "delete": handleDeleteChapter(); break;
     }
   }, [nightMode, showSpeed]);
@@ -472,18 +531,18 @@ export default function EditorScreen() {
                     alignItems: "center", justifyContent: "center",
                     borderWidth: 1, borderColor: theme.border,
                   }}>
-                  <FontAwesome6 name="ellipsis-v" size={15} color={theme.accent} />
+                  <FontAwesome6 name="ellipsis-vertical" size={15} color={theme.accent} />
                 </TouchableOpacity>
               </View>
             </View>
 
             {/* 统计栏 */}
             <View className="flex-row items-center px-4 pb-2.5 gap-4">
-              <View className="flex-row items-center gap-1.5">
+              <TouchableOpacity onPress={() => setStatsModalVisible(true)} className="flex-row items-center gap-1.5">
                 <FontAwesome6 name="text-height" size={11} color={theme.text2} />
                 <Text style={{ color: theme.text2, fontSize: 12, fontWeight: "500" }}>{wordCount}</Text>
                 <Text style={{ color: theme.text2, fontSize: 11 }}>字</Text>
-              </View>
+              </TouchableOpacity>
               <View className="w-px h-3" style={{ backgroundColor: theme.border }} />
               {chapterList.length > 0 && (
                 <View className="flex-row items-center gap-1.5">
@@ -738,6 +797,8 @@ export default function EditorScreen() {
                     { icon: "file-circle-plus", label: "新建章节", key: "newChapter", color: "#8B5CF6" },
                     { icon: "search", label: "搜索", key: "search", color: "#F59E0B" },
                     { icon: "eye", label: "预览", key: "preview", color: "#10B981" },
+                    { icon: "file-export", label: "导出", key: "export", color: "#EC4899" },
+                    { icon: "chart-simple", label: "统计", key: "stats", color: "#0EA5E9" },
                   ]}
                   onPress={handleToolAction} nightMode={nightMode} theme={theme}
                 />
@@ -903,7 +964,81 @@ export default function EditorScreen() {
                   </ScrollView>
                 </View>
               </View>
+            {/* ===== 导出 Modal ===== */}
+        <Modal visible={exportModalVisible} transparent animationType="slide" onRequestClose={() => setExportModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => setExportModalVisible(false)} className="flex-1 bg-black/40 justify-center">
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
+              <TouchableOpacity activeOpacity={1} onPress={() => undefined}
+                className="mx-5" style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24 }}>
+                <View className="flex-row items-center gap-2.5 mb-5">
+                  <View className="w-8 h-8 rounded-2xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
+                    <FontAwesome6 name="file-export" size={14} color={theme.accent} />
+                  </View>
+                  <Text className="text-lg font-bold" style={{ color: theme.text }}>导出文档</Text>
+                </View>
+                <Text className="text-sm mb-4" style={{ color: theme.text2 }}>选择导出格式，将自动分享到其他应用</Text>
+                <View className="flex-row gap-3">
+                  <TouchableOpacity onPress={() => handleExport("txt")}
+                    className="flex-1 py-4 rounded-2xl items-center gap-2"
+                    style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                    <FontAwesome6 name="file-lines" size={20} color={theme.accent} />
+                    <Text className="text-sm font-bold" style={{ color: theme.text }}>纯文本 (.txt)</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleExport("md")}
+                    className="flex-1 py-4 rounded-2xl items-center gap-2"
+                    style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                    <FontAwesome6 name="markdown" size={20} color="#6366F1" />
+                    <Text className="text-sm font-bold" style={{ color: theme.text }}>Markdown (.md)</Text>
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity onPress={() => setExportModalVisible(false)}
+                  className="mt-5 py-3.5 rounded-2xl items-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                  <Text className="text-sm font-medium" style={{ color: theme.text2 }}>取消</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
             </KeyboardAvoidingView>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* ===== 详细统计 Modal ===== */}
+        <Modal visible={statsModalVisible} transparent animationType="slide" onRequestClose={() => setStatsModalVisible(false)}>
+          <TouchableOpacity activeOpacity={1} onPress={() => setStatsModalVisible(false)} className="flex-1 bg-black/40 justify-center">
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined}
+              className="mx-5" style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24 }}>
+              <View className="flex-row items-center gap-2.5 mb-5">
+                <View className="w-8 h-8 rounded-2xl items-center justify-center" style={{ backgroundColor: "#E0F2FE" }}>
+                  <FontAwesome6 name="chart-simple" size={14} color="#0EA5E9" />
+                </View>
+                <Text className="text-lg font-bold" style={{ color: theme.text }}>写作统计</Text>
+              </View>
+              <View className="gap-3 mb-5">
+                {[
+                  { label: "总字符数", value: charCount, icon: "text-height", color: "#6366F1" },
+                  { label: "中文字数", value: wordCount, icon: "font", color: "#8B5CF6" },
+                  { label: "段落数", value: paraCount, icon: "paragraph", color: "#10B981" },
+                  { label: "句子数", value: sentenceCount, icon: "quote-left", color: "#F59E0B" },
+                ].map((item, idx) => (
+                  <View key={idx} className="flex-row items-center justify-between px-4 py-3.5 rounded-2xl"
+                    style={{ backgroundColor: nightMode ? "#1E1E38" : "#F9FAFB" }}>
+                    <View className="flex-row items-center gap-2.5">
+                      <View className="w-7 h-7 rounded-xl items-center justify-center" style={{ backgroundColor: `${item.color}20` }}>
+                        <FontAwesome6 name={item.icon as any} size={11} color={item.color} />
+                      </View>
+                      <Text className="text-sm" style={{ color: theme.text2 }}>{item.label}</Text>
+                    </View>
+                    <Text className="text-lg font-bold" style={{ color: theme.text }}>{item.value.toLocaleString()}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity onPress={() => setStatsModalVisible(false)}
+                className="py-3.5 rounded-2xl items-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                <Text className="text-sm font-medium" style={{ color: theme.text }}>关闭</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+
+      </KeyboardAvoidingView>
           </TouchableWithoutFeedback>
         </Modal>
 
@@ -1023,19 +1158,43 @@ export default function EditorScreen() {
           <TouchableOpacity activeOpacity={1} onPress={() => setSearchVisible(false)} className="flex-1 bg-black/40 justify-center">
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined}>
               <TouchableOpacity activeOpacity={1} onPress={() => undefined}
-                className="mx-5" style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24 }}>
+                className="mx-5" style={{ backgroundColor: theme.surface, borderRadius: 24, padding: 24, width: screenWidth > 500 ? 420 : undefined, alignSelf: "center" }}>
                 <View className="flex-row items-center gap-2.5 mb-4">
                   <View className="w-8 h-8 rounded-2xl items-center justify-center" style={{ backgroundColor: "#FEF3C7" }}>
-                    <FontAwesome6 name="search" size={14} color="#F59E0B" />
+                    <FontAwesome6 name="magnifying-glass" size={14} color="#F59E0B" />
                   </View>
                   <Text className="text-lg font-bold" style={{ color: theme.text }}>搜索替换</Text>
+                  {searchResultCount > 0 && (
+                    <Text className="text-xs ml-auto" style={{ color: theme.text2 }}>
+                      共 {searchResultCount} 处匹配，当前第 {currentSearchIdx + 1} 处
+                    </Text>
+                  )}
                 </View>
-                <TextInput value={searchTerm} onChangeText={setSearchTerm} placeholder="搜索..."
-                  className="w-full px-4 py-3.5 rounded-2xl mb-2 text-sm"
-                  style={{ color: theme.text, backgroundColor: theme.inputBg }} placeholderTextColor="#999" />
+                <View className="flex-row gap-2 mb-2">
+                  <TextInput value={searchTerm} onChangeText={setSearchTerm} placeholder="搜索..."
+                    className="flex-1 px-4 py-3.5 rounded-2xl text-sm"
+                    style={{ color: theme.text, backgroundColor: theme.inputBg }} placeholderTextColor="#999" />
+                </View>
                 <TextInput value={replaceTerm} onChangeText={setReplaceTerm} placeholder="替换为..."
                   className="w-full px-4 py-3.5 rounded-2xl mb-4 text-sm"
                   style={{ color: theme.text, backgroundColor: theme.inputBg }} placeholderTextColor="#999" />
+                {/* 导航按钮 */}
+                {searchResultCount > 0 && (
+                  <View className="flex-row gap-2 mb-4">
+                    <TouchableOpacity onPress={() => scrollToSearchIndex("prev")}
+                      className="flex-1 py-2.5 rounded-xl items-center flex-row justify-center gap-2"
+                      style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                      <FontAwesome6 name="chevron-up" size={12} color={theme.text2} />
+                      <Text className="text-xs font-medium" style={{ color: theme.text2 }}>上一个</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => scrollToSearchIndex("next")}
+                      className="flex-1 py-2.5 rounded-xl items-center flex-row justify-center gap-2"
+                      style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                      <FontAwesome6 name="chevron-down" size={12} color={theme.text2} />
+                      <Text className="text-xs font-medium" style={{ color: theme.text2 }}>下一个</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
                 <View className="flex-row gap-3">
                   <TouchableOpacity onPress={() => setSearchVisible(false)}
                     className="flex-1 py-3.5 rounded-2xl items-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>

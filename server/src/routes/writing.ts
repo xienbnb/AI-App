@@ -91,7 +91,10 @@ router.get("/:id", async (req: Request, res: Response) => {
 router.post("/", async (req: Request, res: Response) => {
   try {
     const { title, description, cover, coverImage, category, volumes } = req.body;
-    if (!title) return res.status(400).json({ success: false, message: "书名不能为空" });
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "书名不能为空且必须是字符串" });
+    }
+    const trimmedTitle = title.trim().slice(0, 100);
 
     const volumeId = generateId();
     const chapters = volumes && volumes.length > 0
@@ -305,6 +308,9 @@ router.post("/:id/volumes", async (req: Request, res: Response) => {
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const { title } = req.body;
+    if (!title || typeof title !== "string" || title.trim().length === 0) {
+      return res.status(400).json({ success: false, message: "卷名称不能为空" });
+    }
     const newVolume = {
       id: generateId(),
       title: title || `第${volumes.length + 1}卷`,
@@ -343,6 +349,9 @@ router.put("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const volume = volumes.find((v: any) => v.id === req.params.volumeId);
     if (!volume) return res.status(404).json({ success: false, message: "未找到卷" });
+    if (req.body.title !== undefined && (typeof req.body.title !== "string" || req.body.title.trim().length === 0)) {
+      return res.status(400).json({ success: false, message: "卷名称不能为空" });
+    }
     Object.assign(volume, req.body);
 
     const { data, error } = await client
@@ -427,6 +436,88 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
 
     if (error) throw new Error(`创建章节失败: ${error.message}`);
     res.json({ success: true, data: newChapter });
+  } catch (err: any) {
+    console.error("创建章节错误:", err);
+    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+  }
+});
+
+// POST /:id/chapters - 创建章节（自动选择卷）
+router.post("/:id/chapters", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, content, volumeId } = req.body;
+    if (!title || !content) {
+      res.status(400).json({ success: false, error: "缺少标题或内容" });
+      return;
+    }
+    const client = getSupabaseClient();
+
+    // Check if volumes exist
+    const { data: book, error: fetchError } = await client
+      .from("books")
+      .select("volumes")
+      .eq("id", id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let targetVolumeId = volumeId;
+    const volumes = book?.volumes || [];
+
+    // If no volumeId provided, use first volume or create one
+    if (!targetVolumeId) {
+      if (volumes.length > 0) {
+        targetVolumeId = volumes[0].id;
+      } else {
+        // Create a default volume
+        targetVolumeId = `vol_${Date.now()}`;
+        const newVolume = { id: targetVolumeId, name: "默认卷", order: 0, chapters: [] };
+        await client.from("books").update({ volumes: [newVolume] }).eq("id", id);
+      }
+    }
+
+    // Find the volume and add chapter
+    const updatedVolumes = volumes.map((v: any) => {
+      if (v.id === targetVolumeId) {
+        const newChapter = {
+          id: `ch_${Date.now()}`,
+          title,
+          content: content || "",
+          order: (v.chapters?.length || 0),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        return { ...v, chapters: [...(v.chapters || []), newChapter] };
+      }
+      return v;
+    });
+
+    // Handle case where volume wasn't found
+    if (!volumes.find((v: any) => v.id === targetVolumeId)) {
+      const newChapter = {
+        id: `ch_${Date.now()}`,
+        title,
+        content: content || "",
+        order: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      updatedVolumes.push({
+        id: targetVolumeId,
+        name: "默认卷",
+        order: volumes.length,
+        chapters: [newChapter],
+      });
+    }
+
+    const { error: updateError } = await client
+      .from("books")
+      .update({ volumes: updatedVolumes })
+      .eq("id", id);
+
+    if (updateError) throw updateError;
+    res.json({ success: true, message: "章节已创建" });
   } catch (err: any) {
     console.error("创建章节错误:", err);
     res.status(500).json({ success: false, message: err.message || "服务器错误" });

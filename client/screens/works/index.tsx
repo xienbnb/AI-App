@@ -21,6 +21,8 @@ import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -303,6 +305,10 @@ export default function WorksScreen() {
   const [confirmDeleteBook, setConfirmDeleteBook] = useState<Book | null>(null);
   // 编辑模式：记录正在编辑的书籍ID（独立于 longPressBook，避免时序竞态）
   const [editingBookId, setEditingBookId] = useState<string | null>(null);
+  // 统计弹窗
+  const [statsBook, setStatsBook] = useState<{ id: string; title: string; wordCount: number; volumes: any[]; createdAt: string } | null>(null);
+  // 自定义封面URL
+  const [customCoverUrl, setCustomCoverUrl] = useState("");
 
   const fetchBooks = useCallback(async () => {
     try {
@@ -357,16 +363,17 @@ export default function WorksScreen() {
     }
     if (!editingBookId) return;
     try {
+      const body: Record<string, any> = {
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+        category: newCategory,
+        status: newStatus,
+      };
+      body.coverImage = customCoverUrl.trim() || selectedCover;
       const res = await fetch(`${API_BASE}/api/v1/writing/${editingBookId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          description: newDesc.trim(),
-          category: newCategory,
-          status: newStatus,
-          coverImage: selectedCover,
-        }),
+        body: JSON.stringify(body),
       });
       const json = await res.json();
       if (json.success) {
@@ -396,7 +403,7 @@ export default function WorksScreen() {
           category: newCategory,
           status: newStatus,
           cover: "cover-image",
-          coverImage: selectedCover,
+          coverImage: customCoverUrl.trim() || selectedCover,
         }),
       });
       const json = await res.json();
@@ -457,6 +464,42 @@ export default function WorksScreen() {
       }
     } catch (e) {
       setConfirmDeleteBook(null);
+    }
+  };
+
+  // 导出作品
+  const handleExportBook = async (bookId: string, bookTitle: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`);
+      const json = await res.json();
+      if (!json.success) { Alert.alert("错误", "获取书籍数据失败"); return; }
+      const book = json.data;
+
+      let md = `# ${book.title}\n\n`;
+      md += `> **分类**：${book.category || "未分类"}  |  **状态**：${book.status === "writing" ? "连载中" : book.status === "completed" ? "已完结" : "已暂停"}\n`;
+      md += `> **字数**：约 ${book.wordCount || 0} 字  |  **章节**：${(book.volumes || []).reduce((s: number, v: any) => s + (v.chapters?.length || 0), 0)} 章\n\n`;
+      md += `---\n\n`;
+
+      if (book.description) md += `## 简介\n\n${book.description}\n\n---\n\n`;
+
+      for (const vol of (book.volumes || [])) {
+        md += `## ${vol.title || "默认卷"}\n\n`;
+        for (const ch of (vol.chapters || [])) {
+          md += `### ${ch.title}\n\n${ch.content || "(空)"}\n\n`;
+        }
+      }
+
+      const fileName = `${bookTitle.replace(/[\\/:*?"<>|]/g, "_")}.md`;
+      const uri = `${FileSystem.cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(uri, md, { encoding: FileSystem.EncodingType.UTF8 });
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(uri, { mimeType: "text/markdown", dialogTitle: `导出《${bookTitle}》` });
+      } else {
+        Alert.alert("导出完成", `文件已保存`);
+      }
+    } catch (e) {
+      Alert.alert("导出失败", "请稍后重试");
     }
   };
 
@@ -719,22 +762,28 @@ export default function WorksScreen() {
                     setNewCategory(b.category);
                     setNewStatus(b.status);
                     setSelectedCover(b.coverImage || COVER_IMAGES_MAN[0].path);
+                    setCustomCoverUrl("");
                     setEditingBookId(b.id);
                     setLongPressBook(null);
                     setTimeout(() => setModalVisible(true), 200);
                   }},
-                  { icon: "trash-can", label: "删除书籍", color: "#EF4444", action: () => {
-                    const b = longPressBook!;
+                  { icon: "chart-simple", label: "写作统计", color: "#0EA5E9", action: () => {
+                    setStatsBook(longPressBook);
                     setLongPressBook(null);
-                    setTimeout(() => setConfirmDeleteBook(b), 300);
                   }},
-                  { icon: "file-export", label: "导出书籍", color: "#10B981", action: () => {
-                    Alert.alert("提示", "导出功能开发中");
+                  { icon: "file-export", label: "导出作品", color: "#10B981", action: () => {
+                    const b = longPressBook!;
+                    handleExportBook(b.id, b.title);
                     setLongPressBook(null);
                   }},
                   { icon: "arrow-down-wide-short", label: "章节排序", color: "#F59E0B", action: () => {
                     Alert.alert("提示", "请在书籍详情页设置章节排序");
                     setLongPressBook(null);
+                  }},
+                  { icon: "trash-can", label: "删除书籍", color: "#EF4444", action: () => {
+                    const b = longPressBook!;
+                    setLongPressBook(null);
+                    setTimeout(() => setConfirmDeleteBook(b), 300);
                   }},
                 ].map((item) => (
                   <TouchableOpacity
@@ -898,6 +947,17 @@ export default function WorksScreen() {
                   </ScrollView>
                   </View>
 
+                  {/* 自定义封面(URL) */}
+                  <View className="mb-5">
+                    <Text className="text-xs font-semibold text-gray-500 mb-1.5">自定义封面URL</Text>
+                    <TextInput
+                      value={customCoverUrl} onChangeText={setCustomCoverUrl}
+                      placeholder="输入图片URL（可选，优先使用）"
+                      className="w-full px-4 py-3 rounded-2xl bg-gray-50 text-sm text-gray-800"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+
                   {/* 按钮 */}
                   <View className="flex-row gap-3 mb-4">
                     <TouchableOpacity
@@ -988,6 +1048,56 @@ export default function WorksScreen() {
                 </View>
               </View>
           </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ======== 写作统计弹窗 ======== */}
+      <Modal visible={!!statsBook} transparent animationType="slide" onRequestClose={() => setStatsBook(null)}>
+        <TouchableOpacity activeOpacity={1} onPress={() => setStatsBook(null)} className="flex-1 bg-black/40 justify-center">
+          <TouchableOpacity activeOpacity={1} onPress={() => undefined}
+            className="mx-5" style={{ backgroundColor: "#FFFFFF", borderRadius: 28, padding: 24 }}>
+            <View className="flex-row items-center gap-2.5 mb-5">
+              <View className="w-9 h-9 rounded-2xl items-center justify-center" style={{ backgroundColor: "#E0F2FE" }}>
+                <FontAwesome6 name="chart-simple" size={15} color="#0EA5E9" />
+              </View>
+              <View>
+                <Text className="text-lg font-bold text-gray-900">写作统计</Text>
+                <Text className="text-xs text-gray-400">{statsBook?.title}</Text>
+              </View>
+            </View>
+            {(() => {
+              const book = statsBook;
+              if (!book) return null;
+              const vols = (book as any).volumes || [];
+              const totalChapters = vols.reduce((s: number, v: any) => s + (v.chapters?.length || 0), 0);
+              const stats = [
+                { label: "总字数", value: book.wordCount.toLocaleString(), icon: "text-height", color: "#6366F1" },
+                { label: "总章节", value: totalChapters.toString(), icon: "book", color: "#8B5CF6" },
+                { label: "总卷数", value: vols.length.toString(), icon: "folder", color: "#10B981" },
+                { label: "平均每章", value: totalChapters > 0 ? Math.round(book.wordCount / totalChapters).toLocaleString() : "0", icon: "chart-line", color: "#F59E0B" },
+                { label: "创建时间", value: new Date(book.createdAt).toLocaleDateString("zh-CN"), icon: "calendar", color: "#EC4899" },
+              ];
+              return (
+                <View className="gap-2.5 mb-5">
+                  {stats.map((stat, idx) => (
+                    <View key={idx} className="flex-row items-center justify-between px-4 py-3.5 rounded-2xl bg-gray-50">
+                      <View className="flex-row items-center gap-2.5">
+                        <View className="w-7 h-7 rounded-xl items-center justify-center" style={{ backgroundColor: stat.color + "20" }}>
+                          <FontAwesome6 name={stat.icon as any} size={11} color={stat.color} />
+                        </View>
+                        <Text className="text-sm text-gray-500">{stat.label}</Text>
+                      </View>
+                      <Text className="text-base font-bold text-gray-800">{stat.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+            <TouchableOpacity onPress={() => setStatsBook(null)}
+              className="py-3.5 rounded-2xl items-center bg-gray-100">
+              <Text className="text-sm font-medium text-gray-600">关闭</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </Screen>
   );

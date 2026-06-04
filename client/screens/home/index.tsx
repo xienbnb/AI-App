@@ -150,12 +150,12 @@ function SkillPickerModal({ visible, skills, onSelect, onClose }: {
   const enabledSkills = skills.filter(s => s.enabled);
   // Group by category for visual
   const categories = [
-    { name: "📚 创作规划", skills: ["market", "planning", "worldbuild"] },
-    { name: "👥 角色设定", skills: ["character", "relations"] },
-    { name: "📋 大纲规划", skills: ["outline", "chapter"] },
-    { name: "✍️ 正文写作", skills: ["writing", "scene", "blurb"] },
-    { name: "🔍 优化完善", skills: ["logic", "polish"] },
-    { name: "⭐ 特殊能力", skills: ["create-book"] },
+    { name: "创作规划", skills: ["market", "planning", "worldbuild"] },
+    { name: "角色设定", skills: ["character", "relations"] },
+    { name: "大纲规划", skills: ["outline", "chapter"] },
+    { name: "正文写作", skills: ["writing", "scene", "blurb"] },
+    { name: "优化完善", skills: ["logic", "polish"] },
+    { name: "特殊能力", skills: ["create-book"] },
   ];
 
   // Custom skills go to the end
@@ -221,7 +221,7 @@ function SkillPickerModal({ visible, skills, onSelect, onClose }: {
                       onPress={() => { onSelect(sk); onClose(); }}
                     >
                       <View className="w-9 h-9 rounded-xl items-center justify-center bg-amber-100">
-                        <FontAwesome6 name="magic" size={14} color="#D97706" />
+                        <FontAwesome6 name="wand-magic-sparkles" size={14} color="#D97706" />
                       </View>
                       <View className="flex-1">
                         <Text className="text-sm font-semibold text-gray-900">{sk.name}</Text>
@@ -328,9 +328,9 @@ function InsertModal({ visible, bookId, content, insertTarget, onClose }: {
             {/* Tab selector for target type */}
             <View className="flex-row px-4 gap-2 mb-4">
               {[
-                { key: "chapter", label: "📖 章节", desc: "作为章节插入" },
-                { key: "outline", label: "📋 大纲", desc: "追加到大纲" },
-                { key: "inspiration", label: "💡 灵感", desc: "存入灵感库" },
+                { key: "chapter", label: "章节", desc: "作为章节插入" },
+                { key: "outline", label: "大纲", desc: "追加到大纲" },
+                { key: "inspiration", label: "灵感", desc: "存入灵感库" },
               ].map((opt) => (
                 <TouchableOpacity
                   key={opt.key}
@@ -681,7 +681,7 @@ export default function HomeScreen() {
       return;
     }
     if (skill.id === "body-writing" && !activeBook) {
-      addMessage("ai", "⚠️ 正文生成需要先挂载一个作品。请点击上方「自由创作」选择一本作品。");
+      addMessage("ai", "正文生成需要先挂载一个作品。请点击上方「自由创作」选择一本作品。");
       return;
     }
     setActiveSkill(skill);
@@ -697,10 +697,14 @@ export default function HomeScreen() {
 
       if (target === "outline") {
         // Insert into outline - append to existing outline
+        const outlineRes = await fetch(`${baseUrl}/outlines`);
+        const outlineJson = await outlineRes.json();
+        const existingOutline = outlineJson.success ? (outlineJson.data?.outline || "") : "";
+        const mergedOutline = existingOutline ? existingOutline + "\n\n---\n\n" + content : content;
         res = await fetch(`${baseUrl}/outlines`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ outline: content }),
+          body: JSON.stringify({ outline: mergedOutline }),
         });
       } else if (target === "inspiration") {
         // Insert into inspirations
@@ -740,12 +744,12 @@ export default function HomeScreen() {
       const json = await res.json();
       const targetLabel = target === "outline" ? "大纲" : target === "inspiration" ? "灵感" : (chapterId && chapterId !== "new" ? "替换章节" : "新章节");
       if (json.success) {
-        addMessage("ai", `✅ 内容已成功插入到《${activeBook.title || activeBook.name}》${targetLabel}！`);
+        addMessage("ai", "内容已成功插入到《" + activeBook.title || activeBook.name + "》" + targetLabel + "！");
       } else {
-        addMessage("ai", "❌ 插入失败：" + (json.error || "未知错误"));
+        addMessage("ai", "插入失败：" + (json.error || "未知错误"));
       }
     } catch (e) {
-      addMessage("ai", "❌ 插入失败：无法连接到服务器");
+      addMessage("ai", "插入失败：无法连接到服务器");
     }
   }, [activeBook, addMessage]);
 

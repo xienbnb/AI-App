@@ -43,7 +43,7 @@ const presetModels = [
 ];
 
 const defaultSkills: Skill[] = [
-  { id: "create-book", name: "📚 创建书籍", desc: "创建新作品（仅此技能可创建书籍）", enabled: true, icon: "book", prompt: "你是一个帮助用户创建新书籍的助手。根据用户提供的小说名称、类型和简介，严格遵守以下规则：只创建书籍，不生成大纲，不生成正文，不生成任何其他内容。创建完成后告知用户书籍已创建成功。" },
+  { id: "create-book", name: "创建书籍", desc: "创建新作品（仅此技能可创建书籍）", enabled: true, icon: "book", prompt: "你是一个帮助用户创建新书籍的助手。根据用户提供的小说名称、类型和简介，严格遵守以下规则：只创建书籍，不生成大纲，不生成正文，不生成任何其他内容。创建完成后告知用户书籍已创建成功。" },
   { id: "market", name: "赛道分析", desc: "爆款赛道分析与差异化定位", enabled: true, icon: "chart-line" },
   { id: "planning", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", enabled: true, icon: "ruler" },
   { id: "worldbuild", name: "世界观", desc: "构建完整世界观底层规则", enabled: true, icon: "globe" },
@@ -360,8 +360,8 @@ export default function ProfileScreen() {
         <View className="mx-4 mb-5">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-base font-semibold text-gray-800">常用角色</Text>
-            <TouchableOpacity onPress={() => router.push("/ai-character")}>
-              <Text className="text-sm font-medium" style={{ color: "#4F46E5" }}>管理</Text>
+            <TouchableOpacity onPress={() => {}}>
+              <Text className="text-sm font-medium text-gray-400">管理</Text>
             </TouchableOpacity>
           </View>
           <View><ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
                   shadowRadius: 8,
                   elevation: 1,
                 }}
-                onPress={() => router.push("/ai-character")}
+                onPress={() => {}}
               >
                 <View className="w-12 h-12 rounded-2xl items-center justify-center mb-2" style={{ backgroundColor: "#4F46E515" }}>
                   <FontAwesome6 name="plus" size={20} color="#4F46E5" />
@@ -680,7 +680,7 @@ export default function ProfileScreen() {
                             skill.enabled ? "bg-indigo-50" : "bg-gray-50"
                           }`}>
                             <FontAwesome6
-                              name={skill.id === "create-book" ? "book" : skill.isCustom ? "magic" : "bolt"}
+                              name={skill.id === "create-book" ? "book" : skill.isCustom ? "wand-magic-sparkles" : "bolt"}
                               size={16}
                               color={skill.enabled ? "#4F46E5" : "#CBD5E1"}
                             />

@@ -27,13 +27,6 @@ export default function RootLayout() {
         <Stack.Screen name="editor" options={{ title: "", animation: 'slide_from_right' }} />
         <Stack.Screen name="report" options={{ title: "", animation: 'slide_from_right' }} />
         <Stack.Screen name="post-detail" options={{ title: "", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-character" options={{ title: "AI角色库", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-outline" options={{ title: "大纲助手", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-cover" options={{ title: "封面生成器", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-detect" options={{ title: "AI检测", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-map" options={{ title: "地图生成器", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-image-gen" options={{ title: "图片生成", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-relationship" options={{ title: "人物关系网", animation: 'slide_from_right' }} />
         <Stack.Screen name="ai-skills" options={{ title: "创作技能", animation: 'slide_from_right' }} />
         <Stack.Screen name="ai-knowledge" options={{ title: "知识库", animation: 'slide_from_right' }} />
       </Stack>
