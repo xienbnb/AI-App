@@ -526,16 +526,16 @@ export default function EditorScreen() {
 
   // 主题色
   const theme = {
-    bg: nightMode ? "#0F0F1A" : "#FAFAFA",
-    surface: nightMode ? "#1A1A2E" : "#FFFFFF",
-    surface2: nightMode ? "#24243D" : "#F3F4F6",
-    text: nightMode ? "#E8E8F0" : "#1F2937",
-    text2: nightMode ? "#9898B8" : "#6B7280",
-    border: nightMode ? "#2D2D4A" : "#F0F0F0",
+    bg: nightMode ? "#0F0F1A" : "#F8F4ED",
+    surface: nightMode ? "#1A1A2E" : "#FFFCF7",
+    surface2: nightMode ? "#24243D" : "#F2EDE4",
+    text: nightMode ? "#E8E8F0" : "#2C1810",
+    text2: nightMode ? "#9898B8" : "#8B7355",
+    border: nightMode ? "#2D2D4A" : "#EDE4D4",
     accent: "#6366F1",
     accentBg: nightMode ? "#2D2D4A" : "#EEF2FF",
-    inputBg: nightMode ? "#1E1E38" : "#F9FAFB",
-    shadow: nightMode ? "transparent" : "rgba(99,102,241,0.08)",
+    inputBg: nightMode ? "#1E1E38" : "#F5F0E8",
+    shadow: nightMode ? "transparent" : "rgba(99,102,241,0.06)",
   };
 
   // ===== 更多菜单 Action Handlers =====
@@ -673,8 +673,8 @@ export default function EditorScreen() {
             </ScrollView>
           </View>
 
-          {/* ===== 编辑区(全屏) ===== */}
-          <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#FAFAFA" }}>
+          {/* ===== 编辑区(全屏沉浸) ===== */}
+          <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#F8F4ED" }}>
             {/* ===== 浮动AI栏（选中文字时显示，浮层不推挤内容） ===== */}
             {showFloatingAI && selectedText && (
               <View style={{
@@ -741,27 +741,25 @@ export default function EditorScreen() {
               </View>
             )}
 
-            {/* ===== 全屏编辑区 ===== */}
-            <ScrollView className="flex-1" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1}}>
+            {/* ===== 全屏沉浸编辑区 ===== */}
+            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1}}>
               {backgroundImage ? (
-                <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.25}} resizeMode="cover" />
+                <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2}} resizeMode="cover" />
               ) : null}
-              <View style={{
-                paddingHorizontal: 20, paddingTop: 16,
-                alignSelf: "stretch", flex: 1,
-              }}>
-                {/* 章节标题 */}
+
+              {/* 章节标题 */}
+              <View className="px-5 pt-8 pb-2 items-center">
                 <TextInput
                   value={chapterTitle} onChangeText={setChapterTitle}
-                  className="text-2xl font-bold mb-1 text-center"
-                  style={{ color: theme.text, lineHeight: 38 }}
-                  placeholder="章节标题" placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
+                  className="w-full text-2xl font-bold text-center leading-9"
+                  style={{ color: theme.text, fontFamily: "serif" }}
+                  placeholder="章节标题" placeholderTextColor={nightMode ? "#4A4A6A" : "#C4B8A0"}
+                  selectionColor={theme.accent}
                 />
-                <View className="mb-5" style={{
-                  width: 44, height: 3, borderRadius: 2, backgroundColor: theme.accent, opacity: 0.5,
-                }} />
+              </View>
 
-                {/* 正文编辑区 - 全屏 */}
+              {/* 正文编辑区 - 全屏无边界 */}
+              <View className="flex-1 px-5">
                 <TextInput
                   ref={contentInputRef}
                   value={content}
@@ -774,11 +772,12 @@ export default function EditorScreen() {
                     fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,
                     textAlignVertical: "top",
                     textAlign: pageMargin === "center" ? "center" : pageMargin === "justify" ? "justify" : "left",
-                    paddingHorizontal: pageMargin === "narrow" ? 12 : pageMargin === "wide" ? 32 : 20,
+                    paddingHorizontal: pageMargin === "narrow" ? 8 : pageMargin === "wide" ? 4 : 0,
                   }}
                   placeholder="开始创作你的故事..."
-                  placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
-                  />
+                  placeholderTextColor={nightMode ? "#4A4A6A" : "#C4B8A0"}
+                  selectionColor={nightMode ? "#6366F1" : "#A58B72"}
+                />
                 <View style={{ height: 80 }} />
               </View>
             </ScrollView>
@@ -787,7 +786,7 @@ export default function EditorScreen() {
             {showQuickBar && (
               <View style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0,
-                backgroundColor: nightMode ? "#1A1A2E" : "#F8F8FC",
+                backgroundColor: nightMode ? "#1A1A2E" : "#F2EDE4",
                 borderTopLeftRadius: 16, borderTopRightRadius: 16,
                 paddingVertical: 8, paddingHorizontal: 10,
               }}>
