@@ -766,7 +766,7 @@ export default function EditorScreen() {
                   onChangeText={(t) => { pushUndo(t); setContent(t); }}
                   onSelectionChange={handleSelectionChange}
                   multiline
-                  className="w-full flex-1"
+                  className="w-full flex-1 outline-none"
                   style={{
                     color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
                     fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,

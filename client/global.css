@@ -283,3 +283,9 @@
   --radius-4xl: calc(var(--radius) * 4); /* 2rem (32px) */
 }
 
+/* Remove default focus outline from editor TextInput on web platform */
+textarea:focus, input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
