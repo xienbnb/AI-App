@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Image,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { Screen } from "@/components/Screen";
 import { useFocusEffect } from "expo-router";
