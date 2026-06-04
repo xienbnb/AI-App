@@ -678,7 +678,7 @@ export default function DetailScreen() {
       {/* 手动大纲管理 */}
       <View className="flex-row gap-2 mb-4">
         <TouchableOpacity
-          onPress={() => setOutlineModal(true)}
+          onPress={() => router.push("/outline-create", { bookId: id })}
           className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
           style={{ backgroundColor: "#6366F1" }}
         >
