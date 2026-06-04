@@ -45,19 +45,19 @@ type Skill = {
 
 // ===== Default skills (strict scope) =====
 const DEFAULT_SKILLS: Skill[] = [
-  { id: "track-analysis", name: "赛道分析", desc: "分析爆款赛道与差异化定位", prompt: "你是一个小说赛道分析专家。请严格只分析赛道趋势、市场定位和差异化建议。不要创建书籍、不要写正文。", enabled: true },
-  { id: "plan-length", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", prompt: "你是一个小说篇幅规划师。请严格只规划作品的大致篇幅、章节数量和更新节奏。不要创建书籍、不要写正文。", enabled: true },
-  { id: "world-building", name: "世界观构建", desc: "构建完整世界观底层规则", prompt: "你是一个世界观构建专家。请严格只构建世界观底层规则和设定。不要创建书籍、不要写正文。", enabled: true },
-  { id: "character-design", name: "人物设定", desc: "生成核心人物三维设定", prompt: "你是一个小说角色设定专家。请严格只创作角色设定（外貌、性格、背景等）。不要创建书籍、不要写正文。", enabled: true },
-  { id: "relationship-net", name: "关系网构建", desc: "构建人物关系网络", prompt: "你是一个人物关系网构建师。请严格只构建人物之间的关系网络图。不要创建书籍、不要写正文。", enabled: true },
-  { id: "volume-outline", name: "分卷大纲", desc: "生成三幕式分卷大纲", prompt: "你是一个小说大纲规划师。请严格只生成分卷大纲和各卷概要。不要创建书籍、不要写章节正文。", enabled: true },
-  { id: "chapter-outline", name: "单章大纲", desc: "生成单章精细化大纲", prompt: "你是一个章节大纲师。请严格只生成单章的细纲。不要创建书籍、不要写正文内容。", enabled: true },
-  { id: "body-writing", name: "正文生成", desc: "生成单章正文初稿", prompt: "你是一个小说正文创作助手。请严格只根据用户提供的设定和大纲撰写正文内容。不要创建书籍、不要生成大纲。", enabled: true },
-  { id: "scene-opt", name: "场景优化", desc: "优化关键场景描写", prompt: "你是一个场景优化专家。请严格只优化场景描写、氛围渲染和画面感。不要创建书籍、不要改写其他内容。", enabled: true },
-  { id: "logic-check", name: "逻辑校验", desc: "检测逻辑漏洞与角色OOC", prompt: "你是一个严谨的逻辑校验师。请严格只检测故事中的逻辑漏洞、时间线冲突和角色OOC问题。不要创建书籍、不要修改正文。", enabled: true },
-  { id: "polish", name: "批量润色", desc: "全文润色与文风统一", prompt: "你是一个专业的编辑。请严格只对文本进行语言润色和文风统一。不要创建书籍、不要改变原有剧情。", enabled: true },
-  { id: "blurb", name: "爆款简介", desc: "生成爆款简介与推荐语", prompt: "你是一个小说简介创作师。请严格只生成吸引人的小说简介、推荐语和封面文案。不要创建书籍、不要写正文。", enabled: true },
-  { id: "create-book", name: "创建书籍", desc: "根据灵感自动创建一本新书（含大纲和第一卷）", prompt: "你是小说创作助手。请根据用户的灵感完整规划一本新书：包括书名、题材类型、一句话简介、核心设定和分卷大纲概览。只负责规划内容不要实际写入数据库。", enabled: true },
+  { id: "create-book", name: "创建书籍", desc: "创建新作品（仅此技能可创建书籍）", prompt: "你是一个帮助用户创建新书籍的助手。根据用户提供的小说名称、类型和简介，严格遵守以下规则：只创建书籍，不生成大纲，不生成正文，不生成任何其他内容。创建完成后告知用户书籍已创建成功。", enabled: true },
+  { id: "market", name: "赛道分析", desc: "爆款赛道分析与差异化定位", prompt: "你是一个小说赛道分析专家。请严格只分析赛道趋势、市场定位和差异化建议。不要创建书籍、不要写正文。", enabled: true },
+  { id: "planning", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", prompt: "你是一个小说篇幅规划师。请严格只规划作品的大致篇幅、章节数量和更新节奏。不要创建书籍、不要写正文。", enabled: true },
+  { id: "worldbuild", name: "世界观", desc: "构建完整世界观底层规则", prompt: "你是一个世界观构建专家。请严格只构建世界观底层规则和设定。不要创建书籍、不要写正文。", enabled: true },
+  { id: "character", name: "人物设定", desc: "生成核心人物三维设定", prompt: "你是一个小说角色设定专家。请严格只创作角色设定（外貌、性格、背景等）。不要创建书籍、不要写正文。", enabled: true },
+  { id: "relations", name: "关系网", desc: "构建人物关系网络", prompt: "你是一个人物关系网构建师。请严格只构建人物之间的关系网络图。不要创建书籍、不要写正文。", enabled: true },
+  { id: "outline", name: "分卷大纲", desc: "仅生成三幕式分卷大纲（不创建任何章节）", prompt: "你是一个小说大纲规划师。请严格只生成分卷大纲和各卷概要。不要创建书籍、不要写章节正文。", enabled: true },
+  { id: "chapter", name: "单章大纲", desc: "仅生成单章精细化大纲（需挂载书籍）", prompt: "你是一个章节大纲师。请严格只生成单章的细纲。不要创建书籍、不要写正文内容。", enabled: true },
+  { id: "writing", name: "正文生成", desc: "仅生成单章正文初稿（需挂载书籍并选择章节）", prompt: "你是一个小说正文创作助手。请严格只根据用户提供的设定和大纲撰写正文内容。不要创建书籍、不要生成大纲。", enabled: true },
+  { id: "scene", name: "场景优化", desc: "仅优化关键场景描写", prompt: "你是一个场景优化专家。请严格只优化场景描写、氛围渲染和画面感。不要创建书籍、不要改写其他内容。", enabled: true },
+  { id: "logic", name: "逻辑校验", desc: "仅检测逻辑漏洞与人物OOC", prompt: "你是一个严谨的逻辑校验师。请严格只检测故事中的逻辑漏洞、时间线冲突和角色OOC问题。不要创建书籍、不要修改正文。", enabled: true },
+  { id: "polish", name: "批量润色", desc: "仅全文润色（不修改章节结构）", prompt: "你是一个专业的编辑。请严格只对文本进行语言润色和文风统一。不要创建书籍、不要改变原有剧情。", enabled: true },
+  { id: "blurb", name: "爆款简介", desc: "仅生成作品简介与章节标题", prompt: "你是一个小说简介创作师。请严格只生成吸引人的小说简介、推荐语和封面文案。不要创建书籍、不要写正文。", enabled: true },
 ];
 
 const INSPIRATION_CHIPS = [
@@ -149,12 +149,12 @@ function SkillPickerModal({ visible, skills, onSelect, onClose }: {
   const enabledSkills = skills.filter(s => s.enabled);
   // Group by category for visual
   const categories = [
-    { name: "创作规划", skills: ["track-analysis", "plan-length", "world-building"] },
-    { name: "角色设定", skills: ["character-design", "relationship-net"] },
-    { name: "大纲规划", skills: ["volume-outline", "chapter-outline"] },
-    { name: "正文写作", skills: ["body-writing", "scene-opt", "blurb"] },
-    { name: "优化完善", skills: ["logic-check", "polish"] },
-    { name: "特殊能力", skills: ["create-book"] },
+    { name: "📚 创作规划", skills: ["market", "planning", "worldbuild"] },
+    { name: "👥 角色设定", skills: ["character", "relations"] },
+    { name: "📋 大纲规划", skills: ["outline", "chapter"] },
+    { name: "✍️ 正文写作", skills: ["writing", "scene", "blurb"] },
+    { name: "🔍 优化完善", skills: ["logic", "polish"] },
+    { name: "⭐ 特殊能力", skills: ["create-book"] },
   ];
 
   // Custom skills go to the end
@@ -162,6 +162,10 @@ function SkillPickerModal({ visible, skills, onSelect, onClose }: {
 
   const getSkillColor = (skillId: string) => {
     if (skillId === "create-book") return "#10B981";
+    if (["market", "planning", "worldbuild", "outline", "chapter"].includes(skillId)) return "#6366F1";
+    if (["character", "relations"].includes(skillId)) return "#8B5CF6";
+    if (["writing", "scene", "blurb"].includes(skillId)) return "#EC4899";
+    if (["logic", "polish"].includes(skillId)) return "#F59E0B";
     if (customSkills.find(s => s.id === skillId)) return "#F59E0B";
     return "#6366F1";
   };
@@ -428,7 +432,17 @@ export default function HomeScreen() {
       if (raw) {
         const cfg = JSON.parse(raw);
         if (Array.isArray(cfg.skills)) {
-          setSkills(cfg.skills);
+          // Merge stored skills with defaults to fill in prompt fields and fix ID mismatches
+          const defaultMap = new Map(DEFAULT_SKILLS.map(s => [s.id, s]));
+          const merged = cfg.skills.map((stored: Record<string, unknown>) => {
+            const def = defaultMap.get(stored.id as string);
+            return {
+              ...def,              // take all default fields (including prompt)
+              ...stored,           // override with stored (including enabled status)
+              isCustom: stored.isCustom === true, // preserve custom flag
+            } as Skill;
+          });
+          setSkills(merged);
           return;
         }
       }
