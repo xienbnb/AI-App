@@ -106,6 +106,7 @@ export default function DetailScreen() {
   const [book, setBook] = useState<Book | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [chapterTitle, setChapterTitle] = useState("");
   const [selectedVolumeId, setSelectedVolumeId] = useState("");
 
@@ -185,11 +186,14 @@ export default function DetailScreen() {
   const fetchBook = useCallback(async () => {
     if (!id) return;
     try {
+      setLoading(true);
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}`);
       const json = await res.json();
       if (json.success) setBook(json.data);
     } catch (e) {
       console.error("获取书籍详情失败", e);
+    } finally {
+      setLoading(false);
     }
   }, [id]);
 
