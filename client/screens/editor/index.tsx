@@ -114,6 +114,7 @@ export default function EditorScreen() {
   const [pageMargin, setPageMargin] = useState<PageMargin>("comfortable");
   const [appearanceVisible, setAppearanceVisible] = useState(false);
   const [addContentVisible, setAddContentVisible] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState("");
 
   const handleInsertContent = (type: "divider" | "timestamp" | "dialogue" | "quote" | "heading") => {
     const inserts: Record<string, string> = {
