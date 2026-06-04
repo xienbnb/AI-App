@@ -54,7 +54,8 @@ function getChapterCount(book: Book): number {
   return book.volumes.reduce((sum, v) => sum + (v.chapters?.length || 0), 0);
 }
 
-function formatWordCount(n: number) {
+function formatWordCount(n: number | undefined | null) {
+  if (n == null) return "0";
   if (n >= 10000) return (n / 10000).toFixed(1) + "万";
   if (n >= 1000) return (n / 1000).toFixed(1) + "k";
   return n.toString();
@@ -853,7 +854,7 @@ export default function DetailScreen() {
           <View className="px-3 py-1.5 rounded-full bg-white flex-row items-center gap-1.5"
             style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
             <FontAwesome6 name="pen" size={10} color="#6B7280" />
-            <Text className="text-xs text-gray-600">{formatWordCount(book.wordCount)}字</Text>
+            <Text className="text-xs text-gray-600">{formatWordCount(book.wordCount || book.totalWords)}字</Text>
           </View>
         </View>
 
