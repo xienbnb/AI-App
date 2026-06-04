@@ -32,6 +32,7 @@ type ChatMessage = {
   content: string;
   step?: string;
   skillName?: string;
+  skillId?: string;
 };
 
 type Skill = {
@@ -288,18 +289,23 @@ function BookPickerModal({ visible, books, selectedId, onSelect, onClose }: {
   );
 }
 
-// ===== Chapter Selector Modal (for "insert into book" or "write chapter") =====
-function ChapterSelectorModal({ visible, bookId, chapterTitle, content, onInsert, onClose }: {
-  visible: boolean; bookId: string; chapterTitle: string; content: string;
-  onInsert: (chapterId: string | null, title: string) => void; onClose: () => void;
+// ===== Unified Insert Modal (supports outline / chapter / inspiration) =====
+function InsertModal({ visible, bookId, content, insertTarget, onClose }: {
+  visible: boolean; bookId: string; content: string; insertTarget: string;
+  onClose: (target: string, title: string, chapterId?: string | null) => void;
 }) {
   const [chapters, setChapters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [title, setTitle] = useState(chapterTitle || "AI 生成内容");
-  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+  const [target, setTarget] = useState(insertTarget);
+  const [selectedChapter, setSelectedChapter] = useState<string | null>("new");
+  const [title, setTitle] = useState("AI 生成内容");
 
   useEffect(() => {
     if (!bookId || !visible) return;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setSelectedChapter("new");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTitle("AI 生成内容");
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`);
@@ -308,70 +314,115 @@ function ChapterSelectorModal({ visible, bookId, chapterTitle, content, onInsert
       } catch (e) { /* silent */ }
       setLoading(false);
     })();
-  }, [bookId, visible]);
+  }, [bookId, visible, insertTarget]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onClose("", "")}>
+      <TouchableWithoutFeedback onPress={() => onClose("", "")}>
         <View className="flex-1 justify-end bg-black/40">
-          <View className="bg-white rounded-t-3xl max-h-[72%] pb-8">
+          <View className="bg-white rounded-t-3xl max-h-[80%] pb-8">
             <View className="items-center pt-4 pb-2"><View className="w-10 h-1 bg-gray-300 rounded-full" /></View>
-            <Text className="text-lg font-bold text-gray-900 text-center mb-1">插入到作品</Text>
-            <Text className="text-sm text-gray-500 text-center mb-4">选择插入方式</Text>
+            <Text className="text-lg font-bold text-gray-900 text-center mb-1">插入内容</Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">选择插入到哪里</Text>
 
-            <View className="px-4 mb-3">
-              <Text className="text-xs font-medium text-gray-600 mb-1">章节标题</Text>
-              <TextInput
-                className="bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-800 border border-gray-200"
-                value={title} onChangeText={setTitle} placeholder="输入标题"
-                placeholderTextColor="#CBD5E1"
-              />
+            {/* Tab selector for target type */}
+            <View className="flex-row px-4 gap-2 mb-4">
+              {[
+                { key: "chapter", label: "📖 章节", desc: "作为章节插入" },
+                { key: "outline", label: "📋 大纲", desc: "追加到大纲" },
+                { key: "inspiration", label: "💡 灵感", desc: "存入灵感库" },
+              ].map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  className={`flex-1 rounded-2xl p-3 items-center border ${target === opt.key ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}
+                  onPress={() => setTarget(opt.key)}
+                >
+                  <Text className={`text-xs font-semibold ${target === opt.key ? "text-indigo-700" : "text-gray-600"}`}>{opt.label}</Text>
+                  <Text className="text-xs text-gray-400 mt-0.5">{opt.desc}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
 
             <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
-              <TouchableOpacity
-                className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === null ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}
-                onPress={() => setSelectedChapter(null)}
-              >
-                <View className="w-9 h-9 rounded-xl bg-indigo-100 items-center justify-center">
-                  <FontAwesome6 name="file-circle-plus" size={16} color="#6366F1" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-900">创建为新章节</Text>
-                  <Text className="text-xs text-gray-400 mt-0.5">作为独立新章节添加到作品</Text>
-                </View>
-                {selectedChapter === null && <FontAwesome6 name="circle-check" size={18} color="#6366F1" solid />}
-              </TouchableOpacity>
-
-              {loading ? (
-                <View className="items-center py-4"><ActivityIndicator size="small" color="#6366F1" /></View>
-              ) : (
-                chapters.map((ch: any) => (
+              {target === "chapter" && (
+                <>
+                  <View className="mb-3">
+                    <Text className="text-xs font-medium text-gray-600 mb-1">章节标题</Text>
+                    <TextInput
+                      className="bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-800 border border-gray-200"
+                      value={title} onChangeText={setTitle} placeholder="输入章节标题"
+                      placeholderTextColor="#CBD5E1"
+                    />
+                  </View>
+                  {/* New chapter option */}
                   <TouchableOpacity
-                    key={ch.id}
-                    className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === ch.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 bg-gray-50"}`}
-                    onPress={() => setSelectedChapter(ch.id)}
+                    className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === "new" ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}
+                    onPress={() => setSelectedChapter("new")}
                   >
-                    <View className="w-9 h-9 rounded-xl bg-emerald-100 items-center justify-center">
-                      <FontAwesome6 name="pen-to-square" size={14} color="#10B981" />
+                    <View className="w-9 h-9 rounded-xl bg-indigo-100 items-center justify-center">
+                      <FontAwesome6 name="file-circle-plus" size={16} color="#6366F1" />
                     </View>
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-gray-900">替换章节：{ch.title}</Text>
-                      <Text className="text-xs text-gray-400 mt-0.5">用 AI 内容替换此章节</Text>
+                      <Text className="text-sm font-semibold text-gray-900">创建为新章节</Text>
+                      <Text className="text-xs text-gray-400 mt-0.5">作为独立新章节添加到作品</Text>
                     </View>
-                    {selectedChapter === ch.id && <FontAwesome6 name="circle-check" size={18} color="#10B981" solid />}
+                    {selectedChapter === "new" && <FontAwesome6 name="circle-check" size={18} color="#6366F1" solid />}
                   </TouchableOpacity>
-                ))
+                  {/* Existing chapters for replacement */}
+                  {loading ? (
+                    <View className="items-center py-4"><ActivityIndicator size="small" color="#6366F1" /></View>
+                  ) : (
+                    chapters.map((ch: any) => (
+                      <TouchableOpacity
+                        key={ch.id}
+                        className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === ch.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 bg-gray-50"}`}
+                        onPress={() => { setSelectedChapter(ch.id); setTitle(ch.title); }}
+                      >
+                        <View className="w-9 h-9 rounded-xl bg-emerald-100 items-center justify-center">
+                          <FontAwesome6 name="pen-to-square" size={14} color="#10B981" />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-sm font-semibold text-gray-900">替换：{ch.title}</Text>
+                          <Text className="text-xs text-gray-400 mt-0.5">用 AI 内容替换此章节</Text>
+                        </View>
+                        {selectedChapter === ch.id && <FontAwesome6 name="circle-check" size={18} color="#10B981" solid />}
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </>
+              )}
+
+              {target === "outline" && (
+                <View className="bg-amber-50 rounded-2xl p-4 mb-4">
+                  <View className="flex-row items-center gap-2 mb-2">
+                    <FontAwesome6 name="list" size={16} color="#D97706" />
+                    <Text className="text-sm font-semibold text-amber-800">追加到作品大纲</Text>
+                  </View>
+                  <Text className="text-xs text-amber-600 leading-5">
+                    AI 生成的内容将追加到当前作品的大纲部分。如需替换全部大纲，请前往作品详情页操作。
+                  </Text>
+                </View>
+              )}
+
+              {target === "inspiration" && (
+                <View className="mb-3">
+                  <Text className="text-xs font-medium text-gray-600 mb-1">灵感标题</Text>
+                  <TextInput
+                    className="bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-800 border border-gray-200"
+                    value={title} onChangeText={setTitle} placeholder="输入灵感标题"
+                    placeholderTextColor="#CBD5E1"
+                  />
+                </View>
               )}
             </ScrollView>
 
             <View className="flex-row gap-3 px-4 mt-3">
-              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={onClose}>
+              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={() => onClose("", "")}>
                 <Text className="text-gray-600 font-medium">取消</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 className="flex-1 py-3 rounded-xl items-center" style={{ backgroundColor: "#6366F1" }}
-                onPress={() => { onInsert(selectedChapter, title); onClose(); }}
+                onPress={() => onClose(target, title, target === "chapter" ? selectedChapter : null)}
               >
                 <Text className="text-white font-medium">确认插入</Text>
               </TouchableOpacity>
@@ -414,7 +465,8 @@ export default function HomeScreen() {
   // Insert to book
   const [pendingInsertContent, setPendingInsertContent] = useState("");
   const [pendingInsertTitle, setPendingInsertTitle] = useState("");
-  const [showChapterModal, setShowChapterModal] = useState(false);
+  const [showInsertModal, setShowInsertModal] = useState(false);
+  const [insertTarget, setInsertTarget] = useState<"outline" | "chapter" | "inspiration" | "chapter_replace">("chapter");
 
   const sseRef = useRef<any>(null);
 
@@ -636,32 +688,59 @@ export default function HomeScreen() {
   }, [activeBook, addMessage]);
 
   // ===== Insert AI content into book =====
-  const handleInsertToBook = useCallback(async (content: string, title: string, chapterId: string | null) => {
+  // ===== Insert content into book (supports outline, chapter, inspiration) =====
+  const handleInsertToBook = useCallback(async (content: string, title: string, target: string, chapterId?: string | null) => {
     if (!activeBook?.id || !content) return;
     try {
       let res;
-      if (chapterId) {
-        // Update existing chapter
-        res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters/${chapterId}`, {
+      const baseUrl = `${API_BASE}/api/v1/writing/${activeBook.id}`;
+
+      if (target === "outline") {
+        // Insert into outline - append to existing outline
+        res = await fetch(`${baseUrl}/outlines`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, content }),
+          body: JSON.stringify({ outline: content }),
+        });
+      } else if (target === "inspiration") {
+        // Insert into inspirations
+        const inspRes = await fetch(`${baseUrl}/inspirations`);
+        const inspJson = await inspRes.json();
+        const oldData = inspJson.success ? (inspJson.data || []) : [];
+        const newInsp = { id: Date.now().toString(), title: title || "AI 灵感", content, createdAt: new Date().toISOString() };
+        oldData.push(newInsp);
+        res = await fetch(`${baseUrl}/inspirations`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: oldData }),
         });
       } else {
-        // Create new chapter
-        const bookRes = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}`);
-        const bookJson = await bookRes.json();
-        const vols = bookJson.success ? (bookJson.data?.volumes || []) : [];
-        const firstVol = vols.length > 0 ? vols[0] : null;
-        res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title, content, volumeId: firstVol?.id || null }),
-        });
+        // Insert as chapter
+        if (chapterId && chapterId !== "new") {
+          // Replace existing chapter
+          res = await fetch(`${baseUrl}/chapters/${chapterId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, content }),
+          });
+        } else {
+          // Create new chapter
+          const bookRes = await fetch(`${baseUrl}`);
+          const bookJson = await bookRes.json();
+          const vols = bookJson.success ? (bookJson.data?.volumes || []) : [];
+          const firstVol = vols.length > 0 ? vols[0] : null;
+          res = await fetch(`${baseUrl}/chapters`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, content, volumeId: firstVol?.id || null }),
+          });
+        }
       }
+
       const json = await res.json();
+      const targetLabel = target === "outline" ? "大纲" : target === "inspiration" ? "灵感" : (chapterId && chapterId !== "new" ? "替换章节" : "新章节");
       if (json.success) {
-        addMessage("ai", `✅ 内容已成功插入到《${activeBook.title || activeBook.name}》${chapterId ? "（替换章节）" : "（新章节）"}！`);
+        addMessage("ai", `✅ 内容已成功插入到《${activeBook.title || activeBook.name}》${targetLabel}！`);
       } else {
         addMessage("ai", "❌ 插入失败：" + (json.error || "未知错误"));
       }
@@ -670,15 +749,23 @@ export default function HomeScreen() {
     }
   }, [activeBook, addMessage]);
 
-  // ===== Open insert modal =====
-  const handleOpenInsert = useCallback((content: string, title?: string) => {
+  // ===== Open insert modal with target suggestion based on skill =====
+  const handleOpenInsert = useCallback((content: string, title?: string, skillId?: string) => {
     if (!activeBook?.id) {
       setShowBookPicker(true);
       return;
     }
     setPendingInsertContent(content);
     setPendingInsertTitle(title || "AI 生成内容");
-    setShowChapterModal(true);
+    // Suggest target based on skill type
+    if (skillId === "outline" || skillId === "chapter-outline" || skillId === "volume-outline") {
+      setInsertTarget("outline");
+    } else if (skillId === "inspiration" || skillId === "push-inspiration") {
+      setInsertTarget("inspiration");
+    } else {
+      setInsertTarget("chapter");
+    }
+    setShowInsertModal(true);
   }, [activeBook]);
 
   // ===== Regenerate last AI response =====
@@ -847,7 +934,7 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 active:bg-blue-100"
-                      onPress={() => handleOpenInsert(msg.content)}
+                      onPress={() => handleOpenInsert(msg.content, msg.content.slice(0, 20), msg.skillId)}
                     >
                       <FontAwesome6 name="book-medical" size={10} color="#3B82F6" />
                       <Text className="text-xs text-blue-600 font-medium">插入书籍</Text>
@@ -1008,16 +1095,17 @@ export default function HomeScreen() {
       }} onClose={() => setShowBookPicker(false)} />
 
       {/* Insert Modal */}
-      <ChapterSelectorModal
-        visible={showChapterModal}
+      <InsertModal
+        visible={showInsertModal}
         bookId={activeBook?.id || ""}
-        chapterTitle={pendingInsertTitle}
         content={pendingInsertContent}
-        onInsert={(chapterId, title) => {
-          handleInsertToBook(pendingInsertContent, title, chapterId);
-          setShowChapterModal(false);
+        insertTarget={insertTarget}
+        onClose={(target, title, chapterId) => {
+          if (target && title) {
+            handleInsertToBook(pendingInsertContent, title, target, chapterId);
+          }
+          setShowInsertModal(false);
         }}
-        onClose={() => setShowChapterModal(false)}
       />
 
       {/* Delete Confirm */}
