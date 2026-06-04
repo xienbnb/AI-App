@@ -807,9 +807,7 @@ export default function EditorScreen() {
               shadowOpacity: 0.15,
               shadowRadius: 20,
               elevation: 16,
-              borderTopWidth: 1,
-              borderTopColor: nightMode ? "#3A3A6E" : "rgba(99,102,241,0.12)",
-            }}>
+              }}>
               <View className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center gap-2.5">
                   <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
@@ -1070,10 +1068,9 @@ export default function EditorScreen() {
                         <TextInput value={aiPrompt} onChangeText={setAiPrompt}
                           placeholder={aiMode === "generate" ? "告诉AI你想要写什么..." : "输入要求..."}
                           multiline numberOfLines={3}
-                          className="w-full px-4 py-3.5 rounded-2xl border mb-4 text-sm leading-relaxed"
+                          className="w-full px-4 py-3.5 rounded-2xl mb-4 text-sm leading-relaxed"
                           style={{
                             color: theme.text, backgroundColor: theme.inputBg,
-                            borderColor: nightMode ? "#2D2D4A" : "#E5E7EB",
                           }}
                           placeholderTextColor="#999" />
                         <TouchableOpacity onPress={handleAIWrite} disabled={isGenerating}
