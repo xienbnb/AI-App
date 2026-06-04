@@ -727,10 +727,14 @@ export default function DetailScreen() {
                     <Text className="text-sm font-bold text-gray-800 flex-1 mr-2">{item.title}</Text>
                     <View className="flex-row gap-2.5">
                       <TouchableOpacity onPress={() => {
-                        setEditingOutline(item);
-                        setEditOutlineType(item.type);
-                        setEditOutlineTitle(item.title);
-                        setEditOutlineContent(item.content);
+                        if (item.type === "大纲") {
+                          router.push("/outline-create", { bookId: id, outlineId: item.id });
+                        } else {
+                          setEditingOutline(item);
+                          setEditOutlineType(item.type);
+                          setEditOutlineTitle(item.title);
+                          setEditOutlineContent(item.content);
+                        }
                       }}>
                         <FontAwesome6 name="pen-to-square" size={13} color="#6366F1" />
                       </TouchableOpacity>
