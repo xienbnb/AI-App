@@ -522,60 +522,22 @@ export default function EditorScreen() {
             </ScrollView>
           </View>
 
-          {/* ===== 编辑区 ===== */}
-          <ScrollView className="flex-1">
-            <View style={{
-              paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40,
-              maxWidth: 720, alignSelf: "center", width: "100%",
-            }}>
-              {/* 章节标题 */}
-              <TextInput
-                value={chapterTitle} onChangeText={setChapterTitle}
-                className="text-2xl font-bold mb-1"
-                style={{ color: theme.text, lineHeight: 36 }}
-                placeholder="章节标题" placeholderTextColor={theme.text2}
-              />
-              <View className="mb-5" style={{
-                width: 40, height: 3, borderRadius: 2, backgroundColor: theme.accent, opacity: 0.6,
-              }} />
-
-              {/* 正文编辑区 */}
-              <TextInput
-                ref={contentInputRef}
-                value={content} onChangeText={(t) => { pushUndo(t); setContent(t); }}
-                onSelectionChange={handleSelectionChange}
-                multiline
-                className="w-full"
-                style={{
-                  color: theme.text, fontSize: 16, lineHeight: 30,
-                  minHeight: 500, textAlignVertical: "top",
-                }}
-                placeholder="开始创作你的故事..."
-                placeholderTextColor={theme.text2}
-              />
-
-              {/* 底部留白 */}
-              <View className="h-40" />
-            </View>
-          </ScrollView>
-
-          {/* ===== 悬浮AI助手(选中文字时) ===== */}
-          {showFloatingAI && selectedText && (
-            <View style={{
-              position: "absolute", bottom: 24, left: 12, right: 12,
-              backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
-              borderRadius: 16,
-              paddingVertical: 10, paddingHorizontal: 12,
-              shadowColor: nightMode ? "#000" : "#6366F1",
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: nightMode ? 0.3 : 0.15,
-              shadowRadius: 16,
-              elevation: 8,
-              borderWidth: 1, borderColor: nightMode ? "#2D2D4A" : "rgba(99,102,241,0.12)",
-            }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row items-center gap-1">
-                  <FloatingAIBtn icon="scissors" label="裁剪" color="#6B7280" onPress={() => replaceSelectedText("")} />
+          {/* ===== 编辑区(全屏) ===== */}
+          <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#FAFAFA" }}>
+            {showFloatingAI && selectedText && (
+              <View className="px-4 pt-2 pb-0" style={{
+                borderBottomWidth: 1, borderBottomColor: nightMode ? "#2D2D4A" : "rgba(99,102,241,0.08)",
+                backgroundColor: nightMode ? "#16162A" : "#FFFFFF",
+                shadowColor: "#6366F1",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: nightMode ? 0 : 0.06,
+                shadowRadius: 8,
+                elevation: 3,
+                zIndex: 100,
+              }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2.5">
+                  <View className="flex-row items-center gap-1">
+                    <FloatingAIBtn icon="scissors" label="裁剪" color="#6B7280" onPress={() => replaceSelectedText("")} />
                   <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
                   <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
                   <FloatingAIBtn icon="text-width" label="全选" color="#6B7280" onPress={() => contentInputRef.current?.focus()} />
@@ -614,41 +576,100 @@ export default function EditorScreen() {
             </View>
           )}
 
-          {/* ===== AI生成区(浮动) ===== */}
+            {/* ===== 全屏编辑区 ===== */}
+            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+              <View style={{
+                paddingHorizontal: 24, paddingTop: 20,
+                maxWidth: 720, alignSelf: "center", width: "100%", flex: 1,
+              }}>
+                {/* 章节标题 */}
+                <TextInput
+                  value={chapterTitle} onChangeText={setChapterTitle}
+                  className="text-2xl font-bold mb-1"
+                  style={{ color: theme.text, lineHeight: 38 }}
+                  placeholder="章节标题" placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
+                />
+                <View className="mb-5" style={{
+                  width: 44, height: 3, borderRadius: 2, backgroundColor: theme.accent, opacity: 0.5,
+                }} />
+
+                {/* 正文编辑区 - 全屏 */}
+                <TextInput
+                  ref={contentInputRef}
+                  value={content}
+                  onChangeText={(t) => { pushUndo(t); setContent(t); }}
+                  onSelectionChange={handleSelectionChange}
+                  multiline
+                  className="w-full"
+                  style={{
+                    color: theme.text, fontSize: 17, lineHeight: 32,
+                    flex: 1, minHeight: 600, textAlignVertical: "top",
+                  }}
+                  placeholder="开始创作你的故事..."
+                  placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
+                  />
+                <View style={{ height: 120 }} />
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* ===== AI生成区(浮动面板) ===== */}
           {isGenerating && (
             <View style={{
-              position: "absolute", bottom: 100, left: 12, right: 12,
-              backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
-              borderRadius: 20,
-              padding: 16,
+              position: "absolute", bottom: 0, left: 0, right: 0,
+              backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
+              borderTopLeftRadius: 24, borderTopRightRadius: 24,
+              paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 34 : 20,
               shadowColor: "#6366F1",
-              shadowOffset: { width: 0, height: 6 },
-              shadowOpacity: 0.2,
+              shadowOffset: { width: 0, height: -4 },
+              shadowOpacity: 0.15,
               shadowRadius: 20,
-              elevation: 10,
-              borderWidth: 1, borderColor: nightMode ? "#3A3A6E" : "rgba(99,102,241,0.15)",
+              elevation: 16,
+              borderTopWidth: 1,
+              borderTopColor: nightMode ? "#3A3A6E" : "rgba(99,102,241,0.12)",
             }}>
-              <View className="flex-row items-center gap-2 mb-2">
-                <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
-                  <FontAwesome6 name="wand-sparkles" size={14} color={theme.accent} />
+              <View className="flex-row items-center justify-between mb-3">
+                <View className="flex-row items-center gap-2.5">
+                  <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
+                    <FontAwesome6 name="wand-sparkles" size={14} color={theme.accent} />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: theme.accent }}>AI</Text>
+                  {generatedContent && (
+                    <Text style={{ fontSize: 12, color: theme.text2 }}>(约{generatedContent.length}字)</Text>
+                  )}
                 </View>
-                <Text className="text-sm font-semibold" style={{ color: theme.accent }}>AI正在创作</Text>
-              </View>
-              <Text className="text-sm leading-relaxed mb-3" style={{ color: theme.text }}>
-                {generatedContent || <Text style={{ color: theme.text2 }}>思考中...</Text>}
-              </Text>
-              <View className="flex-row gap-2">
-                <TouchableOpacity onPress={applyGeneratedContent}
-                  className="flex-1 py-2.5 rounded-xl items-center"
-                  style={{ backgroundColor: theme.accent }}>
-                  <Text className="text-white text-sm font-bold">采用</Text>
-                </TouchableOpacity>
                 <TouchableOpacity onPress={handleStopGeneration}
-                  className="flex-1 py-2.5 rounded-xl items-center"
+                  className="px-3 py-1.5 rounded-lg"
                   style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
-                  <Text className="text-sm font-medium" style={{ color: theme.text }}>停止</Text>
+                  <Text className="text-xs font-medium" style={{ color: theme.text2 }}>关闭</Text>
                 </TouchableOpacity>
               </View>
+              <ScrollView style={{ maxHeight: 160 }} className="mb-3">
+                <Text className="text-[15px] leading-relaxed" style={{ color: theme.text }}>
+                  {generatedContent || (
+                    <View className="flex-row items-center gap-2">
+                      <Text style={{ color: theme.text2, fontStyle: "italic" }}>思考中</Text>
+                      <Text style={{ color: theme.accent, fontSize: 18 }}>...</Text>
+                    </View>
+                  )}
+                </Text>
+              </ScrollView>
+              {generatedContent && (
+                <View className="flex-row gap-3">
+                  <TouchableOpacity onPress={applyGeneratedContent}
+                    className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
+                    style={{ backgroundColor: theme.accent }}>
+                    <FontAwesome6 name="check" size={13} color="#FFFFFF" />
+                    <Text className="text-white text-sm font-bold">采用</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleStopGeneration}
+                    className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
+                    style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
+                    <FontAwesome6 name="ban" size={13} color={theme.text2} />
+                    <Text className="text-sm font-medium" style={{ color: theme.text }}>取消</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
         </View>
