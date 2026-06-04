@@ -566,7 +566,6 @@ export default function EditorScreen() {
           {/* ===== 顶部导航条 ===== */}
           <View style={{
             backgroundColor: theme.surface,
-            shadowColor: theme.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2,
           }}>
             <View className="flex-row items-center justify-between px-4 py-3">
               <TouchableOpacity onPress={() => router.back()} className="flex-row items-center gap-2.5 flex-1">
@@ -617,7 +616,6 @@ export default function EditorScreen() {
                 <Text style={{ color: theme.text2, fontSize: 12, fontWeight: "500" }}>{wordCount}</Text>
                 <Text style={{ color: theme.text2, fontSize: 11 }}>字</Text>
               </TouchableOpacity>
-              <View className="w-px h-3" style={{ backgroundColor: theme.border }} />
               {chapterList.length > 0 && (
                 <View className="flex-row items-center gap-1.5">
                   <FontAwesome6 name="book" size={11} color={theme.text2} />
@@ -625,14 +623,11 @@ export default function EditorScreen() {
                 </View>
               )}
               {showSpeed && (
-                <>
-                  <View className="w-px h-3" style={{ backgroundColor: theme.border }} />
-                  <View className="flex-row items-center gap-1.5">
-                    <FontAwesome6 name="gauge-high" size={11} color="#8B5CF6" />
-                    <Text style={{ color: "#8B5CF6", fontSize: 12, fontWeight: "600" }}>{wpm}</Text>
-                    <Text style={{ color: theme.text2, fontSize: 11 }}>字/分</Text>
-                  </View>
-                </>
+                <View className="flex-row items-center gap-1.5">
+                  <FontAwesome6 name="gauge-high" size={11} color="#8B5CF6" />
+                  <Text style={{ color: "#8B5CF6", fontSize: 12, fontWeight: "600" }}>{wpm}</Text>
+                  <Text style={{ color: theme.text2, fontSize: 11 }}>字/分</Text>
+                </View>
               )}
             </View>
           </View>
@@ -646,11 +641,9 @@ export default function EditorScreen() {
                 <ToolbarButton icon="align-left" label="排版" color={theme.accent} bg={theme.accentBg} onPress={handleFormat} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="rotate-left" label="撤销" color={theme.text2} bg={theme.surface2} onPress={handleUndo} textColor={theme.text2} nightMode={nightMode} disabled={undoStack.length === 0} />
                 <ToolbarButton icon="rotate-right" label="恢复" color={theme.text2} bg={theme.surface2} onPress={handleRedo} textColor={theme.text2} nightMode={nightMode} disabled={redoStack.length === 0} />
-                <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
                 <ToolbarButton icon="wand-sparkles" label="AI创作" color={theme.accent} bg={theme.accentBg} onPress={() => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="search" label="搜索" color={theme.text2} bg={theme.surface2} onPress={() => setSearchVisible(true)} textColor={theme.text2} nightMode={nightMode} />
                 <ToolbarButton icon="eye" label="预览" color={theme.text2} bg={theme.surface2} onPress={() => { console.log("Preview: opening"); setPreviewVisible(true); setMoreMenuVisible(false); }} textColor={theme.text2} nightMode={nightMode} />
-                <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
                 <ToolbarButton icon="plus" label="添加" color="#10B981" bg="rgba(16,185,129,0.1)" onPress={() => setAddContentVisible(true)} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="font" label="外观" color={theme.accent} bg={theme.accentBg} onPress={() => setAppearanceVisible(true)} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="keyboard" label="快捷" color={showQuickBar ? '#8B5CF6' : theme.text2} bg={showQuickBar ? 'rgba(139,92,246,0.15)' : theme.surface2} onPress={() => setShowQuickBar(prev => !prev)} textColor={theme.text2} nightMode={nightMode} />
@@ -665,7 +658,6 @@ export default function EditorScreen() {
               <View style={{
                 position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
                 backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
-                borderTopWidth: 1, borderTopColor: nightMode ? "#2D2D4A" : "rgba(99,102,241,0.08)",
                 shadowColor: "#6366F1",
                 shadowOffset: { width: 0, height: -2 },
                 shadowOpacity: nightMode ? 0 : 0.08,
@@ -677,7 +669,6 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="scissors" label="剪切" color="#6B7280" onPress={() => replaceSelectedText("")} />
                     <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
                     <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
-                    <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
                     {/* AI 写作 */}
                     <FloatingAIBtn icon="pen" label="润写" color="#EC4899" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
@@ -725,13 +716,13 @@ export default function EditorScreen() {
             )}
 
             {/* ===== 全屏编辑区 ===== */}
-            <ScrollView className="flex-1" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled">
+            <ScrollView className="flex-1" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1}}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.25}} resizeMode="cover" />
               ) : null}
               <View style={{
-                paddingHorizontal: 24, paddingTop: 20,
-                maxWidth: 720, alignSelf: "center", width: "100%", flex: 1, position: 'relative',
+                paddingHorizontal: 20, paddingTop: 16,
+                alignSelf: "stretch", flex: 1,
               }}>
                 {/* 章节标题 */}
                 <TextInput
@@ -751,18 +742,18 @@ export default function EditorScreen() {
                   onChangeText={(t) => { pushUndo(t); setContent(t); }}
                   onSelectionChange={handleSelectionChange}
                   multiline
-                  className="w-full"
+                  className="w-full flex-1"
                   style={{
                     color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
                     fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,
-                    flex: 1, minHeight: 600, textAlignVertical: "top",
+                    textAlignVertical: "top",
                     textAlign: pageMargin === "center" ? "center" : pageMargin === "justify" ? "justify" : "left",
-                    paddingHorizontal: pageMargin === "narrow" ? 16 : pageMargin === "wide" ? 36 : 24,
+                    paddingHorizontal: pageMargin === "narrow" ? 12 : pageMargin === "wide" ? 32 : 20,
                   }}
                   placeholder="开始创作你的故事..."
                   placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
                   />
-                <View style={{ height: 120 }} />
+                <View style={{ height: 80 }} />
               </View>
             </ScrollView>
 
