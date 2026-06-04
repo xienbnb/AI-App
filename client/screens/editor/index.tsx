@@ -12,6 +12,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   useWindowDimensions,
+  Image,
 } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
@@ -705,10 +706,13 @@ export default function EditorScreen() {
           )}
 
             {/* ===== 全屏编辑区 ===== */}
-            <ScrollView className="flex-1" keyboardShouldPersistTaps="handled">
+            <ScrollView className="flex-1" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled">
+              {backgroundImage ? (
+                <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.25}} resizeMode="cover" />
+              ) : null}
               <View style={{
                 paddingHorizontal: 24, paddingTop: 20,
-                maxWidth: 720, alignSelf: "center", width: "100%", flex: 1,
+                maxWidth: 720, alignSelf: "center", width: "100%", flex: 1, position: 'relative',
               }}>
                 {/* 章节标题 */}
                 <TextInput
@@ -1410,6 +1414,28 @@ export default function EditorScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {/* ===== 背景图片 ===== */}
+                  <Text className="text-xs font-bold mb-2.5 tracking-wider" style={{ color: theme.text2 }}>背景图</Text>
+                  <View className="flex-row flex-wrap gap-2 mb-4">
+                    {[
+                      { key: "", label: "无", color: theme.surface },
+                      { key: "https://images.unsplash.com/photo-1597848212624-a19eb35e2651?w=800&q=80", label: "纸纹" },
+                      { key: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&q=80", label: "书卷" },
+                      { key: "https://images.unsplash.com/photo-1500462918059-b1a0cb512f1d?w=800&q=80", label: "墨绿" },
+                      { key: "https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=800&q=80", label: "大理石" },
+                      { key: "https://images.unsplash.com/photo-1604871000636-074fa5117945?w=800&q=80", label: "水墨" },
+                      { key: "https://images.unsplash.com/photo-1519681393784-d120267933ba?w=800&q=80", label: "星空" },
+                    ].map((item) => (
+                      <TouchableOpacity key={item.key || "none"} onPress={() => setBackgroundImage(item.key)}
+                        className="px-4 py-2.5 rounded-xl flex-row items-center gap-2"
+                        style={{ backgroundColor: backgroundImage === item.key ? `${theme.accent}20` : (nightMode ? "#2D2D4A" : "#F3F4F6") }}>
+                        <Text className="text-xs" style={{ color: backgroundImage === item.key ? theme.accent : theme.text }}>{item.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {backgroundImage ? (
+                    <Image source={{ uri: backgroundImage }} className="w-full h-20 rounded-xl mb-4" resizeMode="cover" />
+                  ) : null}
                 </ScrollView>
               </TouchableOpacity>
             </KeyboardAvoidingView>
