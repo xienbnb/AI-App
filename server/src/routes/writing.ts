@@ -599,7 +599,7 @@ router.get("/:id/outline/export", async (req: Request, res: Response) => {
 
 // === AI Dialogue (SSE) - Free-form chatting ===
 router.post("/ai-dialogue", async (req: Request, res: Response) => {
-  const { message, history } = req.body;
+  const { message, history, bookId, bookTitle } = req.body;
   if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -610,7 +610,54 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
   let fullContent = "";
 
   try {
-    const systemPrompt = `你是一个专业的AI小说创作助手。你通过对话引导用户创作小说。
+    let bookContext = "";
+    // If a book is selected, load its details for AI context
+    if (bookId) {
+      try {
+        const { db } = await import("../storage/database/client.js");
+        const { books, inspirations } = await import("../storage/database/shared/schema.js");
+        const { eq } = await import("drizzle-orm");
+        const book = await db.select().from(books).where(eq(books.id, bookId)).limit(1).then(r => r[0]);
+        if (book) {
+          bookContext += `\n\n## 当前创作中的作品信息\n`;
+          bookContext += `书名：《${book.title}》\n`;
+          bookContext += `类型：${book.category || "未分类"}\n`;
+          bookContext += `简介：${book.description || "暂无"}\n`;
+          if (book.outline) {
+            bookContext += `大纲：\n${book.outline}\n`;
+          }
+          // Load volumes/chapters from JSONB
+          const vols = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
+          if (Array.isArray(vols) && vols.length > 0) {
+            bookContext += `\n卷（${vols.length}卷）：\n`;
+            for (const v of vols) {
+              const chs = v.chapters || [];
+              bookContext += `- ${v.title || v.name}（${chs.length}章）\n`;
+              if (chs.length > 0) {
+                for (const c of chs.slice(0, 5)) {
+                  bookContext += `  · 第${c.sortOrder || c.order || ""}章 ${c.title}\n`;
+                }
+                if (chs.length > 5) bookContext += `  · ...等${chs.length}章\n`;
+              }
+            }
+          }
+          // Load inspirations
+          const inspList = await db.select().from(inspirations).where(eq(inspirations.bookId, bookId)).limit(5);
+          if (inspList.length > 0) {
+            bookContext += `\n灵感碎片（${inspList.length}条）：\n`;
+            for (const insp of inspList) {
+              const inspData = typeof insp.data === "string" ? JSON.parse(insp.data) : (insp.data || {});
+              const inspTitle = inspData.title || (Array.isArray(inspData) ? inspData[0]?.title : "") || `灵感${insp.id?.slice(0, 8)}`;
+              bookContext += `- ${inspTitle}\n`;
+            }
+          }
+        }
+      } catch (e) {
+        bookContext = `\n\n## 当前创作中的作品\n书名：《${bookTitle || "未知作品"}》\n`;
+      }
+    }
+
+    const basePrompt = `你是一个专业的AI小说创作助手。你通过对话引导用户创作小说。
 
 用户的每条消息可能是一个灵感、想法或问题。你需要：
 1. 热情回应并肯定用户的创意
@@ -641,6 +688,11 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
 - 用户明确要创作某部作品时才输出
 
 【非常重要】如果用户说"帮我写本书"、"创作一本小说"、"写本XX小说"等明确要求创作的话，你必须输出完整的元数据块。如果用户只给了模糊想法，先帮ta完善，然后再输出元数据块。`;
+
+    let systemPrompt = basePrompt;
+    if (bookContext) {
+      systemPrompt += `\n\n---\n${bookContext}\n---\n\n基于以上作品信息，你的回答应该紧密结合当前作品的内容和设定。用户可能会问关于当前作品中角色、剧情、世界观的问题，请基于作品中已有的信息来回答，并在需要时提出合理的创作建议。`;
+    }
 
     // Build message array with history context
     const msgs: Array<{ role: "system" | "user" | "assistant"; content: string }> = [

@@ -143,6 +143,71 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
   );
 }
 
+// ===== BookPickerModal =====
+function BookPickerModal({ visible, books, selectedId, onSelect, onClose }: {
+  visible: boolean;
+  books: any[];
+  selectedId: string | null;
+  onSelect: (book: any) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-3xl max-h-[65%] pb-8 min-h-[300px]">
+            <View className="items-center pt-4 pb-2">
+              <View className="w-10 h-1 bg-gray-300 rounded-full" />
+            </View>
+            <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择作品上下文</Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">AI 将基于选定作品进行创作</Text>
+
+            <FlatList
+              data={books}
+              className="px-4"
+              contentContainerStyle={{ gap: 8 }}
+              ListEmptyComponent={
+                <View className="items-center py-10">
+                  <FontAwesome6 name="book-open" size={32} color="#D1D5DB" />
+                  <Text className="text-sm text-gray-400 mt-3">暂无作品</Text>
+                  <Text className="text-xs text-gray-300 mt-1">先去创作一本小说吧</Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isSelected = item.id === selectedId;
+                return (
+                  <TouchableOpacity
+                    className={`flex-row items-center gap-3 rounded-2xl p-4 border ${isSelected ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}
+                    onPress={() => { onSelect(item); onClose(); }}
+                  >
+                    <View className={`w-10 h-10 rounded-xl items-center justify-center ${isSelected ? "bg-indigo-500" : "bg-white"}`}>
+                      <FontAwesome6 name="book" size={16} color={isSelected ? "white" : "#6366F1"} />
+                    </View>
+                    <View className="flex-1">
+                      <Text className={`text-sm font-semibold ${isSelected ? "text-indigo-700" : "text-gray-800"}`}>
+                        {item.title || item.name || "未命名作品"}
+                      </Text>
+                      <Text className="text-xs text-gray-400 mt-0.5">
+                        {item.type || "未分类"} · {item.chaptersCount ?? item.chapters?.length ?? 0} 章
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <View className="bg-indigo-500 rounded-full px-2.5 py-0.5">
+                        <Text className="text-xs text-white font-medium">当前</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+              keyExtractor={(item) => item.id}
+            />
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 // ===== Main Home Component =====
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -170,6 +235,8 @@ export default function HomeScreen() {
   const [pendingBookData, setPendingBookData] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [activeBook, setActiveBook] = useState<any>(null);
+  const [showBookPicker, setShowBookPicker] = useState(false);
 
   const sseRef = useRef<any>(null);
 
@@ -181,7 +248,7 @@ export default function HomeScreen() {
     }
   };
 
-  // Load last session on mount
+  // Load last session + active book on mount
   useEffect(() => {
     const load = async () => {
         try {
@@ -201,6 +268,14 @@ export default function HomeScreen() {
           } else if (list.length === 0 && !sessionIdRef.current) {
             sessionCounter.current += 1;
             sessionIdRef.current = `chat_${sessionCounter.current}`;
+          }
+        } catch {}
+        // Restore active book
+        try {
+          const bookRaw = await AsyncStorage.getItem("active_book");
+          if (bookRaw) {
+            const book = JSON.parse(bookRaw);
+            if (book?.id) setActiveBook(book);
           }
         } catch {}
         setHistoryLoaded(true);
@@ -289,6 +364,8 @@ export default function HomeScreen() {
         body: JSON.stringify({
           message: userText,
           history,
+          bookId: activeBook?.id || null,
+          bookTitle: activeBook?.title || null,
         }),
       });
       sseRef.current = sse;
@@ -503,6 +580,28 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Book Context Bar */}
+      <TouchableOpacity
+        className="flex-row items-center gap-2 px-4 py-2.5 border-b border-gray-100 bg-gray-50/80 active:bg-gray-100"
+        onPress={() => setShowBookPicker(true)}
+      >
+        <FontAwesome6 name={activeBook ? "book-bookmark" : "feather"} size={14} color={activeBook ? "#6366F1" : "#9CA3AF"} />
+        <Text className="text-sm flex-1" style={{ color: activeBook ? "#374151" : "#9CA3AF" }}>
+          {activeBook ? `当前创作：${activeBook.title || activeBook.name}` : "自由创作（点击选择作品上下文）"}
+        </Text>
+        <View className="flex-row items-center gap-2">
+          {activeBook && (
+            <TouchableOpacity
+              className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center"
+              onPress={(e) => { e.stopPropagation(); setActiveBook(null); }}
+            >
+              <FontAwesome6 name="xmark" size={10} color="#6B7280" />
+            </TouchableOpacity>
+          )}
+          <FontAwesome6 name="chevron-down" size={10} color="#9CA3AF" />
+        </View>
+      </TouchableOpacity>
+
       {/* Messages Area */}
       <ScrollView
         ref={scrollRef}
@@ -679,6 +778,17 @@ export default function HomeScreen() {
           setInputText((prev) => (prev ? prev + " @" + skill : "@" + skill));
         }}
         onClose={() => setShowSkillPicker(false)}
+      />
+
+      <BookPickerModal
+        visible={showBookPicker}
+        books={books}
+        selectedId={activeBook?.id || null}
+        onSelect={(book) => {
+          setActiveBook(book);
+          AsyncStorage.setItem("active_book", JSON.stringify(book)).catch(() => {});
+        }}
+        onClose={() => setShowBookPicker(false)}
       />
 
       <ConfirmModal
