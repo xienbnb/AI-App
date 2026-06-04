@@ -360,9 +360,9 @@ export default function ProfileScreen() {
         <View className="mx-4 mb-5">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-base font-semibold text-gray-800">常用角色</Text>
-            <TouchableOpacity onPress={() => {}}>
+            <View>
               <Text className="text-sm font-medium text-gray-400">管理</Text>
-            </TouchableOpacity>
+            </View>
           </View>
           <View><ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className="flex-row gap-3">
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
                   shadowRadius: 8,
                   elevation: 1,
                 }}
-                onPress={() => {}}
+                onPress={undefined}
               >
                 <View className="w-12 h-12 rounded-2xl items-center justify-center mb-2" style={{ backgroundColor: "#4F46E515" }}>
                   <FontAwesome6 name="plus" size={20} color="#4F46E5" />
