@@ -455,9 +455,17 @@ export default function EditorScreen() {
     if (!aiPrompt.trim()) { Alert.alert("提示", "请输入写作指令"); return; }
     setIsGenerating(true); setGeneratedContent(""); setAiModalVisible(false);
     const context = content.slice(-2000);
+    let systemPrompt = aiPrompt.trim();
+    if (aiMode === "generate") {
+      systemPrompt = `续写以下内容，保持叙事风格、人物性格和文风一致：\n---上下文---\n${context}\n---写作要求---\n${aiPrompt.trim()}`;
+    } else if (aiMode === "expand") {
+      systemPrompt = `请扩写以下内容，增加细节描写（环境、心理、感官），丰富场景和情感，不改变原意：\n${context.slice(-1000)}\n---扩写要求---\n${aiPrompt.trim()}`;
+    } else if (aiMode === "polish") {
+      systemPrompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅：\n${context.slice(-1000)}\n---润色要求---\n${aiPrompt.trim()}`;
+    }
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt: aiPrompt.trim(), style: "default", wordCount: 1000, context }),
+      body: JSON.stringify({ prompt: systemPrompt, style: "default", wordCount: 1000 }),
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
@@ -470,11 +478,25 @@ export default function EditorScreen() {
   const handleStopGeneration = () => {
     if (sseRef.current) { sseRef.current.close(); sseRef.current = null; }
     setIsGenerating(false);
-    if (generatedContent) { setContent(prev => prev + "\n" + generatedContent); setGeneratedContent(""); }
+    // 不再自动追加，由用户手动"采用"决定
   };
 
   const applyGeneratedContent = () => {
-    if (generatedContent) { pushUndo(content); setContent(prev => prev + "\n\n" + generatedContent); setGeneratedContent(""); }
+    if (generatedContent) { pushUndo(content); setContent(prev => prev + "\n\n" + generatedContent); setGeneratedContent(""); setIsGenerating(false); }
+  };
+
+  const replaceSelectedWithAI = () => {
+    // 替换选中文本（润色/扩写/改写用）
+    if (generatedContent && selectionStart !== selectionEnd) {
+      pushUndo(content);
+      const newText = content.slice(0, selectionStart) + generatedContent + content.slice(selectionEnd);
+      setContent(newText);
+      setGeneratedContent("");
+      setSelectionEnd(selectionStart + generatedContent.length);
+      setIsGenerating(false);
+    } else {
+      applyGeneratedContent();
+    }
   };
 
   // ===== 删除本章 =====
@@ -670,11 +692,12 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="copy" label="复制" color="#6B7280" onPress={async () => { await Clipboard.setStringAsync(selectedText); setShowFloatingAI(false); }} />
                     <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
                     {/* AI 写作 */}
-                    <FloatingAIBtn icon="pen" label="润写" color="#EC4899" onPress={() => {
+                    <FloatingAIBtn icon="pen" label="润色" color="#EC4899" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt: `润色以下文字，更优美流畅:\n${selectedText}`, style: "default", wordCount: 500 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
@@ -684,9 +707,10 @@ export default function EditorScreen() {
                     }} />
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt: `扩写以下内容，增加细节不改变原意:\n${selectedText}`, style: "default", wordCount: 500 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
@@ -694,11 +718,13 @@ export default function EditorScreen() {
                         try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
-                    <FloatingAIBtn icon="magic" label="改写" color="#8B5CF6" onPress={() => {
+                    <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      const context = content.slice(-1500);
+                      const prompt = `请根据以上上下文风格，自然地续写接下来的内容。保持叙事节奏、人物性格和文风一致，不要重复已有内容：\n---上下文---\n${context}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
                         method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ prompt: `用不同风格重写以下内容，保持原意:\n${selectedText}`, style: "default", wordCount: 500 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
@@ -818,7 +844,7 @@ export default function EditorScreen() {
                     <Text style={{ fontSize: 12, color: theme.text2 }}>(约{generatedContent.length}字)</Text>
                   )}
                 </View>
-                <TouchableOpacity onPress={handleStopGeneration}
+                <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); }}
                   className="px-3 py-1.5 rounded-lg"
                   style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
                   <Text className="text-xs font-medium" style={{ color: theme.text2 }}>关闭</Text>
@@ -835,15 +861,23 @@ export default function EditorScreen() {
                 </Text>
               </ScrollView>
               {generatedContent && (
-                <View className="flex-row gap-3">
+                <View className="flex-row gap-2">
                   <TouchableOpacity onPress={applyGeneratedContent}
                     className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
                     style={{ backgroundColor: theme.accent }}>
                     <FontAwesome6 name="check" size={13} color="#FFFFFF" />
-                    <Text className="text-white text-sm font-bold">采用</Text>
+                    <Text className="text-white text-sm font-bold">追加</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleStopGeneration}
-                    className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
+                  {selectionStart !== selectionEnd && (
+                    <TouchableOpacity onPress={replaceSelectedWithAI}
+                      className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
+                      style={{ backgroundColor: nightMode ? "#2D2D4A" : "#EEF2FF" }}>
+                      <FontAwesome6 name="arrows-rotate" size={13} color={theme.accent} />
+                      <Text className="text-sm font-bold" style={{ color: theme.accent }}>替换选中</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); setGeneratedContent(""); }}
+                    className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
                     style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
                     <FontAwesome6 name="ban" size={13} color={theme.text2} />
                     <Text className="text-sm font-medium" style={{ color: theme.text }}>取消</Text>
@@ -1056,6 +1090,33 @@ export default function EditorScreen() {
                             </Text>
                           </TouchableOpacity>
                         )}
+                      </View>
+                    )}
+
+                    {/* 结果预览区域 */}
+                    {generatedContent && !isGenerating && (
+                      <View className="rounded-2xl p-4 mb-4 min-h-[80px]" style={{ backgroundColor: nightMode ? "#1E1E38" : "#EEF2FF" }}>
+                        <Text className="text-sm font-medium mb-2" style={{ color: theme.accent }}>生成结果</Text>
+                        <Text className="text-sm leading-relaxed mb-3" style={{ color: theme.text }} selectable>
+                          {generatedContent.slice(0, 500)}{generatedContent.length > 500 ? "..." : ""}
+                          {generatedContent.length > 500 && <Text style={{ color: theme.text2 }}> (共{generatedContent.length}字)</Text>}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <TouchableOpacity onPress={applyGeneratedContent}
+                            className="flex-1 py-2.5 rounded-xl items-center" style={{ backgroundColor: theme.accent }}>
+                            <Text className="text-white text-xs font-bold">追加到文末</Text>
+                          </TouchableOpacity>
+                          {selectionStart !== selectionEnd && (
+                            <TouchableOpacity onPress={replaceSelectedWithAI}
+                              className="flex-1 py-2.5 rounded-xl items-center" style={{ backgroundColor: "#10B981" }}>
+                              <Text className="text-white text-xs font-bold">替换选中</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity onPress={() => setGeneratedContent("")}
+                            className="py-2.5 px-4 rounded-xl items-center" style={{ backgroundColor: nightMode ? "#2D2D4A" : "#FFF" }}>
+                            <Text className="text-xs font-medium" style={{ color: theme.text2 }}>清除</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     )}
 
