@@ -20,6 +20,8 @@ import RNSSE from "react-native-sse";
 import * as DocumentPicker from "expo-document-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import Markdown from "react-native-markdown-display";
+
 const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -30,20 +32,63 @@ type ChatMessage = {
   step?: string;
 };
 
-// ===== Static Data =====
-const SKILL_LIST = [
-  { name: "赛道分析", icon: "A", desc: "分析爆款赛道与差异化定位" },
-  { name: "篇幅规划", icon: "B", desc: "规划作品篇幅与更新节奏" },
-  { name: "世界观构建", icon: "C", desc: "构建完整世界观底层规则" },
-  { name: "人物设定", icon: "D", desc: "生成核心人物三维设定" },
-  { name: "关系网构建", icon: "E", desc: "构建人物关系网络" },
-  { name: "分卷大纲", icon: "F", desc: "生成三幕式分卷大纲" },
-  { name: "单章大纲", icon: "G", desc: "生成单章精细化大纲" },
-  { name: "正文生成", icon: "H", desc: "生成单章正文初稿" },
-  { name: "场景优化", icon: "I", desc: "优化关键场景描写" },
-  { name: "逻辑校验", icon: "J", desc: "检测逻辑漏洞与角色OOC" },
-  { name: "批量润色", icon: "K", desc: "全文润色与文风统一" },
-  { name: "爆款简介", icon: "L", desc: "生成爆款简介与章节标题" },
+// ===== Skill Categories =====
+const SKILL_CATEGORIES = [
+  {
+    name: "灵感创意",
+    icon: "lightbulb",
+    color: "#F59E0B",
+    bgColor: "#FEF3C7",
+    skills: [
+      { name: "赛道分析", desc: "分析爆款赛道与差异化定位" },
+      { name: "世界观构建", desc: "构建完整世界观底层规则" },
+      { name: "灵感发散", desc: "从关键词发散创意脑洞" },
+    ],
+  },
+  {
+    name: "角色设定",
+    icon: "user-group",
+    color: "#8B5CF6",
+    bgColor: "#EDE9FE",
+    skills: [
+      { name: "人物设定", desc: "生成核心人物三维设定" },
+      { name: "关系网构建", desc: "构建人物关系网络" },
+      { name: "角色对话", desc: "生成符合人设的对话" },
+    ],
+  },
+  {
+    name: "大纲规划",
+    icon: "list-tree",
+    color: "#3B82F6",
+    bgColor: "#DBEAFE",
+    skills: [
+      { name: "篇幅规划", desc: "规划作品篇幅与更新节奏" },
+      { name: "分卷大纲", desc: "生成三幕式分卷大纲" },
+      { name: "单章大纲", desc: "生成单章精细化大纲" },
+    ],
+  },
+  {
+    name: "正文写作",
+    icon: "pen-fancy",
+    color: "#10B981",
+    bgColor: "#D1FAE5",
+    skills: [
+      { name: "正文生成", desc: "生成单章正文初稿" },
+      { name: "场景优化", desc: "优化关键场景描写" },
+      { name: "爆款简介", desc: "生成爆款简介与章节标题" },
+    ],
+  },
+  {
+    name: "优化完善",
+    icon: "wrench",
+    color: "#EF4444",
+    bgColor: "#FEE2E2",
+    skills: [
+      { name: "逻辑校验", desc: "检测逻辑漏洞与角色OOC" },
+      { name: "批量润色", desc: "全文润色与文风统一" },
+      { name: "文风模仿", desc: "模仿特定作家文风" },
+    ],
+  },
 ];
 
 const INSPIRATION_CHIPS = [
@@ -66,12 +111,15 @@ function generateTempId(): string {
   return "tmp_" + Math.random().toString(36).substring(2, 9);
 }
 
-// ===== Skill Picker Modal =====
+// ===== Skill Picker Modal (Category based) =====
 function SkillPickerModal({ visible, onSelect, onClose }: {
   visible: boolean;
   onSelect: (skill: string) => void;
   onClose: () => void;
 }) {
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const currentCategory = SKILL_CATEGORIES.find(c => c.name === selectedCategory);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
@@ -80,29 +128,61 @@ function SkillPickerModal({ visible, onSelect, onClose }: {
             <View className="items-center pt-4 pb-2">
               <View className="w-10 h-1 bg-gray-300 rounded-full" />
             </View>
-            <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择技能</Text>
-            <Text className="text-sm text-gray-500 text-center mb-4">点击技能插入到输入框中</Text>
-            <FlatList
-              data={SKILL_LIST}
-              numColumns={2}
-              scrollEnabled
-              className="px-4"
-              columnWrapperStyle={{ gap: 10 }}
-              contentContainerStyle={{ gap: 10 }}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  className="flex-1 bg-gray-50 rounded-xl p-3 border border-gray-100"
-                  onPress={() => { onSelect(item.name); onClose(); }}
-                >
-                  <View className="flex-row items-center gap-2 mb-1">
-                    <Text className="text-base">{item.icon}</Text>
-                    <Text className="font-semibold text-gray-900 text-sm">{item.name}</Text>
-                  </View>
-                  <Text className="text-xs text-gray-500 leading-tight">{item.desc}</Text>
-                </TouchableOpacity>
-              )}
-              keyExtractor={(_, i) => String(i)}
-            />
+
+            {!currentCategory ? (
+              <>
+                <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择技能分类</Text>
+                <Text className="text-sm text-gray-500 text-center mb-4">选择你要使用的创作方向</Text>
+                <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
+                  {SKILL_CATEGORIES.map((cat) => (
+                    <TouchableOpacity
+                      key={cat.name}
+                      className="flex-row items-center gap-3 rounded-2xl p-4 mb-2"
+                      style={{ backgroundColor: cat.bgColor }}
+                      onPress={() => setSelectedCategory(cat.name)}
+                    >
+                      <View className="w-11 h-11 rounded-2xl items-center justify-center" style={{ backgroundColor: cat.color + "20" }}>
+                        <FontAwesome6 name={cat.icon as any} size={18} color={cat.color} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm font-semibold text-gray-900">{cat.name}</Text>
+                        <Text className="text-xs text-gray-500 mt-0.5">{cat.skills.map(s => s.name).join("、")}</Text>
+                      </View>
+                      <FontAwesome6 name="chevron-right" size={12} color={cat.color} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            ) : (
+              <>
+                <View className="flex-row items-center px-4 mb-2">
+                  <TouchableOpacity className="mr-2 w-8 h-8 rounded-full bg-gray-100 items-center justify-center" onPress={() => setSelectedCategory(null)}>
+                    <FontAwesome6 name="arrow-left" size={14} color="#374151" />
+                  </TouchableOpacity>
+                  <Text className="text-lg font-bold text-gray-900 flex-1">{currentCategory.name}</Text>
+                  <View className="w-8" />
+                </View>
+                <Text className="text-sm text-gray-500 text-center mb-3">选择一个技能，AI将按该技能模式回复</Text>
+                <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
+                  {currentCategory.skills.map((sk) => (
+                    <TouchableOpacity
+                      key={sk.name}
+                      className="flex-row items-center gap-3 rounded-2xl p-4 mb-2 border border-gray-100 bg-gray-50 active:bg-gray-100"
+                      onPress={() => { onSelect(sk.name); setSelectedCategory(null); onClose(); }}
+                    >
+                      <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: currentCategory.color + "15" }}>
+                        <FontAwesome6 name={currentCategory.icon as any} size={16} color={currentCategory.color} />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm font-semibold text-gray-900">{sk.name}</Text>
+                        <Text className="text-xs text-gray-500 mt-0.5">{sk.desc}</Text>
+                      </View>
+                      <FontAwesome6 name="plus-circle" size={16} color={currentCategory.color} />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -140,6 +220,38 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
         </View>
       </TouchableOpacity>
     </Modal>
+  );
+}
+
+// ===== Markdown Content Renderer =====
+const mdStyles = {
+  body: { color: "#374151", fontSize: 14, lineHeight: 22 },
+  heading1: { fontSize: 20, fontWeight: "700" as const, color: "#111827", marginVertical: 8, lineHeight: 28 },
+  heading2: { fontSize: 17, fontWeight: "700" as const, color: "#1F2937", marginVertical: 6, lineHeight: 24 },
+  heading3: { fontSize: 15, fontWeight: "600" as const, color: "#374151", marginVertical: 4, lineHeight: 22 },
+  paragraph: { marginVertical: 4, lineHeight: 22 },
+  code_inline: { backgroundColor: "#F3F4F6", color: "#BE185D", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, fontSize: 13 },
+  code_block: { backgroundColor: "#1F2937", color: "#D1D5DB", padding: 12, borderRadius: 8, fontSize: 13, lineHeight: 20, marginVertical: 6 },
+  fence: { backgroundColor: "#1F2937", color: "#D1D5DB", padding: 12, borderRadius: 8, fontSize: 13, lineHeight: 20, marginVertical: 6 },
+  blockquote: { borderLeftWidth: 3, borderLeftColor: "#6366F1", paddingLeft: 12, marginVertical: 6, opacity: 0.8 },
+  bullet_list: { marginVertical: 2 },
+  ordered_list: { marginVertical: 2 },
+  list_item: { marginVertical: 1, lineHeight: 22 },
+  strong: { fontWeight: "700" as const },
+  em: { fontStyle: "italic" as const },
+  link: { color: "#6366F1", textDecorationLine: "underline" as const },
+};
+
+function MarkdownContent({ content, isStream }: { content: string; isStream?: boolean }) {
+  if (!content) return null;
+  // For streaming, use simple text to avoid markdown parsing lag
+  if (isStream) {
+    return <Text className="text-sm text-indigo-800 leading-6 flex-shrink flex-wrap">{content}</Text>;
+  }
+  return (
+    <Markdown style={mdStyles}>
+      {content}
+    </Markdown>
   );
 }
 
@@ -237,6 +349,9 @@ export default function HomeScreen() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [activeBook, setActiveBook] = useState<any>(null);
   const [showBookPicker, setShowBookPicker] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
 
   const sseRef = useRef<any>(null);
 
@@ -497,28 +612,74 @@ export default function HomeScreen() {
 
   // ===== Delete Session =====
   const handleDeleteSession = useCallback((sid: string) => {
-    Alert.alert("删除确认", "确定删除该对话？删除后无法恢复。", [
-      { text: "取消", style: "cancel" },
-      {
-        text: "删除", style: "destructive",
-        onPress: async () => {
-          try {
-            // Remove from AsyncStorage
-            await AsyncStorage.removeItem(`chat_messages_${sid}`);
-            const newList = sessionList.filter(s => s.id !== sid);
-            setSessionList(newList);
-            await AsyncStorage.setItem("chat_sessions", JSON.stringify(newList.slice(0, 20)));
-            // If deleted the active session, reset to new
-            if (sid === sessionIdRef.current) {
-              resetDialog();
-            }
-          } catch (e) {
-            Alert.alert("错误", "删除失败");
-          }
-        },
-      },
-    ]);
-  }, [sessionList, resetDialog]);
+    setDeleteTarget(sid);
+    setShowDeleteConfirm(true);
+  }, []);
+
+  const confirmDeleteSession = useCallback(async () => {
+    const sid = deleteTarget;
+    if (!sid) return;
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
+    try {
+      await AsyncStorage.removeItem(`chat_messages_${sid}`);
+      const newList = sessionList.filter(s => s.id !== sid);
+      setSessionList(newList);
+      await AsyncStorage.setItem("chat_sessions", JSON.stringify(newList.slice(0, 20)));
+      if (sid === sessionIdRef.current) {
+        resetDialog();
+      }
+    } catch (e) {
+      Alert.alert("错误", "删除失败");
+    }
+  }, [deleteTarget, sessionList, resetDialog]);
+
+  // ===== Insert AI content into book =====
+  const handleInsertToBook = useCallback(async (content: string) => {
+    if (!activeBook?.id || !content) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      if (!json.success) return;
+      const book = json.data;
+      const vols = book?.volumes || [];
+      const firstVol = vols.length > 0 ? vols[0] : null;
+      const chapterRes = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "AI 生成内容",
+          content: content,
+          volumeId: firstVol?.id || null,
+        }),
+      });
+      const chJson = await chapterRes.json();
+      if (chJson.success) {
+        Alert.alert("插入成功", `已将 AI 内容插入到《${activeBook.title || activeBook.name}》`);
+      }
+    } catch (e) {
+      Alert.alert("插入失败", "无法连接到服务器");
+    }
+  }, [activeBook]);
+
+  // ===== Regenerate last AI response =====
+  const handleRegenerate = useCallback((msgIndex: number) => {
+    // Find the last user message before this AI response
+    const prevMessages = messages.slice(0, msgIndex);
+    let lastUserIdx = prevMessages.length - 1;
+    while (lastUserIdx >= 0 && prevMessages[lastUserIdx]?.role !== "user") {
+      lastUserIdx--;
+    }
+    const userMsg = prevMessages[lastUserIdx]?.role === "user" ? prevMessages[lastUserIdx].content : null;
+    if (!userMsg) return;
+
+    // Remove this AI message and regenerate
+    setMessages(prev => prev.slice(0, msgIndex));
+    setRegeneratingIndex(msgIndex);
+    sendFreeChat(userMsg);
+    setRegeneratingIndex(null);
+  }, [messages, sendFreeChat]);
 
   // ===== Render =====
 
@@ -613,13 +774,51 @@ export default function HomeScreen() {
           <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
             {/* AI message */}
             {msg.role === "ai" && (
-              <View className="flex-row gap-2 max-w-[85%]">
-                <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
-                  <FontAwesome6 name="robot" size={14} color="#6366F1" />
+              <View className="w-full">
+                <View className="flex-row gap-2 max-w-[90%]">
+                  <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
+                    <FontAwesome6 name="robot" size={14} color="#6366F1" />
+                  </View>
+                  <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
+                    <MarkdownContent content={msg.content} />
+                  </View>
                 </View>
-                <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
-                  <Text className="text-sm text-gray-800 leading-6 flex-shrink flex-wrap">{msg.content}</Text>
-                </View>
+                {/* Action buttons for AI messages (not the first welcome message) */}
+                {i > 0 && (
+                  <View className="flex-row gap-1.5 pl-10 mt-1.5">
+                    <TouchableOpacity
+                      className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 active:bg-gray-200"
+                      onPress={() => {
+                        // Follow-up - copy the AI message content as context
+                        setInputText("继续说说：" + msg.content.slice(0, 50) + (msg.content.length > 50 ? "..." : ""));
+                      }}
+                    >
+                      <FontAwesome6 name="comment-dots" size={10} color="#6B7280" />
+                      <Text className="text-xs text-gray-600 font-medium">追问</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 active:bg-blue-100"
+                      onPress={() => {
+                        // Insert into active book (or show book picker)
+                        if (activeBook?.id) {
+                          handleInsertToBook(msg.content);
+                        } else {
+                          setShowBookPicker(true);
+                        }
+                      }}
+                    >
+                      <FontAwesome6 name="book-medical" size={10} color="#3B82F6" />
+                      <Text className="text-xs text-blue-600 font-medium">插入书籍</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-50 active:bg-amber-100"
+                      onPress={() => handleRegenerate(i)}
+                    >
+                      <FontAwesome6 name="rotate-right" size={10} color="#D97706" />
+                      <Text className="text-xs text-amber-600 font-medium">重新生成</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             )}
 
@@ -635,12 +834,12 @@ export default function HomeScreen() {
         {/* Streaming content */}
         {isAiThinking && streamContent.length > 0 && (
           <View className="mb-4 items-start">
-            <View className="flex-row gap-2 max-w-[85%]">
+            <View className="flex-row gap-2 max-w-[90%]">
               <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
                 <FontAwesome6 name="robot" size={14} color="#6366F1" />
               </View>
               <View className="bg-indigo-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-indigo-100 flex-shrink">
-                <Text className="text-sm text-indigo-800 leading-6 flex-shrink flex-wrap">{streamContent}</Text>
+                <MarkdownContent content={streamContent} isStream />
               </View>
             </View>
           </View>
@@ -798,6 +997,27 @@ export default function HomeScreen() {
         onConfirm={handleConfirm}
         onClose={() => setShowConfirm(false)}
       />
+
+      {/* Delete History Confirm Modal */}
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+        <TouchableOpacity className="flex-1 bg-black/50 justify-center px-8" activeOpacity={1} onPress={() => setShowDeleteConfirm(false)}>
+          <View className="bg-white rounded-2xl p-6 items-center" onStartShouldSetResponder={() => true}>
+            <View className="w-12 h-12 rounded-full bg-red-50 items-center justify-center mb-3">
+              <FontAwesome6 name="trash-can" size={22} color="#EF4444" />
+            </View>
+            <Text className="text-lg font-bold text-gray-900 mb-2">删除确认</Text>
+            <Text className="text-sm text-gray-500 text-center mb-5">确定删除该对话？删除后无法恢复。</Text>
+            <View className="flex-row gap-3 w-full">
+              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={() => setShowDeleteConfirm(false)}>
+                <Text className="text-gray-600 font-medium">取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity className="flex-1 bg-red-500 rounded-xl py-3 items-center" onPress={confirmDeleteSession}>
+                <Text className="text-white font-medium">删除</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* Sidebar Drawer */}
       <Modal visible={sidebarOpen} transparent animationType="none" onRequestClose={() => setSidebarOpen(false)}>
