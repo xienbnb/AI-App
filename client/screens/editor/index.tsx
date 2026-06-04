@@ -445,7 +445,7 @@ export default function EditorScreen() {
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
-      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+      if (e.data === "[DONE]") { sse.close(); return; }
       try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => setIsGenerating(false));
@@ -469,7 +469,7 @@ export default function EditorScreen() {
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
-      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+      if (e.data === "[DONE]") { sse.close(); return; }
       try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => setIsGenerating(false));
@@ -701,7 +701,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        if (e.data === "[DONE]") { sse.close(); return; }
                         try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
@@ -714,7 +714,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        if (e.data === "[DONE]") { sse.close(); return; }
                         try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
@@ -728,7 +728,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
+                        if (e.data === "[DONE]") { sse.close(); return; }
                         try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
@@ -742,7 +742,7 @@ export default function EditorScreen() {
             )}
 
             {/* ===== 全屏沉浸编辑区 ===== */}
-            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
+            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2}} resizeMode="cover" />
               ) : null}
