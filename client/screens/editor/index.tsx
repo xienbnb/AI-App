@@ -113,8 +113,10 @@ export default function EditorScreen() {
   const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
   const [pageMargin, setPageMargin] = useState<PageMargin>("comfortable");
   const [appearanceVisible, setAppearanceVisible] = useState(false);
+  const [showQuickBar, setShowQuickBar] = useState(false);
   const [addContentVisible, setAddContentVisible] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState("");
+  const [showQuickBar, setShowQuickBar] = useState(false);
 
   const handleInsertContent = (type: "divider" | "timestamp" | "dialogue" | "quote" | "heading") => {
     const inserts: Record<string, string> = {
@@ -280,7 +282,7 @@ export default function EditorScreen() {
     pushUndo(content);
     let text = content;
     text = text.replace(/\r\n/g, "\n").replace(/\n{4,}/g, "\n\n\n");
-    text = text.replace(/([\u4e00-\u9fa5])([a-zA-Z])/g, "$1 $2").replace(/([a-zA-Z])([\u4e00-\u9fa5])/g, "$1 $2");
+    text = text.replace(/([\u4e00-\u9fa5])([a-z])/gi, "$1 $2").replace(/([a-z])([\u4e00-\u9fa5])/gi, "$1 $2");
     text = text.split("\n").map((line: string) => {
       if (line.trim() && !line.startsWith("  ")) return "  " + line;
       return line;
@@ -558,7 +560,6 @@ export default function EditorScreen() {
           {/* ===== 顶部导航条 ===== */}
           <View style={{
             backgroundColor: theme.surface,
-            borderBottomWidth: 1, borderBottomColor: theme.border,
             shadowColor: theme.shadow, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 8, elevation: 2,
           }}>
             <View className="flex-row items-center justify-between px-4 py-3">
@@ -597,7 +598,6 @@ export default function EditorScreen() {
                     width: 36, height: 36, borderRadius: 12,
                     backgroundColor: theme.accentBg,
                     alignItems: "center", justifyContent: "center",
-                    borderWidth: 1, borderColor: theme.border,
                   }}>
                   <FontAwesome6 name="ellipsis-vertical" size={15} color={theme.accent} />
                 </TouchableOpacity>
@@ -634,7 +634,6 @@ export default function EditorScreen() {
           {/* ===== 精简工具栏 ===== */}
           <View style={{
             backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
-            borderBottomWidth: 1, borderBottomColor: theme.border,
           }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-3 py-2">
               <View className="flex-row items-center gap-2">
@@ -648,6 +647,7 @@ export default function EditorScreen() {
                 <View className="w-px h-5" style={{ backgroundColor: theme.border }} />
                 <ToolbarButton icon="plus" label="添加" color="#10B981" bg="rgba(16,185,129,0.1)" onPress={() => setAddContentVisible(true)} textColor={theme.text} nightMode={nightMode} />
                 <ToolbarButton icon="font" label="外观" color={theme.accent} bg={theme.accentBg} onPress={() => setAppearanceVisible(true)} textColor={theme.text} nightMode={nightMode} />
+                <ToolbarButton icon="keyboard" label="快捷" color={showQuickBar ? '#8B5CF6' : theme.text2} bg={showQuickBar ? 'rgba(139,92,246,0.15)' : theme.surface2} onPress={() => setShowQuickBar(prev => !prev)} textColor={theme.text2} nightMode={nightMode} />
               </View>
             </ScrollView>
           </View>
@@ -730,7 +730,7 @@ export default function EditorScreen() {
                 {/* 章节标题 */}
                 <TextInput
                   value={chapterTitle} onChangeText={setChapterTitle}
-                  className="text-2xl font-bold mb-1"
+                  className="text-2xl font-bold mb-1 text-center"
                   style={{ color: theme.text, lineHeight: 38 }}
                   placeholder="章节标题" placeholderTextColor={nightMode ? "#4A4A6A" : "#C0C0C0"}
                 />
@@ -759,6 +759,43 @@ export default function EditorScreen() {
                 <View style={{ height: 120 }} />
               </View>
             </ScrollView>
+
+            {/* ===== 快捷输入栏 ===== */}
+            {showQuickBar && (
+              <View style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                backgroundColor: nightMode ? "#1A1A2E" : "#F8F8FC",
+                borderTopLeftRadius: 16, borderTopRightRadius: 16,
+                paddingVertical: 8, paddingHorizontal: 10,
+              }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+                  {[
+                    ["，", "逗号"], ["。", "句号"], ["“”", "引号"], ["：", "冒号"],
+                    ["；", "分号"], ["？", "问号"], ["！", "叹号"], ["——", "破折"],
+                    ["……", "省略"], ["—", "连接"], ["·", "间隔"], ["～", "波浪"],
+                    ["「」", "直角引"], ["【】", "方头括"], ["《》", "书名号"],
+                    ["/\n", "换段"], ["→", "箭头"], ["＃", "井号"],
+                  ].map(([sym, label]) => (
+                    <TouchableOpacity
+                      key={sym}
+                      onPress={() => {
+                        const text = sym.includes("\n") ? "\n\n" : sym;
+                        const pos = cursorPosition ?? content.length;
+                        const newContent = content.slice(0, pos) + text + content.slice(pos);
+                        setContent(newContent);
+                        setCursorPosition(pos + text.length);
+                        pushUndo(newContent);
+                      }}
+                      className="items-center justify-center px-3 py-2 rounded-lg"
+                      style={{ backgroundColor: nightMode ? "#2A2A44" : "#EEEFF5" }}
+                    >
+                      <Text className="text-base font-medium" style={{ color: theme.text }}>{sym.length <= 2 ? sym : sym.slice(0,2)}</Text>
+                      <Text className="text-[10px] mt-0.5" style={{ color: theme.muted }}>{label}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
           </View>
 
           {/* ===== AI生成区(浮动面板) ===== */}
