@@ -28,6 +28,9 @@ interface Skill {
   name: string;
   desc: string;
   enabled: boolean;
+  prompt?: string;      // 系统提示词，自定义技能必须
+  isCustom?: boolean;   // 是否为自定义技能
+  icon?: string;        // 图标名
 }
 
 const presetModels = [
@@ -40,18 +43,19 @@ const presetModels = [
 ];
 
 const defaultSkills: Skill[] = [
-  { id: "market", name: "赛道分析", desc: "爆款赛道分析与差异化定位", enabled: true },
-  { id: "planning", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", enabled: true },
-  { id: "worldbuild", name: "世界观", desc: "构建完整世界观底层规则", enabled: true },
-  { id: "character", name: "人物设定", desc: "生成核心人物三维设定", enabled: true },
-  { id: "relations", name: "关系网", desc: "构建人物关系网络", enabled: true },
-  { id: "outline", name: "分卷大纲", desc: "生成三幕式分卷大纲", enabled: true },
-  { id: "chapter", name: "单章大纲", desc: "生成单章精细化大纲", enabled: false },
-  { id: "writing", name: "正文生成", desc: "生成单章正文初稿", enabled: false },
-  { id: "scene", name: "场景优化", desc: "优化关键场景描写", enabled: false },
-  { id: "logic", name: "逻辑校验", desc: "检测逻辑漏洞与人物OOC", enabled: false },
-  { id: "polish", name: "批量润色", desc: "全文批量润色与文风统一", enabled: false },
-  { id: "blurb", name: "爆款简介", desc: "生成爆款简介与章节标题", enabled: false },
+  { id: "create-book", name: "📚 创建书籍", desc: "创建新作品（仅此技能可创建书籍）", enabled: true, icon: "book", prompt: "你是一个帮助用户创建新书籍的助手。根据用户提供的小说名称、类型和简介，严格遵守以下规则：只创建书籍，不生成大纲，不生成正文，不生成任何其他内容。创建完成后告知用户书籍已创建成功。" },
+  { id: "market", name: "赛道分析", desc: "爆款赛道分析与差异化定位", enabled: true, icon: "chart-line" },
+  { id: "planning", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", enabled: true, icon: "ruler" },
+  { id: "worldbuild", name: "世界观", desc: "构建完整世界观底层规则", enabled: true, icon: "globe" },
+  { id: "character", name: "人物设定", desc: "生成核心人物三维设定", enabled: true, icon: "users" },
+  { id: "relations", name: "关系网", desc: "构建人物关系网络", enabled: true, icon: "share-nodes" },
+  { id: "outline", name: "分卷大纲", desc: "仅生成三幕式分卷大纲（不创建任何章节）", enabled: true, icon: "sitemap" },
+  { id: "chapter", name: "单章大纲", desc: "仅生成单章精细化大纲（需挂载书籍）", enabled: false, icon: "list" },
+  { id: "writing", name: "正文生成", desc: "仅生成单章正文初稿（需挂载书籍并选择章节）", enabled: false, icon: "pen-fancy" },
+  { id: "scene", name: "场景优化", desc: "仅优化关键场景描写", enabled: false, icon: "image" },
+  { id: "logic", name: "逻辑校验", desc: "仅检测逻辑漏洞与人物OOC", enabled: false, icon: "check-double" },
+  { id: "polish", name: "批量润色", desc: "仅全文润色（不修改章节结构）", enabled: false, icon: "wand-magic-sparkles" },
+  { id: "blurb", name: "爆款简介", desc: "仅生成作品简介与章节标题", enabled: false, icon: "bookmark" },
 ];
 
 export default function ProfileScreen() {
@@ -77,6 +81,12 @@ export default function ProfileScreen() {
   const [customModelId, setCustomModelId] = useState("");
   const [customApiKey, setCustomApiKey] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
+
+  // 自定义技能
+  const [showCustomSkillForm, setShowCustomSkillForm] = useState(false);
+  const [newSkillName, setNewSkillName] = useState("");
+  const [newSkillDesc, setNewSkillDesc] = useState("");
+  const [newSkillPrompt, setNewSkillPrompt] = useState("");
 
   // 加载持久化的 AI 设置
   useEffect(() => {
@@ -173,6 +183,42 @@ export default function ProfileScreen() {
     const updatedSkills = skills.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s));
     setSkills(updatedSkills);
     saveAISettings({ skills: updatedSkills });
+  };
+
+  const addCustomSkill = () => {
+    if (!newSkillName.trim()) {
+      Alert.alert("提示", "请输入技能名称");
+      return;
+    }
+    const newSkill: Skill = {
+      id: `custom-${Date.now()}`,
+      name: newSkillName.trim(),
+      desc: newSkillDesc.trim() || "自定义技能",
+      enabled: true,
+      prompt: newSkillPrompt.trim(),
+      isCustom: true,
+    };
+    const updated = [...skills, newSkill];
+    setSkills(updated);
+    saveAISettings({ skills: updated });
+    setShowCustomSkillForm(false);
+    setNewSkillName("");
+    setNewSkillDesc("");
+    setNewSkillPrompt("");
+  };
+
+  const deleteCustomSkill = (id: string) => {
+    Alert.alert("删除技能", "确定要删除这个自定义技能吗？", [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除", style: "destructive",
+        onPress: () => {
+          const updated = skills.filter((s) => s.id !== id);
+          setSkills(updated);
+          saveAISettings({ skills: updated });
+        },
+      },
+    ]);
   };
 
   const settingsSections = [
@@ -623,7 +669,7 @@ export default function ProfileScreen() {
                   {aiTab === "skills" && (
                     <View className="py-2">
                       <Text className="text-xs text-gray-500 mb-3">
-                        开启AI技能，让模型拥有更专业的能力
+                        开启AI技能，让模型拥有更专业的能力。每个技能只能执行自己的职责。
                       </Text>
                       {skills.map((skill) => (
                         <View
@@ -634,19 +680,39 @@ export default function ProfileScreen() {
                             skill.enabled ? "bg-indigo-50" : "bg-gray-50"
                           }`}>
                             <FontAwesome6
-                              name="bolt"
+                              name={skill.id === "create-book" ? "book" : skill.isCustom ? "magic" : "bolt"}
                               size={16}
                               color={skill.enabled ? "#4F46E5" : "#CBD5E1"}
                             />
                           </View>
                           <View className="flex-1">
-                            <Text className={`text-sm font-semibold ${skill.enabled ? "text-gray-800" : "text-gray-400"}`}>
-                              {skill.name}
-                            </Text>
+                            <View className="flex-row items-center gap-1.5">
+                              <Text className={`text-sm font-semibold ${skill.enabled ? "text-gray-800" : "text-gray-400"}`}>
+                                {skill.name}
+                              </Text>
+                              {skill.isCustom && (
+                                <View className="bg-amber-100 rounded px-1.5 py-0.5">
+                                  <Text className="text-[9px] font-medium text-amber-700">自定义</Text>
+                                </View>
+                              )}
+                              {skill.id === "create-book" && (
+                                <View className="bg-emerald-100 rounded px-1.5 py-0.5">
+                                  <Text className="text-[9px] font-medium text-emerald-700">特殊</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text className={`text-xs mt-0.5 ${skill.enabled ? "text-gray-400" : "text-gray-300"}`}>
                               {skill.desc}
                             </Text>
                           </View>
+                          {skill.isCustom ? (
+                            <TouchableOpacity
+                              className="mr-2"
+                              onPress={() => deleteCustomSkill(skill.id)}
+                            >
+                              <FontAwesome6 name="trash-can" size={14} color="#EF4444" />
+                            </TouchableOpacity>
+                          ) : null}
                           <Switch
                             value={skill.enabled}
                             onValueChange={() => toggleSkill(skill.id)}
@@ -655,6 +721,63 @@ export default function ProfileScreen() {
                           />
                         </View>
                       ))}
+
+                      {/* 添加自定义技能 */}
+                      {showCustomSkillForm ? (
+                        <View className="bg-gray-50 rounded-xl p-4 mt-2">
+                          <Text className="text-sm font-semibold text-gray-700 mb-3">创建自定义技能</Text>
+                          <Text className="text-xs font-medium text-gray-600 mb-1">技能名称</Text>
+                          <TextInput
+                            className="bg-white rounded-xl px-4 py-2.5 text-sm text-gray-800 mb-3 border border-gray-200"
+                            placeholder="如：对白润色"
+                            placeholderTextColor="#CBD5E1"
+                            value={newSkillName}
+                            onChangeText={setNewSkillName}
+                          />
+                          <Text className="text-xs font-medium text-gray-600 mb-1">技能描述</Text>
+                          <TextInput
+                            className="bg-white rounded-xl px-4 py-2.5 text-sm text-gray-800 mb-3 border border-gray-200"
+                            placeholder="如：优化小说人物对白"
+                            placeholderTextColor="#CBD5E1"
+                            value={newSkillDesc}
+                            onChangeText={setNewSkillDesc}
+                          />
+                          <Text className="text-xs font-medium text-gray-600 mb-1">系统提示词（限制AI的行为）</Text>
+                          <TextInput
+                            className="bg-white rounded-xl px-4 py-2.5 text-sm text-gray-800 mb-3 border border-gray-200"
+                            placeholder="如：你是一个对白优化助手，只对人物对话内容进行润色，不修改其他内容"
+                            placeholderTextColor="#CBD5E1"
+                            value={newSkillPrompt}
+                            onChangeText={setNewSkillPrompt}
+                            multiline
+                          />
+                          <View className="flex-row gap-3 mt-1">
+                            <TouchableOpacity
+                              className="flex-1 py-2.5 rounded-xl bg-gray-200 items-center"
+                              onPress={() => { setShowCustomSkillForm(false); setNewSkillName(""); setNewSkillDesc(""); setNewSkillPrompt(""); }}
+                            >
+                              <Text className="text-sm font-medium text-gray-600">取消</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              className="flex-1 py-2.5 rounded-xl items-center"
+                              style={{ backgroundColor: "#4F46E5" }}
+                              onPress={addCustomSkill}
+                            >
+                              <Text className="text-sm font-medium text-white">创建</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          className="flex-row items-center justify-center py-3 rounded-xl border border-dashed border-gray-200 mt-2"
+                          onPress={() => setShowCustomSkillForm(true)}
+                        >
+                          <FontAwesome6 name="plus" size={14} color="#4F46E5" />
+                          <Text className="text-sm font-medium ml-2" style={{ color: "#4F46E5" }}>
+                            添加自定义技能
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   )}
                 </ScrollView>

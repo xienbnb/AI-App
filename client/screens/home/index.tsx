@@ -10,7 +10,8 @@ import {
   Modal,
   FlatList,
   TouchableWithoutFeedback,
-  Alert,
+  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,65 +31,33 @@ type ChatMessage = {
   role: "ai" | "user";
   content: string;
   step?: string;
+  skillName?: string;
 };
 
-// ===== Skill Categories =====
-const SKILL_CATEGORIES = [
-  {
-    name: "灵感创意",
-    icon: "lightbulb",
-    color: "#F59E0B",
-    bgColor: "#FEF3C7",
-    skills: [
-      { name: "赛道分析", desc: "分析爆款赛道与差异化定位" },
-      { name: "世界观构建", desc: "构建完整世界观底层规则" },
-      { name: "灵感发散", desc: "从关键词发散创意脑洞" },
-    ],
-  },
-  {
-    name: "角色设定",
-    icon: "user-group",
-    color: "#8B5CF6",
-    bgColor: "#EDE9FE",
-    skills: [
-      { name: "人物设定", desc: "生成核心人物三维设定" },
-      { name: "关系网构建", desc: "构建人物关系网络" },
-      { name: "角色对话", desc: "生成符合人设的对话" },
-    ],
-  },
-  {
-    name: "大纲规划",
-    icon: "list-tree",
-    color: "#3B82F6",
-    bgColor: "#DBEAFE",
-    skills: [
-      { name: "篇幅规划", desc: "规划作品篇幅与更新节奏" },
-      { name: "分卷大纲", desc: "生成三幕式分卷大纲" },
-      { name: "单章大纲", desc: "生成单章精细化大纲" },
-    ],
-  },
-  {
-    name: "正文写作",
-    icon: "pen-fancy",
-    color: "#10B981",
-    bgColor: "#D1FAE5",
-    skills: [
-      { name: "正文生成", desc: "生成单章正文初稿" },
-      { name: "场景优化", desc: "优化关键场景描写" },
-      { name: "爆款简介", desc: "生成爆款简介与章节标题" },
-    ],
-  },
-  {
-    name: "优化完善",
-    icon: "wrench",
-    color: "#EF4444",
-    bgColor: "#FEE2E2",
-    skills: [
-      { name: "逻辑校验", desc: "检测逻辑漏洞与角色OOC" },
-      { name: "批量润色", desc: "全文润色与文风统一" },
-      { name: "文风模仿", desc: "模仿特定作家文风" },
-    ],
-  },
+type Skill = {
+  id: string;
+  name: string;
+  desc: string;
+  prompt: string;
+  enabled: boolean;
+  isCustom?: boolean;
+};
+
+// ===== Default skills (strict scope) =====
+const DEFAULT_SKILLS: Skill[] = [
+  { id: "track-analysis", name: "赛道分析", desc: "分析爆款赛道与差异化定位", prompt: "你是一个小说赛道分析专家。请严格只分析赛道趋势、市场定位和差异化建议。不要创建书籍、不要写正文。", enabled: true },
+  { id: "plan-length", name: "篇幅规划", desc: "规划作品篇幅与更新节奏", prompt: "你是一个小说篇幅规划师。请严格只规划作品的大致篇幅、章节数量和更新节奏。不要创建书籍、不要写正文。", enabled: true },
+  { id: "world-building", name: "世界观构建", desc: "构建完整世界观底层规则", prompt: "你是一个世界观构建专家。请严格只构建世界观底层规则和设定。不要创建书籍、不要写正文。", enabled: true },
+  { id: "character-design", name: "人物设定", desc: "生成核心人物三维设定", prompt: "你是一个小说角色设定专家。请严格只创作角色设定（外貌、性格、背景等）。不要创建书籍、不要写正文。", enabled: true },
+  { id: "relationship-net", name: "关系网构建", desc: "构建人物关系网络", prompt: "你是一个人物关系网构建师。请严格只构建人物之间的关系网络图。不要创建书籍、不要写正文。", enabled: true },
+  { id: "volume-outline", name: "分卷大纲", desc: "生成三幕式分卷大纲", prompt: "你是一个小说大纲规划师。请严格只生成分卷大纲和各卷概要。不要创建书籍、不要写章节正文。", enabled: true },
+  { id: "chapter-outline", name: "单章大纲", desc: "生成单章精细化大纲", prompt: "你是一个章节大纲师。请严格只生成单章的细纲。不要创建书籍、不要写正文内容。", enabled: true },
+  { id: "body-writing", name: "正文生成", desc: "生成单章正文初稿", prompt: "你是一个小说正文创作助手。请严格只根据用户提供的设定和大纲撰写正文内容。不要创建书籍、不要生成大纲。", enabled: true },
+  { id: "scene-opt", name: "场景优化", desc: "优化关键场景描写", prompt: "你是一个场景优化专家。请严格只优化场景描写、氛围渲染和画面感。不要创建书籍、不要改写其他内容。", enabled: true },
+  { id: "logic-check", name: "逻辑校验", desc: "检测逻辑漏洞与角色OOC", prompt: "你是一个严谨的逻辑校验师。请严格只检测故事中的逻辑漏洞、时间线冲突和角色OOC问题。不要创建书籍、不要修改正文。", enabled: true },
+  { id: "polish", name: "批量润色", desc: "全文润色与文风统一", prompt: "你是一个专业的编辑。请严格只对文本进行语言润色和文风统一。不要创建书籍、不要改变原有剧情。", enabled: true },
+  { id: "blurb", name: "爆款简介", desc: "生成爆款简介与推荐语", prompt: "你是一个小说简介创作师。请严格只生成吸引人的小说简介、推荐语和封面文案。不要创建书籍、不要写正文。", enabled: true },
+  { id: "create-book", name: "创建书籍", desc: "根据灵感自动创建一本新书（含大纲和第一卷）", prompt: "你是小说创作助手。请根据用户的灵感完整规划一本新书：包括书名、题材类型、一句话简介、核心设定和分卷大纲概览。只负责规划内容不要实际写入数据库。", enabled: true },
 ];
 
 const INSPIRATION_CHIPS = [
@@ -111,94 +80,15 @@ function generateTempId(): string {
   return "tmp_" + Math.random().toString(36).substring(2, 9);
 }
 
-// ===== Skill Picker Modal (Category based) =====
-function SkillPickerModal({ visible, onSelect, onClose }: {
-  visible: boolean;
-  onSelect: (skill: string) => void;
-  onClose: () => void;
-}) {
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const currentCategory = SKILL_CATEGORIES.find(c => c.name === selectedCategory);
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <TouchableWithoutFeedback onPress={onClose}>
-        <View className="flex-1 justify-end bg-black/40">
-          <View className="bg-white rounded-t-3xl max-h-[70%] pb-8">
-            <View className="items-center pt-4 pb-2">
-              <View className="w-10 h-1 bg-gray-300 rounded-full" />
-            </View>
-
-            {!currentCategory ? (
-              <>
-                <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择技能分类</Text>
-                <Text className="text-sm text-gray-500 text-center mb-4">选择你要使用的创作方向</Text>
-                <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
-                  {SKILL_CATEGORIES.map((cat) => (
-                    <TouchableOpacity
-                      key={cat.name}
-                      className="flex-row items-center gap-3 rounded-2xl p-4 mb-2"
-                      style={{ backgroundColor: cat.bgColor }}
-                      onPress={() => setSelectedCategory(cat.name)}
-                    >
-                      <View className="w-11 h-11 rounded-2xl items-center justify-center" style={{ backgroundColor: cat.color + "20" }}>
-                        <FontAwesome6 name={cat.icon as any} size={18} color={cat.color} />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-gray-900">{cat.name}</Text>
-                        <Text className="text-xs text-gray-500 mt-0.5">{cat.skills.map(s => s.name).join("、")}</Text>
-                      </View>
-                      <FontAwesome6 name="chevron-right" size={12} color={cat.color} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </>
-            ) : (
-              <>
-                <View className="flex-row items-center px-4 mb-2">
-                  <TouchableOpacity className="mr-2 w-8 h-8 rounded-full bg-gray-100 items-center justify-center" onPress={() => setSelectedCategory(null)}>
-                    <FontAwesome6 name="arrow-left" size={14} color="#374151" />
-                  </TouchableOpacity>
-                  <Text className="text-lg font-bold text-gray-900 flex-1">{currentCategory.name}</Text>
-                  <View className="w-8" />
-                </View>
-                <Text className="text-sm text-gray-500 text-center mb-3">选择一个技能，AI将按该技能模式回复</Text>
-                <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
-                  {currentCategory.skills.map((sk) => (
-                    <TouchableOpacity
-                      key={sk.name}
-                      className="flex-row items-center gap-3 rounded-2xl p-4 mb-2 border border-gray-100 bg-gray-50 active:bg-gray-100"
-                      onPress={() => { onSelect(sk.name); setSelectedCategory(null); onClose(); }}
-                    >
-                      <View className="w-10 h-10 rounded-xl items-center justify-center" style={{ backgroundColor: currentCategory.color + "15" }}>
-                        <FontAwesome6 name={currentCategory.icon as any} size={16} color={currentCategory.color} />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-gray-900">{sk.name}</Text>
-                        <Text className="text-xs text-gray-500 mt-0.5">{sk.desc}</Text>
-                      </View>
-                      <FontAwesome6 name="plus-circle" size={16} color={currentCategory.color} />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
-  );
+// ===== Default config for AsyncStorage =====
+function defaultAiSettings() {
+  return { skills: DEFAULT_SKILLS };
 }
 
-// ===== ConfirmModal =====
-function ConfirmModal({ visible, title, message, confirmText = "确认", confirmColor = "bg-indigo-500", onConfirm, onClose }: {
-  visible: boolean;
-  title: string;
-  message: string;
-  confirmText?: string;
-  confirmColor?: string;
-  onConfirm: () => void;
-  onClose: () => void;
+// ===== Confirm Modal =====
+function ConfirmModal({ visible, title, message, confirmText = "确认", confirmColor = "#6366F1", onConfirm, onClose }: {
+  visible: boolean; title: string; message: string; confirmText?: string; confirmColor?: string;
+  onConfirm: () => void; onClose: () => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -213,7 +103,7 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
             <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={onClose}>
               <Text className="text-gray-600 font-medium">取消</Text>
             </TouchableOpacity>
-            <TouchableOpacity className={`flex-1 ${confirmColor} rounded-xl py-3 items-center`} onPress={onConfirm}>
+            <TouchableOpacity className="flex-1 py-3 rounded-xl items-center" style={{ backgroundColor: confirmColor }} onPress={onConfirm}>
               <Text className="text-white font-medium">{confirmText}</Text>
             </TouchableOpacity>
           </View>
@@ -223,7 +113,7 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
   );
 }
 
-// ===== Markdown Content Renderer =====
+// ===== Markdown Renderer =====
 const mdStyles = {
   body: { color: "#374151", fontSize: 14, lineHeight: 22 },
   heading1: { fontSize: 20, fontWeight: "700" as const, color: "#111827", marginVertical: 8, lineHeight: 28 },
@@ -244,45 +134,125 @@ const mdStyles = {
 
 function MarkdownContent({ content, isStream }: { content: string; isStream?: boolean }) {
   if (!content) return null;
-  // For streaming, use simple text to avoid markdown parsing lag
   if (isStream) {
     return <Text className="text-sm text-indigo-800 leading-6 flex-shrink flex-wrap">{content}</Text>;
   }
   return (
-    <Markdown style={mdStyles}>
-      {content}
-    </Markdown>
+    <Markdown style={mdStyles}>{content}</Markdown>
+  );
+}
+
+// ===== Skill Picker Modal (flat list from settings) =====
+function SkillPickerModal({ visible, skills, onSelect, onClose }: {
+  visible: boolean; skills: Skill[]; onSelect: (skill: Skill) => void; onClose: () => void;
+}) {
+  const enabledSkills = skills.filter(s => s.enabled);
+  // Group by category for visual
+  const categories = [
+    { name: "创作规划", skills: ["track-analysis", "plan-length", "world-building"] },
+    { name: "角色设定", skills: ["character-design", "relationship-net"] },
+    { name: "大纲规划", skills: ["volume-outline", "chapter-outline"] },
+    { name: "正文写作", skills: ["body-writing", "scene-opt", "blurb"] },
+    { name: "优化完善", skills: ["logic-check", "polish"] },
+    { name: "特殊能力", skills: ["create-book"] },
+  ];
+
+  // Custom skills go to the end
+  const customSkills = enabledSkills.filter(s => s.isCustom);
+
+  const getSkillColor = (skillId: string) => {
+    if (skillId === "create-book") return "#10B981";
+    if (customSkills.find(s => s.id === skillId)) return "#F59E0B";
+    return "#6366F1";
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-3xl max-h-[72%] pb-8">
+            <View className="items-center pt-4 pb-2">
+              <View className="w-10 h-1 bg-gray-300 rounded-full" />
+            </View>
+            <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择一个技能</Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">AI 将严格按该技能的职责范围回复</Text>
+            <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
+              {categories.map((cat) => {
+                const catSkills = enabledSkills.filter(s => cat.skills.includes(s.id));
+                if (catSkills.length === 0) return null;
+                return (
+                  <View key={cat.name} className="mb-3">
+                    <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 ml-1">{cat.name}</Text>
+                    {catSkills.map((sk) => (
+                      <TouchableOpacity
+                        key={sk.id}
+                        className="flex-row items-center gap-3 rounded-2xl p-3.5 mb-1.5 border border-gray-100 active:bg-gray-50"
+                        onPress={() => { onSelect(sk); onClose(); }}
+                      >
+                        <View className="w-9 h-9 rounded-xl items-center justify-center" style={{ backgroundColor: getSkillColor(sk.id) + "15" }}>
+                          <FontAwesome6
+                            name={sk.id === "create-book" ? "book" : sk.isCustom ? "magic" : "bolt"}
+                            size={14} color={getSkillColor(sk.id)}
+                          />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-sm font-semibold text-gray-900">{sk.name}</Text>
+                          <Text className="text-xs text-gray-400 mt-0.5">{sk.desc}</Text>
+                        </View>
+                        <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                );
+              })}
+              {/* Custom skills */}
+              {customSkills.length > 0 && (
+                <View className="mt-1 pt-3 border-t border-gray-100">
+                  <Text className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2 ml-1">自定义技能</Text>
+                  {customSkills.map((sk) => (
+                    <TouchableOpacity
+                      key={sk.id}
+                      className="flex-row items-center gap-3 rounded-2xl p-3.5 mb-1.5 border border-amber-100 bg-amber-50/30 active:bg-amber-50"
+                      onPress={() => { onSelect(sk); onClose(); }}
+                    >
+                      <View className="w-9 h-9 rounded-xl items-center justify-center bg-amber-100">
+                        <FontAwesome6 name="magic" size={14} color="#D97706" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm font-semibold text-gray-900">{sk.name}</Text>
+                        <Text className="text-xs text-gray-400 mt-0.5">{sk.desc}</Text>
+                      </View>
+                      <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
   );
 }
 
 // ===== BookPickerModal =====
 function BookPickerModal({ visible, books, selectedId, onSelect, onClose }: {
-  visible: boolean;
-  books: any[];
-  selectedId: string | null;
-  onSelect: (book: any) => void;
-  onClose: () => void;
+  visible: boolean; books: any[]; selectedId: string | null; onSelect: (book: any) => void; onClose: () => void;
 }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={onClose}>
         <View className="flex-1 justify-end bg-black/40">
           <View className="bg-white rounded-t-3xl max-h-[65%] pb-8 min-h-[300px]">
-            <View className="items-center pt-4 pb-2">
-              <View className="w-10 h-1 bg-gray-300 rounded-full" />
-            </View>
+            <View className="items-center pt-4 pb-2"><View className="w-10 h-1 bg-gray-300 rounded-full" /></View>
             <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择作品上下文</Text>
             <Text className="text-sm text-gray-500 text-center mb-4">AI 将基于选定作品进行创作</Text>
-
             <FlatList
-              data={books}
-              className="px-4"
-              contentContainerStyle={{ gap: 8 }}
+              data={books} className="px-4" contentContainerStyle={{ gap: 8 }}
               ListEmptyComponent={
                 <View className="items-center py-10">
                   <FontAwesome6 name="book-open" size={32} color="#D1D5DB" />
                   <Text className="text-sm text-gray-400 mt-3">暂无作品</Text>
-                  <Text className="text-xs text-gray-300 mt-1">先去创作一本小说吧</Text>
                 </View>
               }
               renderItem={({ item }) => {
@@ -297,22 +267,111 @@ function BookPickerModal({ visible, books, selectedId, onSelect, onClose }: {
                     </View>
                     <View className="flex-1">
                       <Text className={`text-sm font-semibold ${isSelected ? "text-indigo-700" : "text-gray-800"}`}>
-                        {item.title || item.name || "未命名作品"}
+                        {item.title || item.name || "未命名"}
                       </Text>
-                      <Text className="text-xs text-gray-400 mt-0.5">
-                        {item.type || "未分类"} · {item.chaptersCount ?? item.chapters?.length ?? 0} 章
-                      </Text>
+                      <Text className="text-xs text-gray-400 mt-0.5">{item.type || "未分类"} · {item.chaptersCount ?? item.chapters?.length ?? 0} 章</Text>
                     </View>
-                    {isSelected && (
-                      <View className="bg-indigo-500 rounded-full px-2.5 py-0.5">
-                        <Text className="text-xs text-white font-medium">当前</Text>
-                      </View>
-                    )}
+                    {isSelected && <View className="bg-indigo-500 rounded-full px-2.5 py-0.5"><Text className="text-xs text-white font-medium">当前</Text></View>}
                   </TouchableOpacity>
                 );
               }}
               keyExtractor={(item) => item.id}
             />
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
+// ===== Chapter Selector Modal (for "insert into book" or "write chapter") =====
+function ChapterSelectorModal({ visible, bookId, chapterTitle, content, onInsert, onClose }: {
+  visible: boolean; bookId: string; chapterTitle: string; content: string;
+  onInsert: (chapterId: string | null, title: string) => void; onClose: () => void;
+}) {
+  const [chapters, setChapters] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState(chapterTitle || "AI 生成内容");
+  const [selectedChapter, setSelectedChapter] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bookId || !visible) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`);
+        const json = await res.json();
+        setChapters(json.data || []);
+      } catch (e) { /* silent */ }
+      setLoading(false);
+    })();
+  }, [bookId, visible]);
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-3xl max-h-[72%] pb-8">
+            <View className="items-center pt-4 pb-2"><View className="w-10 h-1 bg-gray-300 rounded-full" /></View>
+            <Text className="text-lg font-bold text-gray-900 text-center mb-1">插入到作品</Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">选择插入方式</Text>
+
+            <View className="px-4 mb-3">
+              <Text className="text-xs font-medium text-gray-600 mb-1">章节标题</Text>
+              <TextInput
+                className="bg-gray-50 rounded-xl px-4 py-2.5 text-sm text-gray-800 border border-gray-200"
+                value={title} onChangeText={setTitle} placeholder="输入标题"
+                placeholderTextColor="#CBD5E1"
+              />
+            </View>
+
+            <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === null ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}
+                onPress={() => setSelectedChapter(null)}
+              >
+                <View className="w-9 h-9 rounded-xl bg-indigo-100 items-center justify-center">
+                  <FontAwesome6 name="file-circle-plus" size={16} color="#6366F1" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-sm font-semibold text-gray-900">创建为新章节</Text>
+                  <Text className="text-xs text-gray-400 mt-0.5">作为独立新章节添加到作品</Text>
+                </View>
+                {selectedChapter === null && <FontAwesome6 name="circle-check" size={18} color="#6366F1" solid />}
+              </TouchableOpacity>
+
+              {loading ? (
+                <View className="items-center py-4"><ActivityIndicator size="small" color="#6366F1" /></View>
+              ) : (
+                chapters.map((ch: any) => (
+                  <TouchableOpacity
+                    key={ch.id}
+                    className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${selectedChapter === ch.id ? "border-emerald-300 bg-emerald-50" : "border-gray-100 bg-gray-50"}`}
+                    onPress={() => setSelectedChapter(ch.id)}
+                  >
+                    <View className="w-9 h-9 rounded-xl bg-emerald-100 items-center justify-center">
+                      <FontAwesome6 name="pen-to-square" size={14} color="#10B981" />
+                    </View>
+                    <View className="flex-1">
+                      <Text className="text-sm font-semibold text-gray-900">替换章节：{ch.title}</Text>
+                      <Text className="text-xs text-gray-400 mt-0.5">用 AI 内容替换此章节</Text>
+                    </View>
+                    {selectedChapter === ch.id && <FontAwesome6 name="circle-check" size={18} color="#10B981" solid />}
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+
+            <View className="flex-row gap-3 px-4 mt-3">
+              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={onClose}>
+                <Text className="text-gray-600 font-medium">取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 py-3 rounded-xl items-center" style={{ backgroundColor: "#6366F1" }}
+                onPress={() => { onInsert(selectedChapter, title); onClose(); }}
+              >
+                <Text className="text-white font-medium">确认插入</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -326,36 +385,35 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
-  // Chat history session
+  // Chat session
   const sessionIdRef = useRef<string>("init_0");
+  const [currentSessionId, setCurrentSessionId] = useState("init_0");
   const sessionCounter = useRef(0);
   const [sessionList, setSessionList] = useState<{ id: string; preview: string; ts: number }[]>([]);
-
-  // -- Core chat state --
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n随便聊——给我一个灵感、想个角色、或者直接说「帮我写本小说」，我来搞定一切。", step: "welcome" },
+    { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n选择一个技能开始创作，或者直接自由聊天。\n\n**已启用的技能**在设置中配置，每个技能有严格的职责范围。", step: "welcome" },
   ]);
   const [inputText, setInputText] = useState("");
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [showSkillPicker, setShowSkillPicker] = useState(false);
-  const confirmActionRef = useRef<(() => void) | null>(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState("");
-  const [confirmMsg, setConfirmMsg] = useState("");
-  const [showNewBookBtn, setShowNewBookBtn] = useState(false);
-  const [pendingBookData, setPendingBookData] = useState<any>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [activeBook, setActiveBook] = useState<any>(null);
   const [showBookPicker, setShowBookPicker] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
+
+  // Skills loaded from settings
+  const [skills, setSkills] = useState<Skill[]>(DEFAULT_SKILLS);
+  const [activeSkill, setActiveSkill] = useState<Skill | null>(null);
+
+  // Insert to book
+  const [pendingInsertContent, setPendingInsertContent] = useState("");
+  const [pendingInsertTitle, setPendingInsertTitle] = useState("");
+  const [showChapterModal, setShowChapterModal] = useState(false);
 
   const sseRef = useRef<any>(null);
 
-  // Clean up SSE
   const cleanupSSE = () => {
     if (sseRef.current) {
       try { sseRef.current.close(); } catch (e) { /* ignore */ }
@@ -363,65 +421,81 @@ export default function HomeScreen() {
     }
   };
 
+  // Load skills from AsyncStorage settings
+  const loadSkills = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem("ai_settings");
+      if (raw) {
+        const cfg = JSON.parse(raw);
+        if (Array.isArray(cfg.skills)) {
+          setSkills(cfg.skills);
+          return;
+        }
+      }
+      // Fallback to defaults
+      const def = defaultAiSettings();
+      await AsyncStorage.setItem("ai_settings", JSON.stringify(def));
+      setSkills(def.skills);
+    } catch (e) { /* silent */ }
+  }, []);
+
   // Load last session + active book on mount
   useEffect(() => {
-    const load = async () => {
-        try {
-          const raw = await AsyncStorage.getItem("chat_sessions");
-          const list: { id: string; preview: string; ts: number }[] = raw ? JSON.parse(raw) : [];
-          setSessionList(list);
-          if (list.length > 0 && !historyLoaded) {
-            const last = list[0];
-            const msgRaw = await AsyncStorage.getItem(`chat_messages_${last.id}`);
-            if (msgRaw) {
-              const msgs = JSON.parse(msgRaw);
-              if (msgs.length > 0) {
-                setMessages(msgs);
-                sessionIdRef.current = last.id;
-              }
-            }
-          } else if (list.length === 0 && !sessionIdRef.current) {
-            sessionCounter.current += 1;
-            sessionIdRef.current = `chat_${sessionCounter.current}`;
-          }
-        } catch {}
-        // Restore active book
-        try {
-          const bookRaw = await AsyncStorage.getItem("active_book");
-          if (bookRaw) {
-            const book = JSON.parse(bookRaw);
-            if (book?.id) setActiveBook(book);
-          }
-        } catch {}
-        setHistoryLoaded(true);
-      };
-      load();
-    }, []);
-
-  // Auto-save messages whenever they change
-  useEffect(() => {
-    if (!historyLoaded || messages.length === 0) return;
-    const timer = setTimeout(async () => {
+    (async () => {
+      await loadSkills();
       try {
-        await AsyncStorage.setItem(`chat_messages_${sessionIdRef.current}`, JSON.stringify(messages));
-        const preview = messages.find(m => m.role === "user")?.content?.slice(0, 30) || "新对话";
-        const list = sessionList.filter(s => s.id !== sessionIdRef.current);
-        list.unshift({ id: sessionIdRef.current, preview, ts: Date.now() });
+        const raw = await AsyncStorage.getItem("chat_sessions");
+        const list: { id: string; preview: string; ts: number }[] = raw ? JSON.parse(raw) : [];
         setSessionList(list);
-        await AsyncStorage.setItem("chat_sessions", JSON.stringify(list.slice(0, 20)));
+        if (list.length > 0) {
+          const last = list[0];
+          const msgRaw = await AsyncStorage.getItem(`chat_messages_${last.id}`);
+          if (msgRaw) {
+            const msgs = JSON.parse(msgRaw);
+            if (msgs.length > 0) {
+              setMessages(msgs);
+              sessionIdRef.current = last.id;
+              setCurrentSessionId(last.id);
+            }
+          }
+        } else {
+          sessionCounter.current += 1;
+          sessionIdRef.current = `chat_${sessionCounter.current}`;
+          setCurrentSessionId(`chat_${sessionCounter.current}`);
+        }
       } catch {}
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [messages, historyLoaded]);
+      try {
+        const bookRaw = await AsyncStorage.getItem("active_book");
+        if (bookRaw) setActiveBook(JSON.parse(bookRaw));
+      } catch {}
+    })();
+  }, []);
 
+  // Save sessions on change
+  useEffect(() => {
+    if (sessionList.length > 0) {
+      AsyncStorage.setItem("chat_sessions", JSON.stringify(sessionList.slice(0, 20)));
+    }
+  }, [sessionList]);
+
+  // Save messages on change
+  useEffect(() => {
+    if (sessionIdRef.current && messages.length > 0) {
+      AsyncStorage.setItem(`chat_messages_${sessionIdRef.current}`, JSON.stringify(messages.slice(-50)));
+    }
+  }, [messages]);
+
+  // Reset dialog
   const resetDialog = useCallback(() => {
     cleanupSSE();
+    setIsAiThinking(false);
     setStreamContent("");
-    setShowNewBookBtn(false);
-    setPendingBookData(null);
-    sessionIdRef.current = `chat_${Date.now()}`;
+    setActiveSkill(null);
+    sessionCounter.current += 1;
+    sessionIdRef.current = `chat_${sessionCounter.current}`;
+          setCurrentSessionId(`chat_${sessionCounter.current}`);
     setMessages([
-      { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n随便聊——给我一个灵感、想个角色、或者直接说「帮我写本小说」，我来搞定一切。", step: "welcome" },
+      { role: "ai", content: "你好！我是你的 AI 创作助手。\n\n选择一个技能开始创作，或者直接自由聊天。\n\n**已启用的技能**在设置中配置，每个技能有严格的职责范围。", step: "welcome" },
     ]);
   }, []);
 
@@ -433,43 +507,42 @@ export default function HomeScreen() {
       if (json.success) setBooks(json.data || []);
     } catch (e) { /* silent */ }
   }, []);
-
   useFocusEffect(useCallback(() => { fetchBooks(); }, [fetchBooks]));
 
-  const addMessage = (role: "ai" | "user", content: string, step?: string) => {
-    setMessages((prev) => [...prev, { role, content, step }]);
+  const addMessage = (role: "ai" | "user", content: string, step?: string, skillName?: string) => {
+    setMessages((prev) => [...prev, { role, content, step, skillName }]);
   };
 
-  const showConfirmDialog = (title: string, msg: string, action: () => void) => {
-    setConfirmTitle(title);
-    setConfirmMsg(msg);
-    confirmActionRef.current = action;
-    setShowConfirm(true);
-  };
-
-  const handleConfirm = () => {
-    setShowConfirm(false);
-    if (confirmActionRef.current) {
-      confirmActionRef.current();
-      confirmActionRef.current = null;
-    }
-  };
-
-  // ===== Free-form chat with AI =====
-  const sendFreeChat = async (text: string) => {
+  // ===== Free-form chat with AI (supports skillType) =====
+  const sendFreeChat = async (text: string, skill?: Skill | null) => {
     if (!text.trim() || isAiThinking) return;
-
     const userText = text.trim();
     setInputText("");
-    addMessage("user", userText);
     setIsAiThinking(true);
     setStreamContent("");
 
-    // Build conversation history for context
+    // If a skill is selected, show which skill
+    if (skill) {
+      addMessage("user", `[${skill.name}] ${userText}`, undefined, skill.name);
+    } else {
+      addMessage("user", userText);
+    }
+
     const history = messages
       .filter((m) => m.content && m.content.length > 0)
-      .slice(-10) // last 10 messages for context
+      .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }));
+
+    // Build system instruction for skill scoping
+    let systemMessage = "";
+    if (skill) {
+      systemMessage = skill.prompt;
+      if (skill.id === "body-writing" && activeBook) {
+        systemMessage += `\n\n当前挂载的作品是《${activeBook.title || activeBook.name}》，请基于该作品的设定和大纲进行正文创作。`;
+      }
+    } else {
+      systemMessage = "你是专业的创作助手。请根据用户的意图自由创作。除非用户明确要求创建书籍，否则不要创建书籍。";
+    }
 
     try {
       cleanupSSE();
@@ -479,6 +552,9 @@ export default function HomeScreen() {
         body: JSON.stringify({
           message: userText,
           history,
+          system: systemMessage,
+          skillId: skill?.id || null,
+          skillName: skill?.name || null,
           bookId: activeBook?.id || null,
           bookTitle: activeBook?.title || null,
         }),
@@ -493,9 +569,6 @@ export default function HomeScreen() {
           if (fullContent) {
             addMessage("ai", fullContent);
           }
-
-          // Check if server sent bookCreated signal (from the previous backend)
-          // Backend checks for book creation patterns in the AI response
           setStreamContent("");
           return;
         }
@@ -503,7 +576,7 @@ export default function HomeScreen() {
           const parsed = JSON.parse(event.data);
           if (parsed.error) {
             setIsAiThinking(false);
-            addMessage("ai", parsed.error);
+            addMessage("ai", "错误：" + parsed.error);
             setStreamContent("");
             return;
           }
@@ -512,13 +585,8 @@ export default function HomeScreen() {
             setStreamContent(fullContent);
           }
           if (parsed.bookCreated) {
-            // AI decided to create a book automatically -> offer to view
-            setShowNewBookBtn(true);
-            setPendingBookData({
-              bookId: parsed.bookId,
-              bookTitle: parsed.bookTitle,
-              chaptersCount: parsed.chaptersCount,
-            });
+            // For create-book skill, show book created notification
+            fetchBooks();
           }
         } catch (e) {
           fullContent += event.data;
@@ -537,60 +605,87 @@ export default function HomeScreen() {
     }
   };
 
-  // ===== Reset all =====
-  const resetAll = resetDialog;
+  // ===== Handle skill selection =====
+  const handleSkillSelect = useCallback((skill: Skill) => {
+    if (skill.id === "create-book") {
+      // Open input with creation prompt
+      setActiveSkill(skill);
+      setInputText("");
+      // Show a quick message guiding the user
+      return;
+    }
+    if (skill.id === "body-writing" && !activeBook) {
+      addMessage("ai", "⚠️ 正文生成需要先挂载一个作品。请点击上方「自由创作」选择一本作品。");
+      return;
+    }
+    setActiveSkill(skill);
+  }, [activeBook, addMessage]);
 
-  // ===== File Upload =====
-  const handleFileUpload = async () => {
+  // ===== Insert AI content into book =====
+  const handleInsertToBook = useCallback(async (content: string, title: string, chapterId: string | null) => {
+    if (!activeBook?.id || !content) return;
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/plain", "text/markdown", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled || !result.assets?.[0]) return;
-
-      const file = result.assets[0];
-      const formData = new FormData();
-      formData.append("file", {
-        uri: file.uri,
-        name: file.name || "file.txt",
-        type: file.mimeType || "text/plain",
-      } as any);
-
-      addMessage("user", `[上传文件] ${file.name}`);
-      setIsAiThinking(true);
-      setStreamContent("正在读取文件...");
-
-      const res = await fetch(`${API_BASE}/api/v1/writing/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
+      let res;
+      if (chapterId) {
+        // Update existing chapter
+        res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters/${chapterId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content }),
+        });
+      } else {
+        // Create new chapter
+        const bookRes = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}`);
+        const bookJson = await bookRes.json();
+        const vols = bookJson.success ? (bookJson.data?.volumes || []) : [];
+        const firstVol = vols.length > 0 ? vols[0] : null;
+        res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, content, volumeId: firstVol?.id || null }),
+        });
+      }
       const json = await res.json();
       if (json.success) {
-        const fileContent = json.data.content;
-        // Send file content to AI
-        const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${fileContent.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
-        setInputText(text);
-        setIsAiThinking(false);
-        setStreamContent("");
-        // Auto-send
-        setTimeout(() => sendFreeChat(text), 100);
+        addMessage("ai", `✅ 内容已成功插入到《${activeBook.title || activeBook.name}》${chapterId ? "（替换章节）" : "（新章节）"}！`);
       } else {
-        setIsAiThinking(false);
-        addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
+        addMessage("ai", "❌ 插入失败：" + (json.error || "未知错误"));
       }
-    } catch (e: any) {
-      setIsAiThinking(false);
-      addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
+    } catch (e) {
+      addMessage("ai", "❌ 插入失败：无法连接到服务器");
     }
-  };
+  }, [activeBook, addMessage]);
 
-  // ===== Send button handler =====
+  // ===== Open insert modal =====
+  const handleOpenInsert = useCallback((content: string, title?: string) => {
+    if (!activeBook?.id) {
+      setShowBookPicker(true);
+      return;
+    }
+    setPendingInsertContent(content);
+    setPendingInsertTitle(title || "AI 生成内容");
+    setShowChapterModal(true);
+  }, [activeBook]);
+
+  // ===== Regenerate last AI response =====
+  const handleRegenerate = useCallback((msgIndex: number) => {
+    const prevMessages = messages.slice(0, msgIndex);
+    let lastUserIdx = prevMessages.length - 1;
+    while (lastUserIdx >= 0 && prevMessages[lastUserIdx]?.role !== "user") lastUserIdx--;
+    const userMsg = prevMessages[lastUserIdx]?.role === "user" ? prevMessages[lastUserIdx].content : null;
+    if (!userMsg) return;
+    setMessages(prev => prev.slice(0, msgIndex));
+    const skillName = prevMessages[lastUserIdx]?.skillName;
+    const skill = skills.find(s => s.name === skillName);
+    sendFreeChat(userMsg, skill || null);
+  }, [messages, skills, sendFreeChat]);
+
+  // ===== Send =====
   const handleSend = () => {
     if (!inputText.trim() || isAiThinking) return;
-    sendFreeChat(inputText.trim());
+    const skill = activeSkill;
+    setActiveSkill(null);
+    sendFreeChat(inputText.trim(), skill);
   };
 
   // ===== Load Session =====
@@ -603,6 +698,7 @@ export default function HomeScreen() {
           if (msgs.length > 0) {
             setMessages(msgs);
             sessionIdRef.current = sid;
+            setCurrentSessionId(sid);
           }
         }
       } catch {}
@@ -626,72 +722,19 @@ export default function HomeScreen() {
       const newList = sessionList.filter(s => s.id !== sid);
       setSessionList(newList);
       await AsyncStorage.setItem("chat_sessions", JSON.stringify(newList.slice(0, 20)));
-      if (sid === sessionIdRef.current) {
+      if (sid === currentSessionId) {
         resetDialog();
       }
-    } catch (e) {
-      Alert.alert("错误", "删除失败");
-    }
-  }, [deleteTarget, sessionList, resetDialog]);
+    } catch (e) { /* silent */ }
+  }, [deleteTarget, sessionList, resetDialog, currentSessionId]);
 
-  // ===== Insert AI content into book =====
-  const handleInsertToBook = useCallback(async (content: string) => {
-    if (!activeBook?.id || !content) return;
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}`);
-      if (!res.ok) return;
-      const json = await res.json();
-      if (!json.success) return;
-      const book = json.data;
-      const vols = book?.volumes || [];
-      const firstVol = vols.length > 0 ? vols[0] : null;
-      const chapterRes = await fetch(`${API_BASE}/api/v1/writing/${activeBook.id}/chapters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: "AI 生成内容",
-          content: content,
-          volumeId: firstVol?.id || null,
-        }),
-      });
-      const chJson = await chapterRes.json();
-      if (chJson.success) {
-        Alert.alert("插入成功", `已将 AI 内容插入到《${activeBook.title || activeBook.name}》`);
-      }
-    } catch (e) {
-      Alert.alert("插入失败", "无法连接到服务器");
-    }
-  }, [activeBook]);
-
-  // ===== Regenerate last AI response =====
-  const handleRegenerate = useCallback((msgIndex: number) => {
-    // Find the last user message before this AI response
-    const prevMessages = messages.slice(0, msgIndex);
-    let lastUserIdx = prevMessages.length - 1;
-    while (lastUserIdx >= 0 && prevMessages[lastUserIdx]?.role !== "user") {
-      lastUserIdx--;
-    }
-    const userMsg = prevMessages[lastUserIdx]?.role === "user" ? prevMessages[lastUserIdx].content : null;
-    if (!userMsg) return;
-
-    // Remove this AI message and regenerate
-    setMessages(prev => prev.slice(0, msgIndex));
-    setRegeneratingIndex(msgIndex);
-    sendFreeChat(userMsg);
-    setRegeneratingIndex(null);
-  }, [messages, sendFreeChat]);
-
-  // ===== Render =====
-
-  // ===== Build session items for render =====
-  const curSid = sessionList.length > 0 ? sessionList[0].id : "new";
-  const sessionItems: React.ReactNode[] = [];
+  // ===== Build session items =====
+  const curSid = currentSessionId;
   const sessionsToShow = sessionList.slice(0, 8);
-  for (let i = 0; i < sessionsToShow.length; i++) {
-    const s = sessionsToShow[i];
+  const sessionItems = sessionsToShow.map((s) => {
     const isActive = s.id === curSid;
     const dateStr = new Date(s.ts).toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-    sessionItems.push(
+    return (
       <TouchableOpacity
         key={s.id}
         className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 ${isActive ? "bg-indigo-50" : "active:bg-gray-50"}`}
@@ -699,44 +742,31 @@ export default function HomeScreen() {
       >
         <FontAwesome6 name="comment" size={14} color={isActive ? "#6366F1" : "#9CA3AF"} />
         <View className="flex-1">
-          <Text className={`text-sm ${isActive ? "text-indigo-600 font-medium" : "text-gray-600"}`} numberOfLines={1}>
-            {s.preview}
-          </Text>
+          <Text className={`text-sm ${isActive ? "text-indigo-600 font-medium" : "text-gray-600"}`} numberOfLines={1}>{s.preview}</Text>
           <Text className="text-xs text-gray-400 mt-0.5">{dateStr}</Text>
         </View>
-        <TouchableOpacity
-          className="w-7 h-7 rounded-lg items-center justify-center"
-          onPress={() => handleDeleteSession(s.id)}
-        >
+        <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center" onPress={() => handleDeleteSession(s.id)}>
           <FontAwesome6 name="trash-can" size={12} color="#EF4444" />
         </TouchableOpacity>
       </TouchableOpacity>
     );
-  }
+  });
 
   // ===== Render =====
   return (
     <View className="flex-1 bg-white overflow-hidden">
       {/* Top Bar */}
       <View className="flex-row items-center justify-between px-4 border-b border-gray-100" style={{ paddingTop: insets.top + 4, paddingBottom: 10 }}>
-        <TouchableOpacity
-          className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center"
-          onPress={() => setSidebarOpen(true)}
-        >
+        <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center" onPress={() => setSidebarOpen(true)}>
           <FontAwesome6 name="bars" size={18} color="#374151" />
         </TouchableOpacity>
-
         <View className="flex-row items-center gap-2">
           <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
             <FontAwesome6 name="robot" size={11} color="#6366F1" />
           </View>
           <Text className="text-sm font-medium text-gray-700">豆包 Seed 2.0</Text>
         </View>
-
-        <TouchableOpacity
-          className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center"
-          onPress={resetAll}
-        >
+        <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={resetDialog}>
           <FontAwesome6 name="plus" size={13} color="#6366F1" />
         </TouchableOpacity>
       </View>
@@ -752,10 +782,7 @@ export default function HomeScreen() {
         </Text>
         <View className="flex-row items-center gap-2">
           {activeBook && (
-            <TouchableOpacity
-              className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center"
-              onPress={(e) => { e.stopPropagation(); setActiveBook(null); }}
-            >
+            <TouchableOpacity className="w-6 h-6 rounded-full bg-gray-200 items-center justify-center" onPress={(e) => { e.stopPropagation(); setActiveBook(null); AsyncStorage.removeItem("active_book"); }}>
               <FontAwesome6 name="xmark" size={10} color="#6B7280" />
             </TouchableOpacity>
           )}
@@ -763,49 +790,50 @@ export default function HomeScreen() {
         </View>
       </TouchableOpacity>
 
+      {/* Active Skill Indicator */}
+      {activeSkill && (
+        <View className="flex-row items-center gap-2 px-4 py-2 bg-purple-50/80 border-b border-purple-100">
+          <FontAwesome6 name="bolt" size={12} color="#9333EA" />
+          <Text className="text-xs font-medium text-purple-700 flex-1">技能模式：{activeSkill.name}</Text>
+          <TouchableOpacity onPress={() => setActiveSkill(null)}>
+            <FontAwesome6 name="xmark" size={12} color="#9333EA" />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Messages Area */}
-      <ScrollView
-        ref={scrollRef}
-        className="flex-1 px-4 pt-4"
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-      >
+      <ScrollView ref={scrollRef} className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
         {messages.map((msg, i) => (
           <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-            {/* AI message */}
             {msg.role === "ai" && (
               <View className="w-full">
                 <View className="flex-row gap-2 max-w-[90%]">
                   <View className="w-8 h-8 rounded-full bg-indigo-100 items-center justify-center mt-1 shrink-0">
                     <FontAwesome6 name="robot" size={14} color="#6366F1" />
                   </View>
-                  <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
-                    <MarkdownContent content={msg.content} />
-                  </View>
+                  {msg.step === "welcome" ? (
+                    <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
+                      <MarkdownContent content={msg.content} />
+                    </View>
+                  ) : (
+                    <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
+                      <MarkdownContent content={msg.content} />
+                    </View>
+                  )}
                 </View>
-                {/* Action buttons for AI messages (not the first welcome message) */}
-                {i > 0 && (
+                {/* Action buttons */}
+                {i > 0 && msg.role === "ai" && !isAiThinking && (
                   <View className="flex-row gap-1.5 pl-10 mt-1.5">
                     <TouchableOpacity
                       className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-gray-100 active:bg-gray-200"
-                      onPress={() => {
-                        // Follow-up - copy the AI message content as context
-                        setInputText("继续说说：" + msg.content.slice(0, 50) + (msg.content.length > 50 ? "..." : ""));
-                      }}
+                      onPress={() => setInputText("继续说说：" + msg.content.slice(0, 50) + (msg.content.length > 50 ? "..." : ""))}
                     >
                       <FontAwesome6 name="comment-dots" size={10} color="#6B7280" />
                       <Text className="text-xs text-gray-600 font-medium">追问</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       className="flex-row items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-50 active:bg-blue-100"
-                      onPress={() => {
-                        // Insert into active book (or show book picker)
-                        if (activeBook?.id) {
-                          handleInsertToBook(msg.content);
-                        } else {
-                          setShowBookPicker(true);
-                        }
-                      }}
+                      onPress={() => handleOpenInsert(msg.content)}
                     >
                       <FontAwesome6 name="book-medical" size={10} color="#3B82F6" />
                       <Text className="text-xs text-blue-600 font-medium">插入书籍</Text>
@@ -821,8 +849,6 @@ export default function HomeScreen() {
                 )}
               </View>
             )}
-
-            {/* User message */}
             {msg.role === "user" && (
               <View className="bg-indigo-500 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%]">
                 <Text className="text-sm text-white leading-6 flex-shrink flex-wrap">{msg.content}</Text>
@@ -831,7 +857,7 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        {/* Streaming content */}
+        {/* Streaming */}
         {isAiThinking && streamContent.length > 0 && (
           <View className="mb-4 items-start">
             <View className="flex-row gap-2 max-w-[90%]">
@@ -845,7 +871,7 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* AI thinking indicator */}
+        {/* Thinking */}
         {isAiThinking && streamContent.length === 0 && (
           <View className="mb-4 items-start">
             <View className="flex-row gap-2 max-w-[88%]">
@@ -862,16 +888,12 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== Coze-style Suggestion Bars (only when idle) ===== */}
+        {/* Suggestions */}
         {!isAiThinking && messages.length <= 1 && (
           <View className="mb-4">
             <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
             {SUGGESTIONS.map((s, i) => (
-              <TouchableOpacity
-                key={i}
-                className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-gray-100 active:bg-gray-50"
-                onPress={() => setInputText(s.title)}
-              >
+              <TouchableOpacity key={i} className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-gray-100 active:bg-gray-50" onPress={() => setInputText(s.title)}>
                 <View className="w-9 h-9 rounded-xl bg-indigo-50 items-center justify-center mr-3">
                   <FontAwesome6 name={s.icon as any} size={15} color="#6366F1" />
                 </View>
@@ -885,40 +907,16 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* ===== Book Created (from free chat) ===== */}
-        {showNewBookBtn && pendingBookData && (
-          <View className="mb-4 pl-10">
-            <View className="bg-green-50 rounded-2xl p-4 border border-green-200">
-              <Text className="text-sm font-semibold text-green-800 mb-1">作品已创建</Text>
-              <Text className="text-sm text-green-700">《{pendingBookData.bookTitle}》已创建，共 {pendingBookData.chaptersCount} 章</Text>
-            </View>
-            <TouchableOpacity
-              className="bg-green-500 rounded-xl py-2.5 items-center mt-2"
-              onPress={() => {
-                if (pendingBookData?.bookId) router.push("/detail", { id: pendingBookData.bookId });
-              }}
-            >
-              <Text className="text-sm text-white font-medium">查看作品</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Bottom spacing */}
         <View className="h-4" />
       </ScrollView>
 
-      {/* Input Bar - ALWAYS visible */}
+      {/* Input Bar */}
       <View className="border-t border-gray-100 px-4 pt-2 pb-4 bg-white">
-        {/* Quick chips (when idle) */}
         {!isAiThinking && messages.length <= 1 && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
             <View className="flex-row gap-2">
               {INSPIRATION_CHIPS.map((chip, i) => (
-                <TouchableOpacity
-                  key={i}
-                  className="bg-gray-50 rounded-full px-3.5 py-1.5 border border-gray-200"
-                  onPress={() => setInputText(chip)}
-                >
+                <TouchableOpacity key={i} className="bg-gray-50 rounded-full px-3.5 py-1.5 border border-gray-200" onPress={() => setInputText(chip)}>
                   <Text className="text-xs text-gray-500">{chip}</Text>
                 </TouchableOpacity>
               ))}
@@ -927,30 +925,49 @@ export default function HomeScreen() {
         )}
 
         <View className="flex-row items-end gap-2">
-          {/* File upload button */}
-          <TouchableOpacity
-            className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center border border-gray-200"
-            onPress={handleFileUpload}
-            disabled={isAiThinking}
-          >
+          <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center border border-gray-200" onPress={async () => {
+            try {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: ["text/plain", "text/markdown", "application/pdf"],
+                copyToCacheDirectory: true,
+              });
+              if (result.canceled || !result.assets?.[0]) return;
+              const file = result.assets[0];
+              const formData = new FormData();
+              formData.append("file", { uri: file.uri, name: file.name || "file.txt", type: file.mimeType || "text/plain" } as any);
+              addMessage("user", `[上传文件] ${file.name}`);
+              setIsAiThinking(true);
+              setStreamContent("正在读取文件...");
+              const res = await fetch(`${API_BASE}/api/v1/writing/upload`, { method: "POST", body: formData });
+              const json = await res.json();
+              if (json.success) {
+                const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${json.data.content.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
+                setInputText(text);
+                setIsAiThinking(false);
+                setStreamContent("");
+                setTimeout(() => sendFreeChat(text), 100);
+              } else {
+                setIsAiThinking(false);
+                addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
+              }
+            } catch (e: any) {
+              setIsAiThinking(false);
+              addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
+            }
+          }} disabled={isAiThinking}>
             <FontAwesome6 name="paperclip" size={15} color={isAiThinking ? "#CBD5E1" : "#64748B"} />
           </TouchableOpacity>
 
-          {/* @ Skill button */}
-          <TouchableOpacity
-            className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200"
-            onPress={() => setShowSkillPicker(true)}
-          >
+          <TouchableOpacity className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200" onPress={() => setShowSkillPicker(true)}>
             <FontAwesome6 name="at" size={15} color="#9333EA" />
           </TouchableOpacity>
 
-          {/* Text input */}
           <View className="flex-1 bg-gray-50 rounded-2xl border border-gray-200 flex-row items-center px-3">
             <TextInput
               className="flex-1 py-2.5 text-gray-900 text-sm max-h-20 leading-5"
               value={inputText}
               onChangeText={setInputText}
-              placeholder={isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
+              placeholder={activeSkill ? `输入内容以使用 [${activeSkill.name}] 技能...` : isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
               placeholderTextColor="#94A3B8"
               multiline
               editable={!isAiThinking}
@@ -959,7 +976,6 @@ export default function HomeScreen() {
             />
           </View>
 
-          {/* Send button */}
           <TouchableOpacity
             className={`w-9 h-9 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? "bg-indigo-500" : "bg-gray-200"}`}
             onPress={handleSend}
@@ -971,117 +987,54 @@ export default function HomeScreen() {
       </View>
 
       {/* Modals */}
-      <SkillPickerModal
-        visible={showSkillPicker}
-        onSelect={(skill) => {
-          setInputText((prev) => (prev ? prev + " @" + skill : "@" + skill));
+      <SkillPickerModal visible={showSkillPicker} skills={skills} onSelect={handleSkillSelect} onClose={() => setShowSkillPicker(false)} />
+      <BookPickerModal visible={showBookPicker} books={books} selectedId={activeBook?.id || null} onSelect={(book) => {
+        setActiveBook(book);
+        AsyncStorage.setItem("active_book", JSON.stringify(book));
+      }} onClose={() => setShowBookPicker(false)} />
+
+      {/* Insert Modal */}
+      <ChapterSelectorModal
+        visible={showChapterModal}
+        bookId={activeBook?.id || ""}
+        chapterTitle={pendingInsertTitle}
+        content={pendingInsertContent}
+        onInsert={(chapterId, title) => {
+          handleInsertToBook(pendingInsertContent, title, chapterId);
+          setShowChapterModal(false);
         }}
-        onClose={() => setShowSkillPicker(false)}
+        onClose={() => setShowChapterModal(false)}
       />
 
-      <BookPickerModal
-        visible={showBookPicker}
-        books={books}
-        selectedId={activeBook?.id || null}
-        onSelect={(book) => {
-          setActiveBook(book);
-          AsyncStorage.setItem("active_book", JSON.stringify(book)).catch(() => {});
-        }}
-        onClose={() => setShowBookPicker(false)}
-      />
-
+      {/* Delete Confirm */}
       <ConfirmModal
-        visible={showConfirm}
-        title={confirmTitle}
-        message={confirmMsg}
-        onConfirm={handleConfirm}
-        onClose={() => setShowConfirm(false)}
+        visible={showDeleteConfirm}
+        title="删除对话"
+        message="确定要删除这个对话记录吗？此操作不可恢复。"
+        confirmText="删除"
+        confirmColor="#EF4444"
+        onConfirm={confirmDeleteSession}
+        onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null); }}
       />
 
-      {/* Delete History Confirm Modal */}
-      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
-        <TouchableOpacity className="flex-1 bg-black/50 justify-center px-8" activeOpacity={1} onPress={() => setShowDeleteConfirm(false)}>
-          <View className="bg-white rounded-2xl p-6 items-center" onStartShouldSetResponder={() => true}>
-            <View className="w-12 h-12 rounded-full bg-red-50 items-center justify-center mb-3">
-              <FontAwesome6 name="trash-can" size={22} color="#EF4444" />
+      {/* Sidebar */}
+      <Modal visible={sidebarOpen} transparent animationType="fade" onRequestClose={() => setSidebarOpen(false)}>
+        <TouchableOpacity className="flex-1 bg-black/40" activeOpacity={1} onPress={() => setSidebarOpen(false)}>
+          <View className="w-[75%] h-full bg-white pt-12" onStartShouldSetResponder={() => true}>
+            <View className="px-4 mb-4">
+              <Text className="text-lg font-bold text-gray-900">对话历史</Text>
+              <Text className="text-xs text-gray-400 mt-1">共 {sessionList.length} 条记录</Text>
             </View>
-            <Text className="text-lg font-bold text-gray-900 mb-2">删除确认</Text>
-            <Text className="text-sm text-gray-500 text-center mb-5">确定删除该对话？删除后无法恢复。</Text>
-            <View className="flex-row gap-3 w-full">
-              <TouchableOpacity className="flex-1 bg-gray-100 rounded-xl py-3 items-center" onPress={() => setShowDeleteConfirm(false)}>
-                <Text className="text-gray-600 font-medium">取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity className="flex-1 bg-red-500 rounded-xl py-3 items-center" onPress={confirmDeleteSession}>
-                <Text className="text-white font-medium">删除</Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView className="flex-1 px-3">
+              {sessionList.length === 0 ? (
+                <View className="items-center py-10">
+                  <FontAwesome6 name="comments" size={28} color="#D1D5DB" />
+                  <Text className="text-sm text-gray-400 mt-3">暂无对话记录</Text>
+                </View>
+              ) : sessionItems}
+            </ScrollView>
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      {/* Sidebar Drawer */}
-      <Modal visible={sidebarOpen} transparent animationType="none" onRequestClose={() => setSidebarOpen(false)}>
-        <TouchableWithoutFeedback onPress={() => setSidebarOpen(false)}>
-          <View className="flex-1 bg-black/40">
-            <TouchableWithoutFeedback>
-              <View className="w-[280px] h-full bg-white" style={{ paddingTop: insets.top }}>
-                {/* Sidebar Header */}
-                <View className="px-5 py-4 border-b border-gray-100">
-                  <View className="flex-row items-center gap-3 mb-4">
-                    <View className="w-10 h-10 rounded-full bg-indigo-100 items-center justify-center">
-                      <FontAwesome6 name="pen-fancy" size={18} color="#6366F1" />
-                    </View>
-                    <View>
-                      <Text className="text-base font-bold text-gray-900">AI 创作</Text>
-                      <Text className="text-xs text-gray-400">创意写作助手</Text>
-                    </View>
-                  </View>
-                  <TouchableOpacity
-                    className="bg-indigo-500 rounded-xl py-2.5 items-center"
-                    onPress={() => { setSidebarOpen(false); resetAll(); }}
-                  >
-                    <Text className="text-sm text-white font-medium">新对话</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Sidebar Menu Items - Chat History */}
-                <ScrollView className="flex-1 px-3 py-3">
-                  <TouchableOpacity className="flex-row items-center gap-3 px-3 py-3 rounded-xl bg-indigo-50 mb-1">
-                    <FontAwesome6 name="message" size={16} color="#6366F1" />
-                    <Text className="text-sm font-medium text-indigo-600">当前对话</Text>
-                  </TouchableOpacity>
-
-                  {/* Recent Sessions */}
-                  {sessionList.length > 0 && (
-                    <>
-                      <View className="border-t border-gray-100 my-3" />
-                      <Text className="text-xs font-medium text-gray-400 px-3 mb-2">最近对话</Text>
-                      {sessionItems}
-                    </>
-                  )}
-                </ScrollView>
-
-                {/* Sidebar Footer */}
-                <View className="px-5 py-3 border-t border-gray-100 gap-1">
-                  <TouchableOpacity
-                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
-                    onPress={() => { setSidebarOpen(false); router.push('/'); }}
-                  >
-                    <FontAwesome6 name="book" size={16} color="#6B7280" />
-                    <Text className="text-sm text-gray-600">我的作品</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    className="flex-row items-center gap-3 px-3 py-2.5 rounded-xl active:bg-gray-50"
-                    onPress={() => { setSidebarOpen(false); router.push('/'); }}
-                  >
-                    <FontAwesome6 name="compass" size={16} color="#6B7280" />
-                    <Text className="text-sm text-gray-600">AI 工坊</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );
