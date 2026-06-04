@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
+import RichEditor from "@/components/RichEditor";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
 import * as Clipboard from "expo-clipboard";
@@ -179,6 +180,7 @@ export default function EditorScreen() {
   // === 大纲/角色/设定 ===
   const [assistModalVisible, setAssistModalVisible] = useState(false);
   const [assistType, setAssistType] = useState<"outline" | "characters" | "settings">("outline");
+  const [outlineHtml, setOutlineHtml] = useState("");
 
   // ===== 初始化 =====
   useEffect(() => {
@@ -200,6 +202,7 @@ export default function EditorScreen() {
         if (json.success) {
           setBookTitle(json.data.title);
           setBookOutline(json.data.outline || "");
+          setOutlineHtml(json.data.outline || "");
           setChapterList((json.data.volumes || []).flatMap((v: any) => (v.chapters || []).map((c: any) => ({ id: c.id, title: c.title }))));
         }
       } catch (e) {}
@@ -261,6 +264,24 @@ export default function EditorScreen() {
   // ===== 撤销 =====
   const contentSnapshot = useRef(content);
   useEffect(() => { contentSnapshot.current = content; }, [content]);
+
+  // ===== 保存大纲 =====
+  const [savingOutline, setSavingOutline] = useState(false);
+  const handleSaveOutline = useCallback(async () => {
+    if (!bookId || !outlineHtml) return;
+    setSavingOutline(true);
+    try {
+      await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outline: outlineHtml }),
+      });
+      setBookOutline(outlineHtml);
+    } catch (e) {
+      console.error("保存大纲失败", e);
+    }
+    setSavingOutline(false);
+  }, [bookId, outlineHtml]);
 
   const handleUndo = () => {
     if (undoStack.length === 0) return;
@@ -535,6 +556,7 @@ export default function EditorScreen() {
     accent: "#6366F1",
     accentBg: nightMode ? "#2D2D4A" : "#EEF2FF",
     inputBg: nightMode ? "#1E1E38" : "#F5F0E8",
+    muted: nightMode ? "#6B6B8A" : "#A89880",
     shadow: nightMode ? "transparent" : "rgba(99,102,241,0.06)",
   };
 
@@ -1247,8 +1269,22 @@ export default function EditorScreen() {
                 </View>
 
                 {assistType === "outline" && (
-                  <View className="rounded-2xl p-5 min-h-[120px]" style={{ backgroundColor: nightMode ? "#1E1E38" : "#FFFBEB" }}>
-                    <Text className="text-sm leading-relaxed" style={{ color: theme.text }} selectable>{bookOutline || "暂无大纲，请在书籍详情页创建"}</Text>
+                  <View>
+                    <RichEditor
+                      initialContent={outlineHtml}
+                      onChange={setOutlineHtml}
+                      nightMode={nightMode}
+                      style={{ marginBottom: 12 }}
+                    />
+                    <TouchableOpacity
+                      onPress={handleSaveOutline}
+                      disabled={savingOutline}
+                      className="py-3 rounded-2xl items-center"
+                      style={{ backgroundColor: savingOutline ? "#9CA3AF" : "#6366F1" }}>
+                      <Text className="text-sm font-semibold text-white">
+                        {savingOutline ? "保存中..." : "保存大纲"}
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 )}
                 {assistType === "characters" && (
