@@ -447,13 +447,20 @@ export default function ProfileScreen() {
                     if ((item as any).isLogout) {
                       Alert.alert("退出登录", "确定要退出登录吗？", [
                         { text: "取消", style: "cancel" },
-                        { text: "退出", style: "destructive", onPress: () => { logout(); expoRouter.replace("/login"); } },
+                        { text: "退出", style: "destructive", onPress: async () => {
+                          try {
+                            await logout();
+                            expoRouter.replace("/login");
+                          } catch (e) {
+                            console.error("退出登录失败", e);
+                          }
+                        }},
                       ]);
                     } else {
                       item.onPress?.();
                     }
                   }}
-                  activeOpacity={item.onPress ? 0.6 : 1}
+                  activeOpacity={0.6}
                 >
                   <View className="w-8 h-8 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${item.color}15` }}>
                     <FontAwesome6 name={item.icon as any} size={14} color={item.color} />
