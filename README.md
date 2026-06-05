@@ -1,4 +1,4 @@
-# Expo App + Express.js
+# Expo App + Express.js - AI 网文创作工具
 
 ## 目录结构规范（严格遵循）
 
@@ -259,3 +259,4 @@ import { Screen } from '../../../components/Screen';
 ## 本地开发
 
 `coze dev`：用来首次启动前后端服务，也可以用来重启前后端服务（该命令会先尝试杀掉占用端口的进程，再启动服务）
+
