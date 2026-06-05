@@ -117,6 +117,7 @@ export default function ProfileScreen() {
 
   // 数据统计弹窗
   const [showDataStats, setShowDataStats] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -220,13 +221,6 @@ export default function ProfileScreen() {
           saveAISettings({ skills: updated });
         },
       },
-    ]);
-  };
-
-  const handleLogout = () => {
-    Alert.alert("退出登录", "确定要退出登录吗？", [
-      { text: "取消", style: "cancel" },
-      { text: "退出", style: "destructive", onPress: () => { logout(); expoRouter.replace("/login"); } },
     ]);
   };
 
@@ -445,17 +439,7 @@ export default function ProfileScreen() {
                   className={`flex-row items-center px-4 py-3.5 ${i !== section.items.length - 1 ? "border-b border-gray-50" : ""}`}
                   onPress={() => {
                     if ((item as any).isLogout) {
-                      Alert.alert("退出登录", "确定要退出登录吗？", [
-                        { text: "取消", style: "cancel" },
-                        { text: "退出", style: "destructive", onPress: async () => {
-                          try {
-                            await logout();
-                            expoRouter.replace("/login");
-                          } catch (e) {
-                            console.error("退出登录失败", e);
-                          }
-                        }},
-                      ]);
+                      setShowLogoutModal(true);
                     } else {
                       item.onPress?.();
                     }
@@ -913,6 +897,63 @@ export default function ProfileScreen() {
               </View>
             </TouchableOpacity>
           </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ===== 退出登录确认弹窗 ===== */}
+      <Modal visible={showLogoutModal} transparent animationType="fade">
+        <TouchableOpacity
+          style={{ flex: 1 }}
+          activeOpacity={1}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <View className="flex-1 items-center justify-center" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
+            <TouchableOpacity activeOpacity={1} onPress={() => undefined}>
+              <View
+                className="bg-white rounded-3xl p-6 mx-8 w-72"
+                style={{
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 24,
+                  elevation: 20,
+                }}
+              >
+                {/* 图标 */}
+                <View className="w-12 h-12 rounded-2xl bg-red-50 items-center justify-center self-center mb-4">
+                  <FontAwesome6 name="right-from-bracket" size={20} color="#EF4444" />
+                </View>
+
+                <Text className="text-lg font-bold text-gray-800 text-center mb-2">退出登录</Text>
+                <Text className="text-sm text-gray-500 text-center mb-6">确定要退出登录吗？</Text>
+
+                <View className="flex-row gap-3">
+                  <TouchableOpacity
+                    className="flex-1 py-3 rounded-xl items-center"
+                    style={{ backgroundColor: "#F3F4F6" }}
+                    onPress={() => setShowLogoutModal(false)}
+                  >
+                    <Text className="text-sm font-medium text-gray-600">取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    className="flex-1 py-3 rounded-xl items-center"
+                    style={{ backgroundColor: "#EF4444" }}
+                    onPress={async () => {
+                      setShowLogoutModal(false);
+                      try {
+                        await logout();
+                        expoRouter.replace("/login");
+                      } catch (e) {
+                        console.error("退出登录失败", e);
+                      }
+                    }}
+                  >
+                    <Text className="text-sm font-medium text-white">退出</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </View>
         </TouchableOpacity>
       </Modal>
     </Screen>
