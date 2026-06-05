@@ -11,9 +11,17 @@ interface RichEditorProps {
 }
 
 /**
- * 跨平台富文本编辑器
- * - Web: 直接在 DOM 中加载 Quill.js
- * - Native (iOS/Android): 通过 WebView 嵌入 Quill
+ * 跨平台富文本编辑器（Quill.js 双引擎）
+ *
+ * 引擎选择（自动）：
+ * - 🌐 Web 端 → 在 DOM 中动态加载 Quill.js，直接绑定编辑器实例
+ * - 📱 Native 端 → 通过 react-native-webview 嵌入 Quill HTML 页面
+ *
+ * 功能特性：
+ * - 完整工具栏：H1/H2/加粗/斜体/下划线/删除线/引用/有序列表/无序列表/清除格式
+ * - 通过 onChange 回调 + contentRef 模式确保内容双向同步
+ * - 支持日间/夜间主题自动适配
+ * - forwardRef + useImperativeHandle 暴露 getContent() 方法供父组件直接读取
  */
 export default function RichEditor(props: RichEditorProps) {
   if (Platform.OS === "web") {

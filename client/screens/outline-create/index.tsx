@@ -1,3 +1,13 @@
+/**
+ * @file 大纲创建/编辑页面
+ * @description 使用 Quill 富文本编辑器编写创作大纲，支持新增和编辑两种模式
+ *
+ * - 新建：跳转时只传 bookId，无 outlineId
+ * - 编辑：跳转时传 bookId + outlineId，自动回填标题和内容
+ * - 保存时写入 /api/v1/writing/:id/outline-items 接口
+ * - 保存后自动返回上一页
+ */
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Platform, KeyboardAvoidingView } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";

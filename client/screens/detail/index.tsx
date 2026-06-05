@@ -1,3 +1,18 @@
+/**
+ * @file 作品详情页
+ * @description 展示单部作品的完整信息，包含四个子 Tab 页：
+ *
+ * - 章节 Tab：展示卷/章节树，支持展开收起，提供添加/删除/重命名操作
+ * - 大纲 Tab：展示大纲列表+AI生成大纲，支持新建/编辑/删除大纲和细纲
+ * - 设定 Tab：展示/编辑世界观设定信息
+ * - 灵感 Tab：灵感记录列表
+ *
+ * 大纲管理要点：
+ * - 大纲（type:"outline"）的新建/编辑跳转至 /outline-create 使用 Quill 编辑器
+ * - 细纲（type:"summary"）在 Modal 中完成编辑
+ * - 数据通过 GET/PUT /api/v1/writing/:id/outline-items 持久化
+ */
+
 import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
