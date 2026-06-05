@@ -280,9 +280,28 @@ router.post("/guest", async (_req: Request, res: Response) => {
   }
 });
 
+// ===== In-Memory OTP Store =====
+interface OtpEntry {
+  code: string;
+  expiresAt: number;
+  lastSentAt: number;
+  used: boolean;
+}
+const otpStore = new Map<string, OtpEntry>();
+
+// 定时清理过期的 OTP（每 5 分钟执行一次）
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of otpStore.entries()) {
+    if (now > entry.expiresAt || entry.used) {
+      otpStore.delete(key);
+    }
+  }
+}, 5 * 60 * 1000);
+
 /**
  * POST /api/v1/auth/send-otp
- * 发送手机验证码（占位）
+ * 发送手机验证码
  */
 router.post("/send-otp", async (req: Request, res: Response) => {
   try {
@@ -291,9 +310,33 @@ router.post("/send-otp", async (req: Request, res: Response) => {
       res.status(400).json({ error: "手机号不能为空" });
       return;
     }
-    // 占位实现 - 需要 Supabase 开启手机号认证并配置 SMS 提供商
-    console.log(`[AUTH] Send OTP to ${phone}: 验证码为 123456`);
-    res.json({ success: true, message: "验证码已发送", code: "123456" });
+
+    // 验证手机号格式（简单校验）
+    if (!/^1\d{10}$/.test(phone)) {
+      res.status(400).json({ error: "手机号格式不正确" });
+      return;
+    }
+
+    const now = Date.now();
+    const existing = otpStore.get(phone);
+
+    // 限制发送频率：同一手机号 60 秒内只能发一次
+    if (existing && (now - existing.lastSentAt) < 60 * 1000) {
+      const remaining = Math.ceil(60 - (now - existing.lastSentAt) / 1000);
+      res.status(429).json({ error: `发送过于频繁，请 ${remaining} 秒后再试` });
+      return;
+    }
+
+    // 生成随机 6 位数字验证码
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = now + 5 * 60 * 1000; // 5 分钟过期
+
+    otpStore.set(phone, { code, expiresAt, lastSentAt: now, used: false });
+
+    console.log(`[AUTH] OTP sent to ${phone}: ${code}`);
+    // 实际生产环境应接入 SMS 服务商发送短信
+    // 开发阶段将验证码返回给前端便于调试
+    res.json({ success: true, message: "验证码已发送" });
   } catch (err: any) {
     console.error("[AUTH] Send OTP error:", err);
     res.status(500).json({ error: err.message || "发送验证码失败" });
@@ -302,7 +345,7 @@ router.post("/send-otp", async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/auth/verify-otp
- * 验证手机验证码（占位）
+ * 验证手机验证码
  */
 router.post("/verify-otp", async (req: Request, res: Response) => {
   try {
@@ -311,12 +354,35 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
       res.status(400).json({ error: "手机号和验证码不能为空" });
       return;
     }
-    
-    // 占位实现 - 验证码总是 123456
-    if (code !== "123456") {
+
+    const entry = otpStore.get(phone);
+    if (!entry) {
+      res.status(400).json({ error: "请先获取验证码" });
+      return;
+    }
+
+    // 检查是否已使用（防重复使用）
+    if (entry.used) {
+      otpStore.delete(phone);
+      res.status(400).json({ error: "验证码已使用，请重新获取" });
+      return;
+    }
+
+    // 检查是否过期
+    if (Date.now() > entry.expiresAt) {
+      otpStore.delete(phone);
+      res.status(400).json({ error: "验证码已过期，请重新获取" });
+      return;
+    }
+
+    // 校验验证码
+    if (code !== entry.code) {
       res.status(400).json({ error: "验证码错误" });
       return;
     }
+
+    // 验证成功后立即标记为已使用（不可重复使用）
+    entry.used = true;
 
     // 查找或创建用户
     const [existingUser] = await db.select().from(users).where(eq(users.email, phone));

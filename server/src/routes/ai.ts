@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { LLMClient, ImageGenerationClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import type { LLMConfig } from "coze-coding-dev-sdk";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -53,7 +54,7 @@ async function streamLLM(
 
 // ============ 1. AI角色库 ============
 // POST /api/v1/ai/character
-router.post("/character", async (req: Request, res: Response) => {
+router.post("/character", requireAuth, async (req: Request, res: Response) => {
   const { genre, style, count } = req.body;
   const systemPrompt = `你是顶级网文角色创作专家。根据用户提供的类型和风格，生成${count || 3}个原创小说角色。
 
@@ -75,7 +76,7 @@ router.post("/character", async (req: Request, res: Response) => {
 
 // ============ 2. 大纲助手 ============
 // POST /api/v1/ai/outline
-router.post("/outline", async (req: Request, res: Response) => {
+router.post("/outline", requireAuth, async (req: Request, res: Response) => {
   const { title, genre, description, detail } = req.body;
   const systemPrompt = `你是顶级网文大纲创作专家。根据用户提供的小说信息，生成一份完整的故事大纲。
 
@@ -95,7 +96,7 @@ router.post("/outline", async (req: Request, res: Response) => {
 
 // ============ 3. AI检测 ============
 // POST /api/v1/ai/detect
-router.post("/detect", async (req: Request, res: Response) => {
+router.post("/detect", requireAuth, async (req: Request, res: Response) => {
   const { text } = req.body;
   const systemPrompt = `你是一位专业的AI生成文本检测专家。请对用户提交的文本进行专业分析，判断是否由AI生成。
 
@@ -114,7 +115,7 @@ router.post("/detect", async (req: Request, res: Response) => {
 
 // ============ 4. 人物关系网 ============
 // POST /api/v1/ai/relationship
-router.post("/relationship", async (req: Request, res: Response) => {
+router.post("/relationship", requireAuth, async (req: Request, res: Response) => {
   const { title, genre, characters } = req.body;
   const systemPrompt = `你是小说人物关系设计专家。根据用户提供的小说信息和角色列表，构建完整的人物关系网络。
 
@@ -134,7 +135,7 @@ router.post("/relationship", async (req: Request, res: Response) => {
 
 // ============ 5. 封面生成器 ============
 // POST /api/v1/ai/cover
-router.post("/cover", async (req: Request, res: Response) => {
+router.post("/cover", requireAuth, async (req: Request, res: Response) => {
   try {
     const { title, genre, style, description } = req.body;
     const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);
@@ -165,7 +166,7 @@ router.post("/cover", async (req: Request, res: Response) => {
 
 // ============ 6. 地图生成器 ============
 // POST /api/v1/ai/map
-router.post("/map", async (req: Request, res: Response) => {
+router.post("/map", requireAuth, async (req: Request, res: Response) => {
   try {
     const { worldName, genre, features } = req.body;
     const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);
@@ -192,7 +193,7 @@ router.post("/map", async (req: Request, res: Response) => {
 
 // ============ 7. 图片生成 ============
 // POST /api/v1/ai/generate-image
-router.post("/generate-image", async (req: Request, res: Response) => {
+router.post("/generate-image", requireAuth, async (req: Request, res: Response) => {
   try {
     const { prompt, style, aspectRatio } = req.body;
     const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);

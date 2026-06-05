@@ -4,6 +4,7 @@ import type { LLMConfig } from "coze-coding-dev-sdk";
 import multer from "multer";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { toCamelCase } from "../utils/case-transform.js";
+import { requireAuth, optionalAuth } from "../middleware/auth.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -70,14 +71,20 @@ router.get("/", async (_req: Request, res: Response) => {
   }
 });
 
-router.get("/:id", async (req: Request, res: Response) => {
+router.get("/:id", optionalAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
-    const { data, error } = await client
+    let query = client
       .from("books")
       .select("*")
       .eq("id", req.params.id)
-      .maybeSingle();
+
+    // If user is authenticated, only show their own books
+    if (req.user) {
+      query = query.eq("user_id", req.user.id);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw new Error(`查询书籍失败: ${error.message}`);
     if (!data) return res.status(404).json({ success: false, message: "未找到书籍" });
@@ -88,7 +95,7 @@ router.get("/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const { title, description, cover, coverImage, category, volumes } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
@@ -102,6 +109,7 @@ router.post("/", async (req: Request, res: Response) => {
       : [];
 
     const newBook = {
+      user_id: req.user!.id,
       title,
       category: category || "其他",
       status: "draft",
@@ -143,7 +151,7 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/writing/ai-generate - AI自动创建书籍
-router.post("/ai-generate", async (req: Request, res: Response) => {
+router.post("/ai-generate", requireAuth, async (req: Request, res: Response) => {
   try {
     const { topic } = req.body;
     if (!topic) return res.status(400).json({ success: false, message: "请输入创作主题" });
@@ -194,6 +202,7 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
     const chapters = bookData.volumes?.[0]?.chapters || [];
 
     const { data, error } = await sb.from("books").insert({
+      user_id: req.user!.id,
       title: bookData.title || topic,
       category: bookData.category || "其他",
       status: "draft",
@@ -226,7 +235,7 @@ router.post("/ai-generate", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id", async (req: Request, res: Response) => {
+router.put("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const updateData: Record<string, any> = { ...req.body };
@@ -262,6 +271,7 @@ router.put("/:id", async (req: Request, res: Response) => {
       .from("books")
       .update(updateData)
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .select()
       .single();
 
@@ -274,13 +284,14 @@ router.put("/:id", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("books")
       .delete()
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .select()
       .single();
 
@@ -294,13 +305,14 @@ router.delete("/:id", async (req: Request, res: Response) => {
 });
 
 // === Volumes CRUD ===
-router.post("/:id/volumes", async (req: Request, res: Response) => {
+router.post("/:id/volumes", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -334,13 +346,14 @@ router.post("/:id/volumes", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
+router.put("/:id/volumes/:volumeId", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -369,13 +382,14 @@ router.put("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
+router.delete("/:id/volumes/:volumeId", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -389,7 +403,8 @@ router.delete("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
     const { error } = await client
       .from("books")
       .update({ volumes: volumes })
-      .eq("id", req.params.id);
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id);
 
     if (error) throw new Error(`删除卷失败: ${error.message}`);
     res.json({ success: true });
@@ -400,13 +415,14 @@ router.delete("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
 });
 
 // === Chapters CRUD ===
-router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Response) => {
+router.post("/:id/volumes/:volumeId/chapters", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -443,7 +459,7 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
 });
 
 // POST /:id/chapters - 创建章节（自动选择卷）
-router.post("/:id/chapters", async (req: Request, res: Response) => {
+router.post("/:id/chapters", requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, content, volumeId } = req.body;
@@ -458,6 +474,7 @@ router.post("/:id/chapters", async (req: Request, res: Response) => {
       .from("books")
       .select("volumes")
       .eq("id", id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw fetchError;
@@ -514,7 +531,8 @@ router.post("/:id/chapters", async (req: Request, res: Response) => {
     const { error: updateError } = await client
       .from("books")
       .update({ volumes: updatedVolumes })
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", req.user!.id);
 
     if (updateError) throw updateError;
     res.json({ success: true, message: "章节已创建" });
@@ -552,13 +570,14 @@ router.get("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
+router.put("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -577,7 +596,8 @@ router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
     const { error } = await client
       .from("books")
       .update({ volumes: volumes })
-      .eq("id", req.params.id);
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id);
 
     if (error) throw new Error(`更新章节失败: ${error.message}`);
     res.json({ success: true, data: chapter });
@@ -587,13 +607,14 @@ router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
+router.delete("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -616,7 +637,8 @@ router.delete("/:id/chapters/:chapterId", async (req: Request, res: Response) =>
     const { error } = await client
       .from("books")
       .update({ volumes: volumes })
-      .eq("id", req.params.id);
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id);
 
     if (error) throw new Error(`删除章节失败: ${error.message}`);
     res.json({ success: true });
@@ -689,7 +711,7 @@ router.get("/:id/outline/export", async (req: Request, res: Response) => {
 });
 
 // === AI Dialogue (SSE) - Free-form chatting ===
-router.post("/ai-dialogue", async (req: Request, res: Response) => {
+router.post("/ai-dialogue", requireAuth, async (req: Request, res: Response) => {
   const { message, history, bookId, bookTitle } = req.body;
   if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
 
@@ -909,7 +931,7 @@ router.post("/ai-dialogue", async (req: Request, res: Response) => {
 });
 
 // === AI Generate Outline (SSE) - Structured outline generation ===
-router.post("/generate-outline", async (req: Request, res: Response) => {
+router.post("/generate-outline", requireAuth, async (req: Request, res: Response) => {
   const { inspiration, genre, audience, platform, length } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -1064,7 +1086,7 @@ xxx
 });
 
 // === AI Generate (Generic SSE) - 通用AI生成端点 ===
-router.post("/generate", async (req: Request, res: Response) => {
+router.post("/generate", requireAuth, async (req: Request, res: Response) => {
   const { prompt, topic, context, style, writingStyle, wordCount } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -1129,7 +1151,7 @@ router.post("/generate", async (req: Request, res: Response) => {
 });
 
 // === AI Generate Book Details (SSE) ===
-router.post("/generate-details", async (req: Request, res: Response) => {
+router.post("/generate-details", requireAuth, async (req: Request, res: Response) => {
   const { outline, volumes, genre, inspiration } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -1216,13 +1238,14 @@ router.get("/:id/outlines", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/outlines", async (req: Request, res: Response) => {
+router.put("/:id/outlines", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { error } = await client
       .from("books")
       .update({ outline: req.body.outline || "" })
-      .eq("id", req.params.id);
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id);
 
     if (error) throw new Error(`更新大纲失败: ${error.message}`);
     res.json({ success: true });
@@ -1251,9 +1274,18 @@ router.get("/:id/outline-items", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/outline-items", async (req: Request, res: Response) => {
+router.put("/:id/outline-items", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    // Verify book ownership
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+
     const contentStr = JSON.stringify(req.body.items || []);
     const { data: existing } = await client
       .from("outlines")
@@ -1292,9 +1324,18 @@ router.get("/:id/settings", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/settings", async (req: Request, res: Response) => {
+router.put("/:id/settings", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    // Verify book ownership
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+
     const { data: existing } = await client
       .from("user_settings")
       .select("id")
@@ -1338,9 +1379,18 @@ router.get("/:id/inspirations", async (req: Request, res: Response) => {
   }
 });
 
-router.put("/:id/inspirations", async (req: Request, res: Response) => {
+router.put("/:id/inspirations", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    // Verify book ownership
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+
     const { data: existing } = await client
       .from("inspirations")
       .select("id")
@@ -1367,7 +1417,7 @@ router.put("/:id/inspirations", async (req: Request, res: Response) => {
 });
 
 // === File Upload ===
-router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
+router.post("/upload", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
   try {
     const file = req.file;
     if (!file) {

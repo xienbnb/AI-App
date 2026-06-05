@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { toCamelCase } from "../utils/case-transform.js";
+import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
@@ -34,16 +35,17 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/community - 创建帖子
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { userName, title, content, tag } = req.body;
+    const { title, content, tag } = req.body;
     if (!title?.trim()) {
       return res.status(400).json({ success: false, message: "请输入标题" });
     }
 
     const client = getSupabaseClient();
     const { data, error } = await client.from("posts").insert({
-      user_name: userName || "匿名用户",
+      user_id: req.user!.id,
+      user_name: req.user!.nickname || req.user!.id,
       title: title.trim(),
       content: content || "",
       tag: tag || "B 全部",
@@ -113,19 +115,19 @@ router.get("/search", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/community/follow - 关注用户
-router.post("/follow", async (req: Request, res: Response) => {
+router.post("/follow", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { followerName, followingName } = req.body;
-    if (!followerName || !followingName) {
+    const { followingName } = req.body;
+    if (!followingName) {
       return res.status(400).json({ success: false, message: "参数不完整" });
     }
-    if (followerName === followingName) {
+    if (req.user!.nickname === followingName) {
       return res.status(400).json({ success: false, message: "不能关注自己" });
     }
 
     const client = getSupabaseClient();
     const { data, error } = await client.from("follows").insert({
-      follower_name: followerName,
+      follower_name: req.user!.nickname || req.user!.id,
       following_name: followingName,
     }).select().single();
 
@@ -145,17 +147,17 @@ router.post("/follow", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/community/follow - 取消关注
-router.delete("/follow", async (req: Request, res: Response) => {
+router.delete("/follow", requireAuth, async (req: Request, res: Response) => {
   try {
-    const { followerName, followingName } = req.body;
-    if (!followerName || !followingName) {
+    const { followingName } = req.body;
+    if (!followingName) {
       return res.status(400).json({ success: false, message: "参数不完整" });
     }
 
     const client = getSupabaseClient();
     const { error } = await client.from("follows")
       .delete()
-      .eq("follower_name", followerName)
+      .eq("follower_name", req.user!.nickname || req.user!.id)
       .eq("following_name", followingName);
 
     if (error) {
@@ -271,10 +273,10 @@ router.get("/:id/comments", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/community/:id/comments - 创建评论
-router.post("/:id/comments", async (req: Request, res: Response) => {
+router.post("/:id/comments", requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { userName, content, parentId } = req.body;
+    const { content, parentId } = req.body;
     if (!content?.trim()) {
       return res.status(400).json({ success: false, message: "请输入评论内容" });
     }
@@ -282,7 +284,8 @@ router.post("/:id/comments", async (req: Request, res: Response) => {
     const client = getSupabaseClient();
     const { data, error } = await client.from("comments").insert({
       post_id: id,
-      user_name: userName || "匿名用户",
+      user_id: req.user!.id,
+      user_name: req.user!.nickname || req.user!.id,
       content: content.trim(),
       parent_id: parentId || null,
     }).select().single();
@@ -300,14 +303,19 @@ router.post("/:id/comments", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/community/comments/:commentId - 删除评论
-router.delete("/comments/:commentId", async (req: Request, res: Response) => {
+router.delete("/comments/:commentId", requireAuth, async (req: Request, res: Response) => {
   try {
     const { commentId } = req.params;
     const client = getSupabaseClient();
 
-    const { data: comment } = await client.from("comments").select("post_id").eq("id", commentId).single();
+    const { data: comment } = await client.from("comments").select("post_id, user_id").eq("id", commentId).single();
     if (!comment) {
       return res.status(404).json({ success: false, message: "评论不存在" });
+    }
+
+    // 只能删除自己的评论
+    if ((comment as any).user_id !== req.user!.id) {
+      return res.status(403).json({ success: false, message: "无权删除他人评论" });
     }
 
     const { error } = await client.from("comments").delete().eq("id", commentId);
@@ -329,7 +337,7 @@ router.delete("/comments/:commentId", async (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/community/:id/like - 点赞
-router.put("/:id/like", async (req: Request, res: Response) => {
+router.put("/:id/like", requireAuth, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const client = getSupabaseClient();
