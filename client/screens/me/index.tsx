@@ -243,6 +243,8 @@ export default function ProfileScreen() {
     {
       title: "其他",
       items: [
+        { icon: "file-contract", label: "服务条款", color: "#8B5CF6", onPress: () => expoRouter.push("/tos") },
+        { icon: "shield-halved", label: "隐私政策", color: "#3B82F6", onPress: () => expoRouter.push("/privacy") },
         { icon: "circle-question", label: "帮助与反馈", color: "#10B981", onPress: () => undefined },
         { icon: "info", label: "关于应用", color: "#6B7280", onPress: () => undefined },
         ...(isAuthenticated

@@ -33,6 +33,8 @@ export default function RootLayout() {
           <Stack.Screen name="post-detail" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="ai-skills" options={{ title: "创作技能", animation: 'slide_from_right' }} />
           <Stack.Screen name="ai-knowledge" options={{ title: "知识库", animation: 'slide_from_right' }} />
+          <Stack.Screen name="tos" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="privacy" options={{ title: "", animation: 'slide_from_right' }} />
         </Stack>
         <Toast />
       </AuthGuard>
