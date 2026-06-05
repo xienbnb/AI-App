@@ -183,6 +183,29 @@ router.get("/me", async (req: Request, res: Response) => {
       return;
     }
 
+    // 游客令牌验证 (格式: guest_UUID_TIMESTAMP)
+    if (token.startsWith("guest_")) {
+      const parts = token.split("_");
+      if (parts.length >= 2) {
+        const guestId = parts[1];
+        const result = await db.select().from(users).where(eq(users.id, guestId)).limit(1);
+        if (result.length > 0) {
+          return res.json({
+            user: {
+              id: result[0].id,
+              email: result[0].email,
+              nickname: result[0].nickname,
+              avatar: result[0].avatar || "",
+              bio: result[0].bio || "",
+              isGuest: true,
+            },
+          });
+        }
+      }
+      return res.status(401).json({ error: "游客令牌无效" });
+    }
+
+
     // 验证 token
     const { url, anonKey } = getSupabaseCredentials();
     const anonClient = createClient(url, anonKey, {
@@ -217,6 +240,121 @@ router.get("/me", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Me error:", err);
     res.status(500).json({ error: err.message || "获取用户信息失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/guest
+ * 游客登录（无账号，快速体验）
+ */
+router.post("/guest", async (_req: Request, res: Response) => {
+  try {
+    const guestId = crypto.randomUUID();
+    const guestName = "游客" + guestId.slice(0, 6).toUpperCase();
+
+    const [guestUser] = await db.insert(users).values({
+      id: guestId,
+      email: `guest_${guestId}@guest.app`,
+      nickname: guestName,
+      avatar: "",
+      bio: "游客用户",
+    }).returning();
+
+    // 生成一个简单的 guest token
+    const guestToken = `guest_${guestId}_${Date.now()}`;
+
+    res.json({
+      token: guestToken,
+      user: {
+        id: guestUser.id,
+        email: guestUser.email,
+        nickname: guestUser.nickname,
+        avatar: guestUser.avatar,
+        bio: guestUser.bio,
+        isGuest: true,
+      },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Guest error:", err);
+    res.status(500).json({ error: err.message || "游客登录失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/send-otp
+ * 发送手机验证码（占位）
+ */
+router.post("/send-otp", async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) {
+      res.status(400).json({ error: "手机号不能为空" });
+      return;
+    }
+    // 占位实现 - 需要 Supabase 开启手机号认证并配置 SMS 提供商
+    console.log(`[AUTH] Send OTP to ${phone}: 验证码为 123456`);
+    res.json({ success: true, message: "验证码已发送", code: "123456" });
+  } catch (err: any) {
+    console.error("[AUTH] Send OTP error:", err);
+    res.status(500).json({ error: err.message || "发送验证码失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/verify-otp
+ * 验证手机验证码（占位）
+ */
+router.post("/verify-otp", async (req: Request, res: Response) => {
+  try {
+    const { phone, code } = req.body;
+    if (!phone || !code) {
+      res.status(400).json({ error: "手机号和验证码不能为空" });
+      return;
+    }
+    
+    // 占位实现 - 验证码总是 123456
+    if (code !== "123456") {
+      res.status(400).json({ error: "验证码错误" });
+      return;
+    }
+
+    // 查找或创建用户
+    const [existingUser] = await db.select().from(users).where(eq(users.email, phone));
+
+    if (existingUser) {
+      res.json({
+        token: `phone_${phone}_${Date.now()}`,
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          nickname: existingUser.nickname,
+          avatar: existingUser.avatar,
+          bio: existingUser.bio,
+        },
+      });
+      return;
+    }
+
+    // 创建新用户
+    const [newUser] = await db.insert(users).values({
+      id: crypto.randomUUID(),
+      email: phone,
+      nickname: `用户${phone.slice(-4)}`,
+    }).returning();
+
+    res.json({
+      token: `phone_${phone}_${Date.now()}`,
+      user: {
+        id: newUser.id,
+        email: newUser.email,
+        nickname: newUser.nickname,
+        avatar: newUser.avatar,
+        bio: newUser.bio,
+      },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Verify OTP error:", err);
+    res.status(500).json({ error: err.message || "验证失败" });
   }
 });
 
