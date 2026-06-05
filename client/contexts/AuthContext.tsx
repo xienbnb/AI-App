@@ -1,48 +1,133 @@
-// @ts-nocheck
 /**
- * 通用认证上下文
+ * 认证上下文
  *
- * 基于固定的 API 接口实现，可复用到其他项目
- * 其他项目使用时，只需修改 @api 的导入路径指向项目的 api 模块
+ * 管理用户登录状态、Token 持久化（AsyncStorage）、自动恢复会话
+ * 遵循 Supabase Auth 规范，Token 通过 x-session Header 传递
  *
- * 注意：
- * - 如果需要登录/鉴权场景，请扩展本文件，完善 login/logout、token 管理、用户信息获取与刷新等逻辑
- * - 将示例中的占位实现替换为项目实际的接口调用与状态管理
+ * @file /client/contexts/AuthContext.tsx
  */
-import React, { createContext, useContext, ReactNode } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-interface UserOut {
+const TOKEN_KEY = "auth_token";
+const USER_KEY = "auth_user";
 
+const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+
+interface UserInfo {
+  id: string;
+  email: string;
+  nickname: string;
+  avatar: string;
+  bio: string;
 }
 
 interface AuthContextType {
-  user: UserOut | null;
+  user: UserInfo | null;
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
-  updateUser: (userData: Partial<UserOut>) => void;
+  updateUser: (userData: Partial<UserInfo>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 从 AsyncStorage 恢复会话
+  useEffect(() => {
+    (async () => {
+      try {
+        const savedToken = await AsyncStorage.getItem(TOKEN_KEY);
+        if (savedToken) {
+          setToken(savedToken);
+          // 验证 token 并获取用户信息
+          const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+            headers: { "x-session": savedToken },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setUser(data.user);
+          } else {
+            // Token 过期，清除
+            await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+            setToken(null);
+          }
+        }
+      } catch {
+        // 静默失败，保持未登录状态
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, []);
+
+  const fetchUser = useCallback(async (tok: string): Promise<UserInfo | null> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+        headers: { "x-session": tok },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.user;
+      }
+    } catch {
+      // ignore
+    }
+    return null;
+  }, []);
+
+  const login = useCallback(async (tok: string) => {
+    setToken(tok);
+    await AsyncStorage.setItem(TOKEN_KEY, tok);
+    const userInfo = await fetchUser(tok);
+    if (userInfo) {
+      setUser(userInfo);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(userInfo));
+    }
+  }, [fetchUser]);
+
+  const logout = useCallback(async () => {
+    setToken(null);
+    setUser(null);
+    await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  }, []);
+
+  const updateUser = useCallback((userData: Partial<UserInfo>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...userData };
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    if (!token) return;
+    const userInfo = await fetchUser(token);
+    if (userInfo) {
+      setUser(userInfo);
+      await AsyncStorage.setItem(USER_KEY, JSON.stringify(userInfo));
+    }
+  }, [token, fetchUser]);
+
   const value: AuthContextType = {
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    isLoading: false,
-
-    // 登录逻辑，根据项目实际情况实现
-    login: async (token: string) => {}, // eslint-disable-line @typescript-eslint/no-empty-function
-
-    // 登出逻辑，根据项目实际情况实现
-    logout: async () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
-
-    // 更新用户信息，根据项目实际情况实现
-    updateUser: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+    user,
+    token,
+    isAuthenticated: !!token && !!user,
+    isLoading,
+    login,
+    logout,
+    updateUser,
+    refreshUser,
   };
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 

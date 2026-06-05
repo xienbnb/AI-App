@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from "react";
 import { View, Text, ScrollView, TouchableOpacity, Switch, Modal, Platform, KeyboardAvoidingView, TextInput, Alert } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -60,9 +61,10 @@ const defaultSkills: Skill[] = [
 
 export default function ProfileScreen() {
   const router = useSafeRouter();
+  const expoRouter = useRouter();
+  const { isAuthenticated, user, logout } = useAuth();
   const [bookCount, setBookCount] = useState(0);
   const [totalWords, setTotalWords] = useState(0);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [guardianEnabled, setGuardianEnabled] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -221,6 +223,13 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleLogout = () => {
+    Alert.alert("退出登录", "确定要退出登录吗？", [
+      { text: "取消", style: "cancel" },
+      { text: "退出", style: "destructive", onPress: () => { logout(); expoRouter.replace("/login"); } },
+    ]);
+  };
+
   const settingsSections = [
     {
       title: "创作工具",
@@ -242,6 +251,9 @@ export default function ProfileScreen() {
       items: [
         { icon: "circle-question", label: "帮助与反馈", color: "#10B981", onPress: () => undefined },
         { icon: "info", label: "关于应用", color: "#6B7280", onPress: () => undefined },
+        ...(isAuthenticated
+          ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]
+          : []),
       ],
     },
   ];
@@ -266,13 +278,13 @@ export default function ProfileScreen() {
               <FontAwesome6 name="user" size={28} color="#fff" />
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-bold text-white">码字达人</Text>
+              <Text className="text-xl font-bold text-white">{user?.nickname || user?.email?.split('@')[0] || "码字达人"}</Text>
               <Text className="text-sm text-white/70 mt-0.5">创作 2 年 · {bookCount} 部作品</Text>
             </View>
-            {!isLoggedIn ? (
+            {!isAuthenticated ? (
               <TouchableOpacity
                 className="bg-white/20 px-4 py-2 rounded-full"
-                onPress={() => Alert.alert("功能预告", "登录功能即将上线，敬请期待！")}
+                onPress={() => expoRouter.replace("/login")}
               >
                 <Text className="text-white text-sm font-medium">登录</Text>
               </TouchableOpacity>
@@ -431,7 +443,16 @@ export default function ProfileScreen() {
                 <TouchableOpacity
                   key={item.label}
                   className={`flex-row items-center px-4 py-3.5 ${i !== section.items.length - 1 ? "border-b border-gray-50" : ""}`}
-                  onPress={item.onPress}
+                  onPress={() => {
+                    if ((item as any).isLogout) {
+                      Alert.alert("退出登录", "确定要退出登录吗？", [
+                        { text: "取消", style: "cancel" },
+                        { text: "退出", style: "destructive", onPress: () => { logout(); expoRouter.replace("/login"); } },
+                      ]);
+                    } else {
+                      item.onPress?.();
+                    }
+                  }}
                   activeOpacity={item.onPress ? 0.6 : 1}
                 >
                   <View className="w-8 h-8 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: `${item.color}15` }}>

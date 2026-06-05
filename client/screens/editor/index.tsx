@@ -14,6 +14,7 @@
  * - 导出功能：HTML/TXT 导出
  * - 自动保存：内容变更后标记未保存，支持手动保存
  */
+import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,

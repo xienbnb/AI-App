@@ -1,6 +1,16 @@
 import { pgTable, serial, timestamp, uuid, text, integer, jsonb } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
+export const users = pgTable("users", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	email: text().notNull().unique(),
+	nickname: text().notNull().default(''),
+	avatar: text().default(''),
+	bio: text().default(''),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const healthCheck = pgTable("health_check", {
 	id: serial().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),

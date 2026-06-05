@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 import writingRouter from "./routes/writing.js";
 import aiRouter from "./routes/ai.js";
 import communityRouter from "./routes/community.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -25,6 +26,7 @@ app.get('/api/v1/health', (req, res) => {
 app.use('/api/v1/writing', writingRouter);
 app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/community', communityRouter);
+app.use('/api/v1/auth', authRouter);
 
 // ===== Global Error Handler =====
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {

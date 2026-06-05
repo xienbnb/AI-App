@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { LogBox } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { Provider } from '@/components/Provider';
+import { AuthGuard } from '@/components/AuthGuard';
 
 import '../global.css';
 
@@ -14,24 +15,27 @@ LogBox.ignoreLogs([
 export default function RootLayout() {
   return (
     <Provider>
-      <Stack
-        screenOptions={{
-          animation: 'slide_from_right',
-          gestureEnabled: true,
-          gestureDirection: 'horizontal',
-          headerShown: false
-        }}
-      >
-        <Stack.Screen name="(tabs)" options={{ title: "" }} />
-        <Stack.Screen name="detail" options={{ title: "" }} />
-        <Stack.Screen name="outline-create" options={{ title: "", animation: 'slide_from_right' }} />
-        <Stack.Screen name="editor" options={{ title: "", animation: 'slide_from_right' }} />
-        <Stack.Screen name="report" options={{ title: "", animation: 'slide_from_right' }} />
-        <Stack.Screen name="post-detail" options={{ title: "", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-skills" options={{ title: "创作技能", animation: 'slide_from_right' }} />
-        <Stack.Screen name="ai-knowledge" options={{ title: "知识库", animation: 'slide_from_right' }} />
-      </Stack>
-      <Toast />
+      <AuthGuard>
+        <Stack
+          screenOptions={{
+            animation: 'slide_from_right',
+            gestureEnabled: true,
+            gestureDirection: 'horizontal',
+            headerShown: false
+          }}
+        >
+          <Stack.Screen name="login" options={{ title: "" }} />
+          <Stack.Screen name="(tabs)" options={{ title: "" }} />
+          <Stack.Screen name="detail" options={{ title: "" }} />
+          <Stack.Screen name="outline-create" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="editor" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="report" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="post-detail" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="ai-skills" options={{ title: "创作技能", animation: 'slide_from_right' }} />
+          <Stack.Screen name="ai-knowledge" options={{ title: "知识库", animation: 'slide_from_right' }} />
+        </Stack>
+        <Toast />
+      </AuthGuard>
     </Provider>
   );
 }
