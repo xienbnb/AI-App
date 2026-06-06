@@ -13,19 +13,23 @@ export default function TabLayout() {
     "--color-border",
   ]) as string[];
 
+  const bottomPad = Platform.OS === "ios" ? Math.max(insets.bottom - 4, 2) : 2;
+
   let tabBarStyle = {
     backgroundColor: background || "#FFFFFF",
     borderTopWidth: 1,
     borderTopColor: border || "#F3F4F6",
-    paddingBottom: Platform.OS === "ios" ? insets.bottom : 4,
-    height: Platform.OS === "ios" ? 85 : 64,
+    paddingBottom: bottomPad,
+    height: Platform.OS === "ios" ? 56 + bottomPad : 56,
+    elevation: 0,
+    shadowOpacity: 0,
   };
 
   if (Platform.OS === "web") {
     tabBarStyle = {
       ...tabBarStyle,
-      height: "auto" as unknown as number,
-      paddingBottom: 8,
+      height: 56,
+      paddingBottom: 6,
     };
   }
 
@@ -36,14 +40,15 @@ export default function TabLayout() {
         tabBarStyle,
         tabBarActiveTintColor: accent || "#6366F1",
         tabBarInactiveTintColor: muted || "#9CA3AF",
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600", marginTop: -2 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarItemStyle: { paddingVertical: 4 },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "首页",
-          tabBarIcon: ({ color }) => (
+          tabBarIcon: ({ color, size }) => (
             <FontAwesome6 name="house" size={20} color={color} />
           ),
         }}
@@ -52,8 +57,8 @@ export default function TabLayout() {
         name="works"
         options={{
           title: "作品",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="book" size={20} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="book-open" size={18} color={color} />
           ),
         }}
       />
@@ -61,8 +66,8 @@ export default function TabLayout() {
         name="community"
         options={{
           title: "社区",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="comments" size={20} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="comment" size={18} color={color} />
           ),
         }}
       />
@@ -70,8 +75,8 @@ export default function TabLayout() {
         name="ai"
         options={{
           title: "AI工坊",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="wand-magic-sparkles" size={20} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="brain" size={18} color={color} />
           ),
         }}
       />
@@ -79,8 +84,8 @@ export default function TabLayout() {
         name="me"
         options={{
           title: "我的",
-          tabBarIcon: ({ color }) => (
-            <FontAwesome6 name="user" size={20} color={color} />
+          tabBarIcon: ({ color, size }) => (
+            <FontAwesome6 name="circle-user" size={18} color={color} />
           ),
         }}
       />
