@@ -28,6 +28,7 @@ import {
   Image,
   Linking,
   ActivityIndicator,
+  Pressable,
 } from "react-native";
 import { Screen } from "@/components/Screen";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1289,9 +1290,9 @@ export default function DetailScreen() {
       </Modal>
 
       {/* 创建卷弹窗 */}
-      <Modal visible={volumeCreateVisible} transparent animationType="fade">
-        <TouchableOpacity className="flex-1 bg-black/40 justify-center items-center" onPress={() => setVolumeCreateVisible(false)} activeOpacity={1}>
-          <View className="bg-white rounded-2xl w-[300px] p-5 gap-4" onStartShouldSetResponder={() => true}>
+      <Modal visible={volumeCreateVisible} transparent animationType="fade" onRequestClose={() => setVolumeCreateVisible(false)}>
+        <Pressable className="flex-1 bg-black/40 justify-center items-center" onPress={() => setVolumeCreateVisible(false)}>
+          <Pressable className="bg-white rounded-2xl w-[300px] p-5 gap-4" onPress={(e) => e.stopPropagation()}>
             <Text className="text-lg font-bold text-gray-900">创建新卷</Text>
             <TextInput
               className="w-full px-4 py-3 bg-gray-50 rounded-xl text-base text-gray-900 border border-gray-200"
@@ -1308,8 +1309,8 @@ export default function DetailScreen() {
                 <Text className="text-base text-white font-medium">创建</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* 编辑大纲弹窗 */}
