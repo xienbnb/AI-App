@@ -12,6 +12,7 @@ import { getSupabaseCredentials, getSupabaseServiceRoleKey } from "../storage/da
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { db } from "../storage/database/client.js";
 import { users } from "../storage/database/shared/schema.js";
+import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 
 const router = Router();
@@ -205,6 +206,27 @@ router.get("/me", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "游客令牌无效" });
     }
 
+    // Phone 令牌验证 (格式: phone_PHONE_TIMESTAMP)
+    if (token.startsWith("phone_")) {
+      const parts = token.split("_");
+      if (parts.length >= 2) {
+        const phone = parts[1];
+        const result = await db.select().from(users).where(eq(users.email, phone)).limit(1);
+        if (result.length > 0) {
+          return res.json({
+            user: {
+              id: result[0].id,
+              email: result[0].email,
+              nickname: result[0].nickname,
+              avatar: result[0].avatar || "",
+              bio: result[0].bio || "",
+              role: result[0].role || "user",
+            },
+          });
+        }
+      }
+      return res.status(401).json({ error: "手机令牌无效" });
+    }
 
     // 验证 token
     const { url, anonKey } = getSupabaseCredentials();
@@ -235,6 +257,7 @@ router.get("/me", async (req: Request, res: Response) => {
         nickname: user.nickname,
         avatar: user.avatar,
         bio: user.bio,
+        role: user.role || "user",
       },
     });
   } catch (err: any) {
@@ -421,6 +444,65 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Verify OTP error:", err);
     res.status(500).json({ error: err.message || "验证失败" });
+  }
+});
+
+/**
+ * POST /password-login
+ * 手机号 + 密码登录（用于 账号密码 登录方式）
+ * Body: phone, password
+ */
+router.post("/password-login", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, password } = req.body;
+    if (!phone || !password) { res.status(400).json({ error: "手机号和密码不能为空" }); return; }
+
+    const client = getSupabaseClient();
+    const { data: user, error } = await client
+      .from("users")
+      .select("id, email, nickname, avatar, password_hash, role")
+      .eq("email", phone)
+      .maybeSingle();
+
+    if (error || !user) { res.status(400).json({ error: "账号不存在" }); return; }
+    if (!user.password_hash) { res.status(400).json({ error: "该账号未设置密码，请使用验证码登录" }); return; }
+
+    const valid = bcrypt.compareSync(password, user.password_hash);
+    if (!valid) { res.status(400).json({ error: "密码错误" }); return; }
+
+    const token = `phone_${phone}_${Date.now()}`;
+    res.json({ token, user: { id: user.id, email: user.email, nickname: user.nickname, avatar: user.avatar, role: user.role } });
+  } catch (err) {
+    console.error("密码登录失败:", err);
+    res.status(500).json({ error: "密码登录失败" });
+  }
+});
+
+/**
+ * POST /set-password
+ * 设置/修改密码（需要登录态）
+ * Body: password, code(OTP验证码)
+ */
+router.post("/set-password", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { phone, code, password } = req.body;
+    if (!phone || !code || !password) { res.status(400).json({ error: "参数不完整" }); return; }
+    if (password.length < 6) { res.status(400).json({ error: "密码至少6位" }); return; }
+
+    // 验证 OTP
+    const entry = otpStore.get(phone);
+    if (!entry || entry.used || entry.code !== code || Date.now() > entry.expiresAt) {
+      res.status(400).json({ error: "验证码无效或已过期" }); return;
+    }
+    entry.used = true;
+
+    const hash = bcrypt.hashSync(password, 10);
+    const client = getSupabaseClient();
+    await client.from("users").update({ password_hash: hash }).eq("email", phone);
+    res.json({ success: true, message: "密码设置成功" });
+  } catch (err) {
+    console.error("设置密码失败:", err);
+    res.status(500).json({ error: "设置密码失败" });
   }
 });
 

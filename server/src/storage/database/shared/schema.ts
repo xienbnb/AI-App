@@ -7,6 +7,7 @@ export const users = pgTable("users", {
 	nickname: text().notNull().default(''),
 	avatar: text().default(''),
 	bio: text().default(''),
+	role: text().notNull().default('user'),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });

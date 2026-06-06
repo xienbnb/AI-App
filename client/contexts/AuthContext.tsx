@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
+const PHONE_KEY = "last_phone";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -31,6 +32,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   updateUser: (userData: Partial<UserInfo>) => void;
   refreshUser: () => Promise<void>;
+  getStoredPhone: () => Promise<string | null>;
+  savePhone: (phone: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -83,9 +86,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return null;
   }, []);
 
-  const login = useCallback(async (tok: string) => {
+  const login = useCallback(async (tok: string, phone?: string) => {
     setToken(tok);
     await AsyncStorage.setItem(TOKEN_KEY, tok);
+    if (phone) {
+      await AsyncStorage.setItem(PHONE_KEY, phone);
+    }
     const userInfo = await fetchUser(tok);
     if (userInfo) {
       setUser(userInfo);
@@ -100,6 +106,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateUser = useCallback((userData: Partial<UserInfo>) => {
+
+  const getStoredPhone = useCallback(async () => {
+    return AsyncStorage.getItem(PHONE_KEY);
+  }, []);
+
+  const savePhone = useCallback(async (phone: string) => {
+    await AsyncStorage.setItem(PHONE_KEY, phone);
+  }, []);
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...userData };
@@ -117,6 +131,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [token, fetchUser]);
 
+  const getStoredPhone = useCallback(async (): Promise<string | null> => {
+    try {
+      return await AsyncStorage.getItem(PHONE_KEY);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const savePhone = useCallback(async (phone: string) => {
+    try {
+      await AsyncStorage.setItem(PHONE_KEY, phone);
+    } catch {}
+  }, []);
+
   const value: AuthContextType = {
     user,
     token,
@@ -126,6 +154,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     updateUser,
     refreshUser,
+    getStoredPhone,
+    savePhone,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
