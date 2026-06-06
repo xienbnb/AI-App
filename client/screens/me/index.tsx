@@ -51,6 +51,12 @@ export default function ProfileScreen() {
 
   const settingsSections = [
     {
+      title: "会员特权",
+      items: [
+        { icon: "crown", label: "会员中心", color: "#F59E0B", onPress: () => router.push("/vip") },
+      ],
+    },
+    {
       title: "创作工具",
       items: [
         { icon: "sliders", label: "AI模型设置", color: "#8B5CF6", onPress: () => router.push("/my-ai-settings") },
