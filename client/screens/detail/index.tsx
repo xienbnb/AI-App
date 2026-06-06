@@ -315,6 +315,8 @@ export default function DetailScreen() {
         setSelectedVolumeId("");
         await fetchBook();
         router.push("/editor", { bookId: id, chapterId: json.data.id });
+      } else {
+        Alert.alert("错误", json.error || "创建章节失败");
       }
     } catch (e) {
       Alert.alert("错误", "创建章节失败");
@@ -335,6 +337,8 @@ export default function DetailScreen() {
         setVolumeCreateVisible(false);
         setVolumeName("");
         await fetchBook();
+      } else {
+        Alert.alert("错误", json.error || "创建卷失败");
       }
     } catch (e) {
       Alert.alert("错误", "创建卷失败");
