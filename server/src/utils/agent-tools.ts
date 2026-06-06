@@ -316,7 +316,48 @@ export async function readChapter(chapterId: string): Promise<ToolResult> {
 }
 
 // ============================================================
-// 9. 保存世界设定（角色/物品/金手指/世界背景 → user_settings 表）
+// 9. 续写章节（读取章节当前内容，追加新内容）
+// ============================================================
+export async function continueChapter(
+  chapterId: string,
+  newContent: string,
+): Promise<ToolResult> {
+  try {
+    // 读取当前章节内容
+    const supabase = getSupabaseClient();
+    const { data: chapter, error: readError } = await supabase
+      .from("chapters")
+      .select("id, title, content, book_id, word_count")
+      .eq("id", chapterId)
+      .single();
+
+    if (readError || !chapter) {
+      return { success: false, data: null, message: "章节不存在" };
+    }
+
+    // 拼接新内容
+    const updatedContent = (chapter.content || "") + "\n\n" + newContent;
+    const newWordCount = updatedContent.length;
+
+    const { error: updateError } = await supabase
+      .from("chapters")
+      .update({ content: updatedContent, word_count: newWordCount, updated_at: new Date().toISOString() })
+      .eq("id", chapterId);
+
+    if (updateError) throw updateError;
+
+    return {
+      success: true,
+      data: { id: chapterId, word_count: newWordCount },
+      message: `续写完成，章节总字数 ${newWordCount} 字`,
+    };
+  } catch (err: any) {
+    return { success: false, data: null, message: `续写章节失败: ${err.message}` };
+  }
+}
+
+// ============================================================
+// 10. 保存世界设定（角色/物品/金手指/世界背景 → user_settings 表）
 //    匹配前端 detail 页面的 WorldSetting 格式
 // ============================================================
 export async function saveWorldSetting(
@@ -507,6 +548,19 @@ export const agentTools: ToolDefinition[] = [
       required: ["chapterId"],
     },
     handler: (_, args) => readChapter(args.chapterId),
+  },
+  {
+    name: "continue_chapter",
+    description: "续写章节内容。读取已有章节，在其末尾追加新内容。用于章节未完成或用户要求续写时。",
+    parameters: {
+      type: "object",
+      properties: {
+        chapterId: { type: "string", description: "章节ID" },
+        newContent: { type: "string", description: "要追加的新章节内容" },
+      },
+      required: ["chapterId", "newContent"],
+    },
+    handler: (_, args) => continueChapter(args.chapterId, args.newContent),
   },
   {
     name: "save_world_setting",

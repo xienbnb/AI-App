@@ -547,6 +547,7 @@ export default function HomeScreen() {
   const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
   const [agentStreamContent, setAgentStreamContent] = useState("");
   const [agentActionStatus, setAgentActionStatus] = useState<string>("");
+  const [agentTokenUsage, setAgentTokenUsage] = useState<string>("");
   const agentSseRef = useRef<any>(null);
 
   const getAuthHeaders = useCallback(() => ({
@@ -639,10 +640,12 @@ export default function HomeScreen() {
         body: JSON.stringify({
           message: text,
           conversationId: activeConvId,
+          model: selectedModel,
         }),
       });
       agentSseRef.current = sse;
       let fullContent = "";
+      let latestTokenUsage = "";
 
       sse.addEventListener("message", (event: any) => {
         if (!event.data) return;
@@ -650,6 +653,13 @@ export default function HomeScreen() {
           sse.close();
           agentSseRef.current = null;
           setIsAiThinking(false);
+          // Save final content as message
+          if (fullContent) {
+            setAgentMessages(prev => [...prev, { role: "ai", content: fullContent + (latestTokenUsage ? `\n\n---\n${latestTokenUsage}` : "") }]);
+          }
+          setAgentStreamContent("");
+          setAgentActionStatus("");
+          setAgentTokenUsage("");
           // Load conversations list (re-fetch to get new/updated)
           loadAgentConversations();
           return;
@@ -669,6 +679,14 @@ export default function HomeScreen() {
             }
           } else if (parsed.type === "error") {
             setAgentActionStatus(`[错误] ${parsed.message}`);
+          } else if (parsed.type === "done") {
+            // Save conversation ID for persistence
+            if (parsed.conversationId) {
+              setActiveConvId(parsed.conversationId);
+            }
+          } else if (parsed.type === "usage") {
+            latestTokenUsage = `Token 消耗: 输入 ${parsed.promptTokens || 0} | 输出 ${parsed.completionTokens || 0} | 总计 ${parsed.totalTokens || 0}`;
+            setAgentTokenUsage(latestTokenUsage);
           }
         } catch (e) {
           fullContent += event.data;
@@ -681,12 +699,13 @@ export default function HomeScreen() {
         agentSseRef.current = null;
         setIsAiThinking(false);
         if (fullContent) {
-          setAgentMessages(prev => [...prev, { role: "ai", content: fullContent }]);
+          setAgentMessages(prev => [...prev, { role: "ai", content: fullContent + (latestTokenUsage ? `\n\n---\n${latestTokenUsage}` : "") }]);
         } else {
           setAgentMessages(prev => [...prev, { role: "ai", content: "抱歉，Agent 出错了，请稍后重试。" }]);
         }
         setAgentStreamContent("");
         setAgentActionStatus("");
+        setAgentTokenUsage("");
         loadAgentConversations();
       });
     } catch (e: any) {
@@ -1128,15 +1147,6 @@ export default function HomeScreen() {
           </View>
         </View>
         <View className="flex-row items-center gap-2">
-          <TouchableOpacity className="flex-row items-center gap-2 active:opacity-70" onPress={() => setShowModelPicker(true)}>
-            <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
-              <FontAwesome6 name="brain" size={11} color="#6366F1" />
-            </View>
-            <Text className="text-sm font-medium text-gray-700">
-              {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
-            </Text>
-            <FontAwesome6 name="chevron-down" size={9} color="#9CA3AF" />
-          </TouchableOpacity>
           <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={isAgentMode ? handleNewAgentConv : resetDialog}>
             <FontAwesome6 name="plus" size={13} color="#6366F1" />
           </TouchableOpacity>
@@ -1417,6 +1427,23 @@ export default function HomeScreen() {
             )
           )
         )}
+
+        {/* 模型选择器 - 在输入框上方 */}
+        <View className="flex-row items-center justify-between mb-2 px-1">
+          <TouchableOpacity className="flex-row items-center gap-1.5 active:opacity-70" onPress={() => setShowModelPicker(true)}>
+            <FontAwesome6 name="brain" size={12} color="#6366F1" />
+            <Text className="text-xs font-medium text-gray-500">
+              {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
+            </Text>
+            <FontAwesome6 name="chevron-down" size={8} color="#9CA3AF" />
+          </TouchableOpacity>
+          {isAiThinking && (
+            <View className="flex-row items-center gap-1">
+              <View className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+              <Text className="text-xs text-gray-400">AI 生成中...</Text>
+            </View>
+          )}
+        </View>
 
         <View className="flex-row items-end gap-2">
           <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center border border-gray-200" onPress={async () => {
