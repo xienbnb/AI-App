@@ -533,6 +533,9 @@ export default function HomeScreen() {
   const [showInsertModal, setShowInsertModal] = useState(false);
   const [insertTarget, setInsertTarget] = useState<"outline" | "chapter" | "inspiration" | "chapter_replace">("chapter");
 
+  // Keyboard state
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   // Selected AI model
   const [selectedModel, setSelectedModel] = useState("doubao-seed-2-0-lite-260215");
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -549,6 +552,28 @@ export default function HomeScreen() {
   const [agentActionStatus, setAgentActionStatus] = useState<string>("");
   const [agentTokenUsage, setAgentTokenUsage] = useState<string>("");
   const agentSseRef = useRef<any>(null);
+
+  // Keyboard avoiding
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardWillShow", (e: any) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const showSub2 = Keyboard.addListener("keyboardDidShow", (e: any) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideSub = Keyboard.addListener("keyboardWillHide", () => {
+      setKeyboardHeight(0);
+    });
+    const hideSub2 = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showSub.remove();
+      showSub2.remove();
+      hideSub.remove();
+      hideSub2.remove();
+    };
+  }, []);
 
   const getAuthHeaders = useCallback(() => ({
     "Content-Type": "application/json",
@@ -1428,84 +1453,104 @@ export default function HomeScreen() {
           )
         )}
 
-        {/* 模型选择器 - 在输入框上方 */}
-        <View className="flex-row items-center justify-between mb-2 px-1">
-          <TouchableOpacity className="flex-row items-center gap-1.5 active:opacity-70" onPress={() => setShowModelPicker(true)}>
-            <FontAwesome6 name="brain" size={12} color="#6366F1" />
-            <Text className="text-xs font-medium text-gray-500">
-              {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
-            </Text>
-            <FontAwesome6 name="chevron-down" size={8} color="#9CA3AF" />
-          </TouchableOpacity>
+        {/* 底部输入区 - Coze 风格 */}
+        <View className="border-t border-gray-100 pt-3 pb-1" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight - 20 : (insets?.bottom || 8) + 4 }}>
+          {/* AI 状态指示 */}
           {isAiThinking && (
-            <View className="flex-row items-center gap-1">
-              <View className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+            <View className="flex-row items-center justify-center gap-1.5 mb-2">
+              <View className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
               <Text className="text-xs text-gray-400">AI 生成中...</Text>
+              {agentActionStatus ? <Text className="text-xs text-gray-400">· {agentActionStatus}</Text> : null}
             </View>
           )}
-        </View>
 
-        <View className="flex-row items-end gap-2">
-          <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-50 items-center justify-center border border-gray-200" onPress={async () => {
-            try {
-              const result = await DocumentPicker.getDocumentAsync({
-                type: ["text/plain", "text/markdown", "application/pdf"],
-                copyToCacheDirectory: true,
-              });
-              if (result.canceled || !result.assets?.[0]) return;
-              const file = result.assets[0];
-              const formData = new FormData();
-              formData.append("file", { uri: file.uri, name: file.name || "file.txt", type: file.mimeType || "text/plain" } as any);
-              addMessage("user", `[上传文件] ${file.name}`);
-              setIsAiThinking(true);
-              setStreamContent("正在读取文件...");
-              const res = await fetch(`${API_BASE}/api/v1/writing/upload`, { method: "POST", body: formData });
-              const json = await res.json();
-              if (json.success) {
-                const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${json.data.content.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
-                setInputText(text);
-                setIsAiThinking(false);
-                setStreamContent("");
-                setTimeout(() => sendFreeChat(text), 100);
-              } else {
-                setIsAiThinking(false);
-                addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
-              }
-            } catch (e: any) {
-              setIsAiThinking(false);
-              addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
-            }
-          }} disabled={isAiThinking}>
-            <FontAwesome6 name="paperclip" size={15} color={isAiThinking ? "#CBD5E1" : "#64748B"} />
-          </TouchableOpacity>
+          {/* 主输入容器 */}
+          <View className="mx-2 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            {/* 模型芯片 + 输入行 */}
+            <View className="flex-row items-end">
+              {/* 模型选择芯片 */}
+              <TouchableOpacity
+                className="flex-row items-center gap-1 h-7 px-2.5 mx-2 mt-2 bg-indigo-50 rounded-full active:opacity-70"
+                onPress={() => setShowModelPicker(true)}
+              >
+                <FontAwesome6 name="brain" size={10} color="#6366F1" />
+                <Text className="text-[11px] font-medium text-indigo-600 max-w-[80px]" numberOfLines={1}>
+                  {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "模型"}
+                </Text>
+                <FontAwesome6 name="chevron-down" size={6} color="#818CF8" />
+              </TouchableOpacity>
 
-          {!isAgentMode && (
-            <TouchableOpacity className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200" onPress={() => setShowSkillPicker(true)}>
-              <FontAwesome6 name="at" size={15} color="#9333EA" />
-            </TouchableOpacity>
-          )}
+              {/* 输入框 */}
+              <TextInput
+                className="flex-1 px-3 py-3 text-gray-900 text-[15px] leading-6 max-h-24 min-h-[44px]"
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder={isAgentMode ? "告诉Agent你想创作什么小说..." : isAiThinking ? "AI 正在回复中..." : activeSkill ? `使用[${activeSkill.name}]...` : "输入想法..."}
+                placeholderTextColor="#94A3B8"
+                multiline
+                editable={!isAiThinking}
+              />
+            </View>
 
-          <View className="flex-1 bg-gray-50 rounded-2xl border border-gray-200 flex-row items-center px-3">
-            <TextInput
-              className="flex-1 py-2.5 text-gray-900 text-sm max-h-20 leading-5"
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder={isAgentMode ? "告诉Agent你想创作什么类型的小说..." : activeSkill ? `输入内容以使用 [${activeSkill.name}] 技能...` : isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
-              placeholderTextColor="#94A3B8"
-              multiline
-              editable={!isAiThinking}
-              onSubmitEditing={handleSend}
-              blurOnSubmit
-            />
+            {/* 底部工具栏行 */}
+            <View className="flex-row items-center justify-between px-2 pb-1.5">
+              <View className="flex-row items-center gap-1">
+                {/* 文件上传 */}
+                <TouchableOpacity
+                  className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100"
+                  onPress={async () => {
+                    try {
+                      const result = await DocumentPicker.getDocumentAsync({
+                        type: ["text/plain", "text/markdown", "application/pdf"],
+                        copyToCacheDirectory: true,
+                      });
+                      if (result.canceled || !result.assets?.[0]) return;
+                      const file = result.assets[0];
+                      const formData = new FormData();
+                      formData.append("file", { uri: file.uri, name: file.name || "file.txt", type: file.mimeType || "text/plain" } as any);
+                      addMessage("user", `[上传文件] ${file.name}`);
+                      setIsAiThinking(true);
+                      setStreamContent("正在读取文件...");
+                      const res = await fetch(`${API_BASE}/api/v1/writing/upload`, { method: "POST", body: formData });
+                      const json = await res.json();
+                      if (json.success) {
+                        const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${json.data.content.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
+                        setInputText(text);
+                        setIsAiThinking(false);
+                        setStreamContent("");
+                        setTimeout(() => sendFreeChat(text), 100);
+                      } else {
+                        setIsAiThinking(false);
+                        addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
+                      }
+                    } catch (e: any) {
+                      setIsAiThinking(false);
+                      addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
+                    }
+                  }}
+                  disabled={isAiThinking}
+                >
+                  <FontAwesome6 name="paperclip" size={14} color={isAiThinking ? "#CBD5E1" : "#94A3B8"} />
+                </TouchableOpacity>
+
+                {/* 技能选择 @ */}
+                {!isAgentMode && (
+                  <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100" onPress={() => setShowSkillPicker(true)}>
+                    <FontAwesome6 name="at" size={14} color="#A855F7" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* 发送按钮 */}
+              <TouchableOpacity
+                className={`w-8 h-8 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? (isAgentMode ? "bg-emerald-500" : "bg-indigo-500") : "bg-gray-200"}`}
+                onPress={handleSend}
+                disabled={!inputText.trim() || isAiThinking}
+              >
+                <FontAwesome6 name="arrow-up" size={13} color={inputText.trim() && !isAiThinking ? "white" : "#CBD5E1"} solid />
+              </TouchableOpacity>
+            </View>
           </View>
-
-          <TouchableOpacity
-            className={`w-9 h-9 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? (isAgentMode ? "bg-emerald-500" : "bg-indigo-500") : "bg-gray-200"}`}
-            onPress={handleSend}
-            disabled={!inputText.trim() || isAiThinking}
-          >
-            <FontAwesome6 name="arrow-up" size={14} color={inputText.trim() && !isAiThinking ? "white" : "#CBD5E1"} solid />
-          </TouchableOpacity>
         </View>
       </View>
 
