@@ -1,17 +1,26 @@
 import { Router, type Request, type Response } from "express";
-import { LLMClient } from "coze-coding-dev-sdk";
+import { getLLMClient, getUserLLMClient } from "../utils/ai-client.js";
 import type { LLMConfig } from "coze-coding-dev-sdk";
 import multer from "multer";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
-import { toCamelCase } from "../utils/case-transform.js";
-import { requireAuth, optionalAuth } from "../middleware/auth.js";
+import { db } from "../storage/database/client.js";
+import { inspirations, books } from "../storage/database/shared/schema.js";
+import { eq, and } from "drizzle-orm";
+import { toCamelCase, toSnakeCaseTopLevel } from "../utils/case-transform.js";
+import { quotaMiddleware } from "../middleware/quota.middleware.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const router = Router();
 
+// --- Auth Helper ---
+function getUserId(req: Request): string {
+  if (!req.user) throw new Error("未登录");
+  return req.user.id;
+}
+
 function generateId(): string {
-  return Math.random().toString(36).substring(2, 15);
+  return crypto.randomUUID();
 }
 
 // --- Types ---
@@ -55,52 +64,50 @@ function countWords(text: string): number {
 }
 
 // === Books CRUD ===
-router.get("/", requireAuth, async (req: Request, res: Response) => {
+router.get("/", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("books")
       .select("*")
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(`查询书籍失败: ${error.message}`);
     res.json({ success: true, data: toCamelCase(data || []) });
   } catch (err: any) {
     console.error("查询书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.get("/:id", optionalAuth, async (req: Request, res: Response) => {
+router.get("/:id", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    let query = client
+    const { data, error } = await client
       .from("books")
       .select("*")
       .eq("id", req.params.id)
-
-    // If user is authenticated, only show their own books
-    if (req.user) {
-      query = query.eq("user_id", req.user.id);
-    }
-
-    const { data, error } = await query.maybeSingle();
+      .eq("user_id", userId)
+      .maybeSingle();
 
     if (error) throw new Error(`查询书籍失败: ${error.message}`);
-    if (!data) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!data) return res.status(404).json({ success: false, error: "未找到书籍" });
     res.json({ success: true, data: toCamelCase(data) });
   } catch (err: any) {
     console.error("查询书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.post("/", requireAuth, async (req: Request, res: Response) => {
+router.post("/", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const { title, description, cover, coverImage, category, volumes } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
-      return res.status(400).json({ success: false, message: "书名不能为空且必须是字符串" });
+      return res.status(400).json({ success: false, error: "书名不能为空且必须是字符串" });
     }
     const trimmedTitle = title.trim().slice(0, 100);
 
@@ -110,7 +117,7 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
       : [];
 
     const newBook = {
-      user_id: req.user!.id,
+      user_id: userId,
       title,
       category: category || "其他",
       status: "draft",
@@ -147,17 +154,18 @@ router.post("/", requireAuth, async (req: Request, res: Response) => {
     res.json({ success: true, data: toCamelCase(data) });
   } catch (err: any) {
     console.error("创建书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // POST /api/v1/writing/ai-generate - AI自动创建书籍
-router.post("/ai-generate", requireAuth, async (req: Request, res: Response) => {
+router.post("/ai-generate", quotaMiddleware('book_generate'), async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const { topic } = req.body;
-    if (!topic) return res.status(400).json({ success: false, message: "请输入创作主题" });
+    if (!topic) return res.status(400).json({ success: false, error: "请输入创作主题" });
 
-    const client = new LLMClient();
+    const client = await getUserLLMClient(userId);
     const prompt = `你是一位资深网文作家。根据用户提供的主题"${topic}"，创作一部完整的小说方案。
 
 请严格按照以下JSON格式返回，不要包含任何其他文字：
@@ -203,7 +211,7 @@ router.post("/ai-generate", requireAuth, async (req: Request, res: Response) => 
     const chapters = bookData.volumes?.[0]?.chapters || [];
 
     const { data, error } = await sb.from("books").insert({
-      user_id: req.user!.id,
+      user_id: userId,
       title: bookData.title || topic,
       category: bookData.category || "其他",
       status: "draft",
@@ -232,97 +240,77 @@ router.post("/ai-generate", requireAuth, async (req: Request, res: Response) => 
     res.json({ success: true, data: toCamelCase(data) });
   } catch (err: any) {
     console.error("AI创建书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "AI生成失败" });
+    res.status(500).json({ success: false, error: err.message || "AI生成失败" });
   }
 });
 
-router.put("/:id", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const updateData: Record<string, any> = { ...req.body };
     // Remove id from update payload
     delete updateData.id;
-    // Convert camelCase to snake_case for DB columns
-    if (updateData.coverImage !== undefined) {
-      updateData.cover_image = updateData.coverImage;
-      delete updateData.coverImage;
-    }
-    if (updateData.wordCount !== undefined) {
-      updateData.word_count = updateData.wordCount;
-      delete updateData.wordCount;
-    }
-    if (updateData.chapterCount !== undefined) {
-      updateData.chapter_count = updateData.chapterCount;
-      delete updateData.chapterCount;
-    }
-    if (updateData.outlineAnalysis !== undefined) {
-      updateData.outline_analysis = updateData.outlineAnalysis;
-      delete updateData.outlineAnalysis;
-    }
-    if (updateData.outlineCharacters !== undefined) {
-      updateData.outline_characters = updateData.outlineCharacters;
-      delete updateData.outlineCharacters;
-    }
-    if (updateData.outlineWorldBuilding !== undefined) {
-      updateData.outline_world_building = updateData.outlineWorldBuilding;
-      delete updateData.outlineWorldBuilding;
-    }
-    // Handle volumes as JSON string if it's an array
+    // Convert camelCase to snake_case for DB columns (仅转换顶层，避免破坏 JSONB 内部结构)
+    const snakeUpdateData = toSnakeCaseTopLevel(updateData);
+
     const { data, error } = await client
       .from("books")
-      .update(updateData)
+      .update(snakeUpdateData)
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) throw new Error(`更新书籍失败: ${error.message}`);
-    if (!data) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!data) return res.status(404).json({ success: false, error: "未找到书籍" });
     res.json({ success: true, data: toCamelCase(data) });
   } catch (err: any) {
     console.error("更新书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.delete("/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("books")
       .delete()
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .select()
       .single();
 
     if (error) throw new Error(`删除书籍失败: ${error.message}`);
-    if (!data) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!data) return res.status(404).json({ success: false, error: "未找到书籍" });
     res.json({ success: true });
   } catch (err: any) {
     console.error("删除书籍错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Volumes CRUD ===
-router.post("/:id/volumes", requireAuth, async (req: Request, res: Response) => {
+router.post("/:id/volumes", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const { title } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
-      return res.status(400).json({ success: false, message: "卷名称不能为空" });
+      return res.status(400).json({ success: false, error: "卷名称不能为空" });
     }
     const newVolume = {
       id: generateId(),
@@ -343,28 +331,29 @@ router.post("/:id/volumes", requireAuth, async (req: Request, res: Response) => 
     res.json({ success: true, data: newVolume });
   } catch (err: any) {
     console.error("创建卷错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/volumes/:volumeId", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const volume = volumes.find((v: any) => v.id === req.params.volumeId);
-    if (!volume) return res.status(404).json({ success: false, message: "未找到卷" });
+    if (!volume) return res.status(404).json({ success: false, error: "未找到卷" });
     if (req.body.title !== undefined && (typeof req.body.title !== "string" || req.body.title.trim().length === 0)) {
-      return res.status(400).json({ success: false, message: "卷名称不能为空" });
+      return res.status(400).json({ success: false, error: "卷名称不能为空" });
     }
     Object.assign(volume, req.body);
 
@@ -379,74 +368,92 @@ router.put("/:id/volumes/:volumeId", requireAuth, async (req: Request, res: Resp
     res.json({ success: true, data: toCamelCase(volume) });
   } catch (err: any) {
     console.error("更新卷错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.delete("/:id/volumes/:volumeId", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id/volumes/:volumeId", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
-      .select("volumes")
+      .select("volumes, word_count, chapter_count")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const index = volumes.findIndex((v: any) => v.id === req.params.volumeId);
-    if (index === -1) return res.status(404).json({ success: false, message: "未找到卷" });
+    if (index === -1) return res.status(404).json({ success: false, error: "未找到卷" });
+
+    // 计算被删除卷中的章节数和字数
+    const deletedVolume = volumes[index];
+    const deletedChapters = deletedVolume.chapters || [];
+    let deletedWordCount = 0;
+    for (const ch of deletedChapters) {
+      deletedWordCount += ch.wordCount || 0;
+    }
+
     volumes.splice(index, 1);
+
+    // 同步更新整本书的章节数和字数
+    const totalChapterCount = Math.max(0, (book.chapter_count || 0) - deletedChapters.length);
+    const totalWordCount = Math.max(0, (book.word_count || 0) - deletedWordCount);
 
     const { error } = await client
       .from("books")
-      .update({ volumes: volumes })
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id);
+      .update({ volumes: volumes, chapter_count: totalChapterCount, word_count: totalWordCount })
+      .eq("id", req.params.id);
 
     if (error) throw new Error(`删除卷失败: ${error.message}`);
     res.json({ success: true });
   } catch (err: any) {
     console.error("删除卷错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Chapters CRUD ===
-router.post("/:id/volumes/:volumeId/chapters", requireAuth, async (req: Request, res: Response) => {
+router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
-      .select("volumes")
+      .select("volumes, word_count, chapter_count")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     const volume = volumes.find((v: any) => v.id === req.params.volumeId);
-    if (!volume) return res.status(404).json({ success: false, message: "未找到卷" });
+    if (!volume) return res.status(404).json({ success: false, error: "未找到卷" });
 
     const { title } = req.body;
     const newChapter = {
       id: generateId(),
-      title: title || `第${volume.chapters.length + 1}章`,
+      title: title || `第${(volume.chapters?.length || 0) + 1}章`,
       wordCount: 0,
       createdAt: new Date().toISOString().split("T")[0],
       content: "",
       volumeId: volume.id,
     };
+    volume.chapters = volume.chapters || [];
     volume.chapters.push(newChapter);
 
-    const { data, error } = await client
+    // 同步更新章节数
+    const totalChapterCount = (book.chapter_count || 0) + 1;
+
+    const { data: updatedBook, error } = await client
       .from("books")
-      .update({ volumes: volumes })
+      .update({ volumes: volumes, chapter_count: totalChapterCount })
       .eq("id", req.params.id)
       .select()
       .single();
@@ -455,13 +462,14 @@ router.post("/:id/volumes/:volumeId/chapters", requireAuth, async (req: Request,
     res.json({ success: true, data: newChapter });
   } catch (err: any) {
     console.error("创建章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // POST /:id/chapters - 创建章节（自动选择卷）
-router.post("/:id/chapters", requireAuth, async (req: Request, res: Response) => {
+router.post("/:id/chapters", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const { id } = req.params;
     const { title, content, volumeId } = req.body;
     if (!title || !content) {
@@ -473,15 +481,18 @@ router.post("/:id/chapters", requireAuth, async (req: Request, res: Response) =>
     // Check if volumes exist
     const { data: book, error: fetchError } = await client
       .from("books")
-      .select("volumes")
+      .select("volumes, chapter_count, word_count")
       .eq("id", id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw fetchError;
 
     let targetVolumeId = volumeId;
-    const volumes = book?.volumes || [];
+    const volumes = (book?.volumes || []) as any[];
+    let chapterAdded = false;
+    let newChapter: any = null;
+    const wordCount = countWords(content);
 
     // If no volumeId provided, use first volume or create one
     if (!targetVolumeId) {
@@ -489,73 +500,94 @@ router.post("/:id/chapters", requireAuth, async (req: Request, res: Response) =>
         targetVolumeId = volumes[0].id;
       } else {
         // Create a default volume
-        targetVolumeId = `vol_${Date.now()}`;
-        const newVolume = { id: targetVolumeId, name: "默认卷", order: 0, chapters: [] };
-        await client.from("books").update({ volumes: [newVolume] }).eq("id", id);
-      }
-    }
-
-    // Find the volume and add chapter
-    const updatedVolumes = volumes.map((v: any) => {
-      if (v.id === targetVolumeId) {
-        const newChapter = {
-          id: `ch_${Date.now()}`,
+        targetVolumeId = generateId();
+        newChapter = {
+          id: generateId(),
           title,
-          content: content || "",
-          order: (v.chapters?.length || 0),
+          content,
+          wordCount,
+          order: 0,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          volumeId: targetVolumeId,
         };
-        return { ...v, chapters: [...(v.chapters || []), newChapter] };
+        volumes.push({ id: targetVolumeId, title: "第一卷", order: 0, chapters: [newChapter] });
+        chapterAdded = true;
       }
-      return v;
-    });
-
-    // Handle case where volume wasn't found
-    if (!volumes.find((v: any) => v.id === targetVolumeId)) {
-      const newChapter = {
-        id: `ch_${Date.now()}`,
-        title,
-        content: content || "",
-        order: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      updatedVolumes.push({
-        id: targetVolumeId,
-        name: "默认卷",
-        order: volumes.length,
-        chapters: [newChapter],
-      });
     }
+
+    if (!chapterAdded) {
+      // Find the volume and add chapter
+      const targetVolume = volumes.find((v: any) => v.id === targetVolumeId);
+      if (targetVolume) {
+        newChapter = {
+          id: generateId(),
+          title,
+          content,
+          wordCount,
+          order: (targetVolume.chapters?.length || 0),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          volumeId: targetVolumeId,
+        };
+        targetVolume.chapters = targetVolume.chapters || [];
+        targetVolume.chapters.push(newChapter);
+      } else {
+        // Volume not found, create a new one
+        newChapter = {
+          id: generateId(),
+          title,
+          content,
+          wordCount,
+          order: 0,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          volumeId: targetVolumeId,
+        };
+        volumes.push({
+          id: targetVolumeId,
+          title: "默认卷",
+          order: volumes.length,
+          chapters: [newChapter],
+        });
+      }
+    }
+
+    // 更新章节数和字数
+    const totalChapterCount = (book.chapter_count || 0) + 1;
+    const totalWordCount = (book.word_count || 0) + wordCount;
 
     const { error: updateError } = await client
       .from("books")
-      .update({ volumes: updatedVolumes })
-      .eq("id", id)
-      .eq("user_id", req.user!.id);
+      .update({ 
+        volumes: volumes, 
+        chapter_count: totalChapterCount,
+        word_count: totalWordCount 
+      })
+      .eq("id", id);
 
     if (updateError) throw updateError;
-    res.json({ success: true, message: "章节已创建" });
+    res.json({ success: true, message: "章节已创建", data: newChapter });
   } catch (err: any) {
     console.error("创建章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // GET /:id/chapters/:chapterId - 获取单个章节内容
-router.get("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     let chapter: any;
@@ -563,106 +595,127 @@ router.get("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Re
       chapter = v.chapters?.find((c: any) => c.id === req.params.chapterId);
       if (chapter) break;
     }
-    if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
+    if (!chapter) return res.status(404).json({ success: false, error: "未找到章节" });
 
     res.json({ success: true, data: toCamelCase(chapter) });
   } catch (err: any) {
     console.error("获取章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
-      .select("volumes")
+      .select("volumes, word_count, chapter_count")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     let chapter: any;
+    let oldWordCount = 0;
     for (const v of volumes) {
       chapter = v.chapters?.find((c: any) => c.id === req.params.chapterId);
-      if (chapter) break;
+      if (chapter) {
+        oldWordCount = chapter.wordCount || 0;
+        break;
+      }
     }
-    if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
-    if (req.body.content !== undefined) chapter.wordCount = countWords(req.body.content);
+    if (!chapter) return res.status(404).json({ success: false, error: "未找到章节" });
+    
+    // 计算新的字数
+    const newContent = req.body.content;
+    const newWordCount = newContent !== undefined ? countWords(newContent) : oldWordCount;
+    const wordDiff = newWordCount - oldWordCount;
+    
+    // 更新章节
     Object.assign(chapter, req.body);
+    chapter.wordCount = newWordCount;
+
+    // 同步更新整本书的总字数
+    const totalWordCount = Math.max(0, (book.word_count || 0) + wordDiff);
 
     const { error } = await client
       .from("books")
-      .update({ volumes: volumes })
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id);
+      .update({ volumes: volumes, word_count: totalWordCount })
+      .eq("id", req.params.id);
 
     if (error) throw new Error(`更新章节失败: ${error.message}`);
     res.json({ success: true, data: chapter });
   } catch (err: any) {
     console.error("更新章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.delete("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
+router.delete("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
-      .select("volumes")
+      .select("volumes, word_count, chapter_count")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     let found = false;
+    let deletedWordCount = 0;
     for (const v of volumes) {
       if (v.chapters) {
         const idx = v.chapters.findIndex((c: any) => c.id === req.params.chapterId);
         if (idx !== -1) {
+          deletedWordCount = v.chapters[idx].wordCount || 0;
           v.chapters.splice(idx, 1);
           found = true;
           break;
         }
       }
     }
-    if (!found) return res.status(404).json({ success: false, message: "未找到章节" });
+    if (!found) return res.status(404).json({ success: false, error: "未找到章节" });
+
+    // 同步更新整本书的总字数和章节数
+    const totalWordCount = Math.max(0, (book.word_count || 0) - deletedWordCount);
+    const totalChapterCount = Math.max(0, (book.chapter_count || 0) - 1);
 
     const { error } = await client
       .from("books")
-      .update({ volumes: volumes })
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id);
+      .update({ volumes: volumes, word_count: totalWordCount, chapter_count: totalChapterCount })
+      .eq("id", req.params.id);
 
     if (error) throw new Error(`删除章节失败: ${error.message}`);
     res.json({ success: true });
   } catch (err: any) {
     console.error("删除章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Export Chapter ===
-router.get("/:id/chapters/:chapterId/export", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/chapters/:chapterId/export", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
 
     const volumes = typeof book.volumes === "string" ? JSON.parse(book.volumes) : (book.volumes || []);
     let chapter: any;
@@ -670,7 +723,7 @@ router.get("/:id/chapters/:chapterId/export", requireAuth, async (req: Request, 
       chapter = v.chapters?.find((c: any) => c.id === req.params.chapterId);
       if (chapter) break;
     }
-    if (!chapter) return res.status(404).json({ success: false, message: "未找到章节" });
+    if (!chapter) return res.status(404).json({ success: false, error: "未找到章节" });
 
     const format = req.query.format as string || "txt";
     const content = `# ${chapter.title}\n\n${chapter.content}`;
@@ -684,23 +737,25 @@ router.get("/:id/chapters/:chapterId/export", requireAuth, async (req: Request, 
     res.send(content);
   } catch (err: any) {
     console.error("导出章节错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // GET /:id/outline/export - 导出大纲为MD文件
-router.get("/:id/outline/export", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/outline/export", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error } = await client
       .from("books")
       .select("title, outline")
       .eq("id", req.params.id)
+      .eq("user_id", userId)
       .single();
 
     if (error) throw new Error(`查询书籍失败: ${error.message}`);
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
-    if (!book.outline) return res.status(404).json({ success: false, message: "该书还没有大纲" });
+    if (!book) return res.status(404).json({ success: false, error: "未找到书籍" });
+    if (!book.outline) return res.status(404).json({ success: false, error: "该书还没有大纲" });
 
     const mdContent = `# 《${book.title}》大纲\n\n${book.outline}`;
     const filename = `${book.title}_大纲.md`;
@@ -709,31 +764,32 @@ router.get("/:id/outline/export", requireAuth, async (req: Request, res: Respons
     res.send(mdContent);
   } catch (err: any) {
     console.error("导出大纲错误:", err);
-    res.status(500).json({ success: false, message: err.message || "导出失败" });
+    res.status(500).json({ success: false, error: err.message || "导出失败" });
   }
 });
 
 // === AI Dialogue (SSE) - Free-form chatting ===
-router.post("/ai-dialogue", requireAuth, async (req: Request, res: Response) => {
+router.post("/ai-dialogue", quotaMiddleware('ai_chat'), async (req: Request, res: Response) => {
+  const userId = getUserId(req);
   const { message, history, bookId, bookTitle } = req.body;
-  if (!message) return res.status(400).json({ success: false, message: "消息不能为空" });
+  if (!message) return res.status(400).json({ success: false, error: "消息不能为空" });
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = new LLMClient();
+  const client = await getUserLLMClient(userId);
   let fullContent = "";
 
   try {
     let bookContext = "";
-    // If a book is selected, load its details for AI context
+    // 如果提供了 bookId，加载书籍详情作为 AI 上下文
     if (bookId) {
       try {
-        const { db } = await import("../storage/database/client.js");
-        const { books, inspirations } = await import("../storage/database/shared/schema.js");
-        const { eq } = await import("drizzle-orm");
-        const book = await db.select().from(books).where(eq(books.id, bookId)).limit(1).then(r => r[0]);
+        const bookResult = await db.select().from(books)
+          .where(and(eq(books.id, bookId as string), eq(books.userId, userId)))
+          .limit(1);
+        const book = bookResult[0];
         if (book) {
           bookContext += `\n\n## 当前创作中的作品信息\n`;
           bookContext += `书名：《${book.title}》\n`;
@@ -748,17 +804,19 @@ router.post("/ai-dialogue", requireAuth, async (req: Request, res: Response) => 
             bookContext += `\n卷（${vols.length}卷）：\n`;
             for (const v of vols) {
               const chs = v.chapters || [];
-              bookContext += `- ${v.title || v.name}（${chs.length}章）\n`;
+              bookContext += `- ${v.title || "未命名卷"}（${chs.length}章）\n`;
               if (chs.length > 0) {
                 for (const c of chs.slice(0, 5)) {
-                  bookContext += `  · 第${c.sortOrder || c.order || ""}章 ${c.title}\n`;
+                  bookContext += `  · 第${c.order || ""}章 ${c.title}\n`;
                 }
                 if (chs.length > 5) bookContext += `  · ...等${chs.length}章\n`;
               }
             }
           }
           // Load inspirations
-          const inspList = await db.select().from(inspirations).where(eq(inspirations.bookId, bookId)).limit(5);
+          const inspList = await db.select().from(inspirations)
+            .where(eq(inspirations.bookId, bookId as string))
+            .limit(5);
           if (inspList.length > 0) {
             bookContext += `\n灵感碎片（${inspList.length}条）：\n`;
             for (const insp of inspList) {
@@ -934,14 +992,15 @@ router.post("/ai-dialogue", requireAuth, async (req: Request, res: Response) => 
 });
 
 // === AI Generate Outline (SSE) - Structured outline generation ===
-router.post("/generate-outline", requireAuth, async (req: Request, res: Response) => {
+router.post("/generate-outline", quotaMiddleware('outline_generate'), async (req: Request, res: Response) => {
+  const userId = getUserId(req);
   const { inspiration, genre, audience, platform, length } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = new LLMClient();
+  const client = await getUserLLMClient(userId);
 
   try {
     const prompt = `你是一位资深网文创作顾问。用户计划创作一部小说，基本信息如下：
@@ -1089,14 +1148,15 @@ xxx
 });
 
 // === AI Generate (Generic SSE) - 通用AI生成端点 ===
-router.post("/generate", requireAuth, async (req: Request, res: Response) => {
+router.post("/generate", quotaMiddleware('content_generate'), async (req: Request, res: Response) => {
+  const userId = getUserId(req);
   const { prompt, topic, context, style, writingStyle, wordCount } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = new LLMClient();
+  const client = await getUserLLMClient(userId);
 
   try {
     let systemPrompt = "你是一个专业的网络小说写作助手，擅长创作精彩的小说内容。";
@@ -1154,14 +1214,15 @@ router.post("/generate", requireAuth, async (req: Request, res: Response) => {
 });
 
 // === AI Generate Book Details (SSE) ===
-router.post("/generate-details", requireAuth, async (req: Request, res: Response) => {
+router.post("/generate-details", quotaMiddleware('details_generate'), async (req: Request, res: Response) => {
+  const userId = getUserId(req);
   const { outline, volumes, genre, inspiration } = req.body;
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = new LLMClient();
+  const client = await getUserLLMClient(userId);
 
   try {
     const chapterList = volumes?.map((v: any) =>
@@ -1224,56 +1285,53 @@ ${chapterList || outline || ""}
 });
 
 // === Outlines ===
-router.get("/:id/outlines", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/outlines", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { data: book, error } = await client
       .from("books")
       .select("outline")
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw new Error(`查询大纲失败: ${error.message}`);
     res.json({ success: true, data: book?.outline || "" });
   } catch (err: any) {
     console.error("查询大纲错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/outlines", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/outlines", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
     const { error } = await client
       .from("books")
       .update({ outline: req.body.outline || "" })
       .eq("id", req.params.id)
-      .eq("user_id", req.user!.id);
+      .eq("user_id", userId);
 
     if (error) throw new Error(`更新大纲失败: ${error.message}`);
     res.json({ success: true });
   } catch (err: any) {
     console.error("更新大纲错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Outline Items (structured manual outlines) ===
-router.get("/:id/outline-items", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/outline-items", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("outlines")
       .select("content")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
     if (error) throw new Error(`查询大纲条目失败: ${error.message}`);
     let items: any[] = [];
@@ -1281,83 +1339,64 @@ router.get("/:id/outline-items", requireAuth, async (req: Request, res: Response
     res.json({ success: true, data: items });
   } catch (err: any) {
     console.error("查询大纲条目错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/outline-items", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/outline-items", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    // Verify book ownership
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
-
     const contentStr = JSON.stringify(req.body.items || []);
     const { data: existing } = await client
       .from("outlines")
       .select("id")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
     if (existing) {
       const { error } = await client.from("outlines").update({ content: contentStr }).eq("book_id", req.params.id);
       if (error) throw new Error(`更新大纲条目失败: ${error.message}`);
     } else {
-      const { error } = await client.from("outlines").insert({ book_id: req.params.id, content: contentStr });
+      const { error } = await client.from("outlines").insert({ book_id: req.params.id, user_id: userId, content: contentStr });
       if (error) throw new Error(`创建大纲条目失败: ${error.message}`);
     }
     res.json({ success: true });
   } catch (err: any) {
     console.error("更新大纲条目错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Settings ===
-router.get("/:id/settings", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/settings", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("user_settings")
       .select("data")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw new Error(`查询设定失败: ${error.message}`);
     res.json({ success: true, data: data?.data || [] });
   } catch (err: any) {
     console.error("查询设定错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/settings", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/settings", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    // Verify book ownership
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
-
     const { data: existing } = await client
       .from("user_settings")
       .select("id")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (existing) {
@@ -1369,57 +1408,45 @@ router.put("/:id/settings", requireAuth, async (req: Request, res: Response) => 
     } else {
       const { error } = await client
         .from("user_settings")
-        .insert({ book_id: req.params.id, data: req.body.data || [] });
+        .insert({ book_id: req.params.id, user_id: userId, data: req.body.data || [] });
       if (error) throw new Error(`创建设定失败: ${error.message}`);
     }
     res.json({ success: true });
   } catch (err: any) {
     console.error("更新设定错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === Inspirations ===
-router.get("/:id/inspirations", requireAuth, async (req: Request, res: Response) => {
+router.get("/:id/inspirations", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("inspirations")
       .select("data")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw new Error(`查询灵感失败: ${error.message}`);
     res.json({ success: true, data: data?.data || [] });
   } catch (err: any) {
     console.error("查询灵感错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
-router.put("/:id/inspirations", requireAuth, async (req: Request, res: Response) => {
+router.put("/:id/inspirations", async (req: Request, res: Response) => {
   try {
+    const userId = getUserId(req);
     const client = getSupabaseClient();
-    // Verify book ownership
-    const { data: book } = await client
-      .from("books")
-      .select("id")
-      .eq("id", req.params.id)
-      .eq("user_id", req.user!.id)
-      .maybeSingle();
-    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
-
     const { data: existing } = await client
       .from("inspirations")
       .select("id")
       .eq("book_id", req.params.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (existing) {
@@ -1431,18 +1458,18 @@ router.put("/:id/inspirations", requireAuth, async (req: Request, res: Response)
     } else {
       const { error } = await client
         .from("inspirations")
-        .insert({ book_id: req.params.id, data: req.body.data || [] });
+        .insert({ book_id: req.params.id, user_id: userId, data: req.body.data || [] });
       if (error) throw new Error(`创建灵感失败: ${error.message}`);
     }
     res.json({ success: true });
   } catch (err: any) {
     console.error("更新灵感错误:", err);
-    res.status(500).json({ success: false, message: err.message || "服务器错误" });
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
 
 // === File Upload ===
-router.post("/upload", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
+router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
   try {
     const file = req.file;
     if (!file) {

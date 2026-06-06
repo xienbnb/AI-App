@@ -1,90 +1,43 @@
 import { Router, type Request, type Response } from "express";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
+import { db } from "../storage/database/client.js";
+import { posts, comments, postLikes, follows, users } from "../storage/database/shared/schema.js";
+import { eq, and, desc, count, like, or } from "drizzle-orm";
 import { toCamelCase } from "../utils/case-transform.js";
-import { requireAuth } from "../middleware/auth.js";
+import { authMiddleware } from "../middleware/auth.js";
 
 const router = Router();
 
-// ==================== 静态路由（必须在 /:id 之前） ====================
+// ==================== 读操作（公开，可选认证） ====================
 
 // GET /api/v1/community - 获取帖子列表
 router.get("/", async (req: Request, res: Response) => {
   try {
     const { tag } = req.query;
-    const client = getSupabaseClient();
 
-    let query = client.from("posts").select("*").order("created_at", { ascending: false });
-
-    if (tag && tag !== "B 全部") {
-      query = query.eq("tag", tag as string);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error("Get posts error:", error);
-      return res.status(500).json({ success: false, message: "获取帖子失败" });
-    }
-
-    const posts = (data || []).map((row: any) => toCamelCase(row));
-    res.json({ success: true, data: posts });
+    const conditions = tag && tag !== "B 全部" ? eq(posts.tag, tag as string) : undefined;
+    const data = await db.select().from(posts)
+      .where(conditions)
+      .orderBy(desc(posts.createdAt));
+    const result = data.map((row: any) => toCamelCase(row));
+    res.json({ success: true, data: result });
   } catch (err) {
     console.error("Get posts error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
-  }
-});
-
-// POST /api/v1/community - 创建帖子
-router.post("/", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { title, content, tag } = req.body;
-    if (!title?.trim()) {
-      return res.status(400).json({ success: false, message: "请输入标题" });
-    }
-
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("posts").insert({
-      user_id: req.user!.id,
-      user_name: req.user!.nickname || req.user!.id,
-      title: title.trim(),
-      content: content || "",
-      tag: tag || "B 全部",
-      likes: 0,
-      comments: 0,
-      featured: 0,
-    }).select().single();
-
-    if (error) {
-      console.error("Create post error:", error);
-      return res.status(500).json({ success: false, message: "创建帖子失败" });
-    }
-
-    res.json({ success: true, data: toCamelCase(data) });
-  } catch (err) {
-    console.error("Create post error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "服务器错误" });
   }
 });
 
 // GET /api/v1/community/hot - 热门推荐
 router.get("/hot", async (_req: Request, res: Response) => {
   try {
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("posts")
-      .select("*")
-      .order("likes", { ascending: false })
-      .order("comments", { ascending: false })
+    const data = await db.select().from(posts)
+      .orderBy(desc(posts.likes), desc(posts.comments))
       .limit(10);
 
-    if (error) {
-      console.error("Get hot posts error:", error);
-      return res.status(500).json({ success: false, message: "获取热门帖子失败" });
-    }
-
-    res.json({ success: true, data: (data || []).map((row: any) => toCamelCase(row)) });
+    res.json({ success: true, data: data.map((row: any) => toCamelCase(row)) });
   } catch (err) {
     console.error("Get hot posts error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "获取热门帖子失败" });
   }
 });
 
@@ -93,104 +46,45 @@ router.get("/search", async (req: Request, res: Response) => {
   try {
     const { q } = req.query;
     if (!q || typeof q !== "string") {
-      return res.status(400).json({ success: false, message: "请输入搜索关键词" });
+      return res.status(400).json({ success: false, error: "请输入搜索关键词" });
     }
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("posts")
-      .select("*")
-      .or(`title.ilike.%${q}%,content.ilike.%${q}%,user_name.ilike.%${q}%`)
-      .order("created_at", { ascending: false })
+
+    const data = await db.select().from(posts)
+      .where(or(
+        like(posts.title, `%${q}%`),
+        like(posts.content, `%${q}%`),
+        like(posts.userName, `%${q}%`),
+      ))
+      .orderBy(desc(posts.createdAt))
       .limit(20);
 
-    if (error) {
-      console.error("Search posts error:", error);
-      return res.status(500).json({ success: false, message: "搜索失败" });
-    }
-
-    res.json({ success: true, data: (data || []).map((row: any) => toCamelCase(row)) });
+    res.json({ success: true, data: data.map((row: any) => toCamelCase(row)) });
   } catch (err) {
     console.error("Search posts error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
-  }
-});
-
-// POST /api/v1/community/follow - 关注用户
-router.post("/follow", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { followingName } = req.body;
-    if (!followingName) {
-      return res.status(400).json({ success: false, message: "参数不完整" });
-    }
-    if (req.user!.nickname === followingName) {
-      return res.status(400).json({ success: false, message: "不能关注自己" });
-    }
-
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("follows").insert({
-      follower_name: req.user!.nickname || req.user!.id,
-      following_name: followingName,
-    }).select().single();
-
-    if (error) {
-      if ((error as any).code === "23505") {
-        return res.status(409).json({ success: false, message: "已关注该用户" });
-      }
-      console.error("Follow error:", error);
-      return res.status(500).json({ success: false, message: "关注失败" });
-    }
-
-    res.json({ success: true, data: toCamelCase(data) });
-  } catch (err) {
-    console.error("Follow error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
-  }
-});
-
-// DELETE /api/v1/community/follow - 取消关注
-router.delete("/follow", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const { followingName } = req.body;
-    if (!followingName) {
-      return res.status(400).json({ success: false, message: "参数不完整" });
-    }
-
-    const client = getSupabaseClient();
-    const { error } = await client.from("follows")
-      .delete()
-      .eq("follower_name", req.user!.nickname || req.user!.id)
-      .eq("following_name", followingName);
-
-    if (error) {
-      console.error("Unfollow error:", error);
-      return res.status(500).json({ success: false, message: "取消关注失败" });
-    }
-
-    res.json({ success: true, message: "已取消关注" });
-  } catch (err) {
-    console.error("Unfollow error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "搜索失败" });
   }
 });
 
 // GET /api/v1/community/follow/check - 检查是否已关注
 router.get("/follow/check", async (req: Request, res: Response) => {
   try {
-    const { followerName, followingName } = req.query;
-    if (!followerName || !followingName) {
+    const { followingName } = req.query;
+    if (!req.user || !followingName) {
       return res.json({ success: true, data: false });
     }
 
-    const client = getSupabaseClient();
-    const { data } = await client.from("follows")
-      .select("id")
-      .eq("follower_name", followerName as string)
-      .eq("following_name", followingName as string)
-      .maybeSingle();
+    const result = await db.select().from(follows)
+      .innerJoin(users, eq(follows.followingId, users.id))
+      .where(and(
+        eq(follows.followerId, req.user.id),
+        eq(users.nickname, followingName as string),
+      ))
+      .limit(1);
 
-    res.json({ success: true, data: !!data });
+    res.json({ success: true, data: result.length > 0 });
   } catch (err) {
     console.error("Check follow error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "服务器错误" });
   }
 });
 
@@ -198,46 +92,74 @@ router.get("/follow/check", async (req: Request, res: Response) => {
 router.get("/user/:userName", async (req: Request, res: Response) => {
   try {
     const { userName } = req.params;
-    const client = getSupabaseClient();
+
+    // 先找用户ID
+    const [user] = await db.select().from(users)
+      .where(eq(users.nickname, userName as string))
+      .limit(1);
+
+    if (!user) {
+      return res.status(404).json({ success: false, error: "用户不存在" });
+    }
 
     const [postsRes, followersRes, followingRes] = await Promise.all([
-      client.from("posts").select("*").eq("user_name", userName).order("created_at", { ascending: false }),
-      client.from("follows").select("id", { count: "exact", head: true }).eq("following_name", userName),
-      client.from("follows").select("id", { count: "exact", head: true }).eq("follower_name", userName),
+      db.select().from(posts)
+        .where(eq(posts.userId, user.id))
+        .orderBy(desc(posts.createdAt)),
+      db.select({ count: count() }).from(follows)
+        .where(eq(follows.followingId, user.id)),
+      db.select({ count: count() }).from(follows)
+        .where(eq(follows.followerId, user.id)),
     ]);
 
     res.json({
       success: true,
       data: {
         userName,
-        posts: (postsRes.data || []).map((row: any) => toCamelCase(row)),
-        followers: followersRes.count || 0,
-        following: followingRes.count || 0,
+        userId: user.id,
+        avatar: user.avatar || "",
+        bio: user.bio || "",
+        posts: postsRes.map((row: any) => toCamelCase(row)),
+        followers: followersRes[0]?.count || 0,
+        following: followingRes[0]?.count || 0,
       },
     });
   } catch (err) {
     console.error("Get user error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "服务器错误" });
   }
 });
-
-// ==================== 动态路由（带 :id 参数，放在静态路由之后） ====================
 
 // GET /api/v1/community/:id - 获取帖子详情
 router.get("/:id", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("posts").select("*").eq("id", id).single();
 
-    if (error || !data) {
-      return res.status(404).json({ success: false, message: "帖子不存在" });
+    const [post] = await db.select().from(posts).where(eq(posts.id, id as string)).limit(1);
+
+    if (!post) {
+      return res.status(404).json({ success: false, error: "帖子不存在" });
     }
 
-    res.json({ success: true, data: toCamelCase(data) });
+    // 检查当前用户是否已点赞
+    let isLiked = false;
+    if (req.user) {
+      const [likeRecord] = await db.select().from(postLikes)
+        .where(and(eq(postLikes.postId, id as string), eq(postLikes.userId, req.user.id)))
+        .limit(1);
+      isLiked = !!likeRecord;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        ...toCamelCase(post),
+        isLiked,
+      },
+    });
   } catch (err) {
     console.error("Get post error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "服务器错误" });
   }
 });
 
@@ -245,22 +167,16 @@ router.get("/:id", async (req: Request, res: Response) => {
 router.get("/:id/comments", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("comments")
-      .select("*")
-      .eq("post_id", id)
-      .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Get comments error:", error);
-      return res.status(500).json({ success: false, message: "获取评论失败" });
-    }
+    const data = await db.select().from(comments)
+      .where(eq(comments.postId, id as string))
+      .orderBy(comments.createdAt);
 
-    const allComments = (data || []).map((row: any) => toCamelCase(row));
+    const allComments = data.map((row: any) => toCamelCase(row));
     const topLevel = allComments.filter((c: any) => !c.parentId);
     const replies = allComments.filter((c: any) => c.parentId);
 
-    const nest = (comments: any[]) => comments.map((c: any) => ({
+    const nest = (commentList: any[]) => commentList.map((c: any) => ({
       ...c,
       replies: replies.filter((r: any) => r.parentId === c.id),
     }));
@@ -268,96 +184,286 @@ router.get("/:id/comments", async (req: Request, res: Response) => {
     res.json({ success: true, data: nest(topLevel) });
   } catch (err) {
     console.error("Get comments error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "获取评论失败" });
+  }
+});
+
+// ==================== 写操作（需要登录） ====================
+// 以下路由需要认证
+router.use(authMiddleware);
+
+// POST /api/v1/community - 创建帖子
+router.post("/", async (req: Request, res: Response) => {
+  try {
+    const { title, content, tag } = req.body;
+    if (!title?.trim()) {
+      return res.status(400).json({ success: false, error: "请输入标题" });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    const [newPost] = await db.insert(posts).values({
+      userId: req.user.id,
+      userName: req.user.nickname || "匿名用户",
+      title: title.trim(),
+      content: content || "",
+      tag: tag || "B 全部",
+      likes: 0,
+      comments: 0,
+      featured: 0,
+    }).returning();
+
+    res.json({ success: true, data: toCamelCase(newPost) });
+  } catch (err) {
+    console.error("Create post error:", err);
+    res.status(500).json({ success: false, error: "创建帖子失败" });
   }
 });
 
 // POST /api/v1/community/:id/comments - 创建评论
-router.post("/:id/comments", requireAuth, async (req: Request, res: Response) => {
+router.post("/:id/comments", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { content, parentId } = req.body;
     if (!content?.trim()) {
-      return res.status(400).json({ success: false, message: "请输入评论内容" });
+      return res.status(400).json({ success: false, error: "请输入评论内容" });
     }
 
-    const client = getSupabaseClient();
-    const { data, error } = await client.from("comments").insert({
-      post_id: id,
-      user_id: req.user!.id,
-      user_name: req.user!.nickname || req.user!.id,
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    // 检查帖子是否存在
+    const [post] = await db.select().from(posts).where(eq(posts.id, id as string)).limit(1);
+    if (!post) {
+      return res.status(404).json({ success: false, error: "帖子不存在" });
+    }
+
+    const [newComment] = await db.insert(comments).values({
+      postId: id as string,
+      userId: req.user.id,
+      userName: req.user.nickname || "匿名用户",
       content: content.trim(),
-      parent_id: parentId || null,
-    }).select().single();
+      parentId: parentId || null,
+      likes: 0,
+    }).returning();
 
-    if (error) {
-      console.error("Create comment error:", error);
-      return res.status(500).json({ success: false, message: "评论失败" });
-    }
+    // 原子递增评论数
+    await db.update(posts)
+      .set({ comments: (post.comments || 0) + 1 })
+      .where(eq(posts.id, id as string));
 
-    res.json({ success: true, data: toCamelCase(data) });
+    res.json({ success: true, data: toCamelCase(newComment) });
   } catch (err) {
     console.error("Create comment error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "评论失败" });
   }
 });
 
 // DELETE /api/v1/community/comments/:commentId - 删除评论
-router.delete("/comments/:commentId", requireAuth, async (req: Request, res: Response) => {
+router.delete("/comments/:commentId", async (req: Request, res: Response) => {
   try {
     const { commentId } = req.params;
-    const client = getSupabaseClient();
 
-    const { data: comment } = await client.from("comments").select("post_id, user_id").eq("id", commentId).single();
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    // 获取评论信息
+    const [comment] = await db.select().from(comments)
+      .where(eq(comments.id, commentId as string))
+      .limit(1);
+
     if (!comment) {
-      return res.status(404).json({ success: false, message: "评论不存在" });
+      return res.status(404).json({ success: false, error: "评论不存在" });
     }
 
-    // 只能删除自己的评论
-    if ((comment as any).user_id !== req.user!.id) {
-      return res.status(403).json({ success: false, message: "无权删除他人评论" });
+    // 校验权限：只能删除自己的评论
+    if (comment.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: "无权限删除该评论" });
     }
 
-    const { error } = await client.from("comments").delete().eq("id", commentId);
-    if (error) {
-      console.error("Delete comment error:", error);
-      return res.status(500).json({ success: false, message: "删除失败" });
-    }
+    // 统计该帖子下的评论数（用于计算级联删除后的准确数量）
+    const beforeComments = await db.select().from(comments)
+      .where(eq(comments.postId, comment.postId));
 
-    const postId = (comment as any).post_id;
-    const { data: post } = await client.from("posts").select("comments").eq("id", postId).single();
-    const newCount = Math.max(0, ((post as any)?.comments || 0) - 1);
-    await client.from("posts").update({ comments: newCount }).eq("id", postId);
+    // 删除评论（数据库会级联删除子评论）
+    await db.delete(comments).where(eq(comments.id, commentId as string));
+
+    // 重新统计并更新帖子评论数
+    const afterComments = await db.select().from(comments)
+      .where(eq(comments.postId, comment.postId));
+
+    await db.update(posts)
+      .set({ comments: afterComments.length })
+      .where(eq(posts.id, comment.postId));
 
     res.json({ success: true, message: "删除成功" });
   } catch (err) {
     console.error("Delete comment error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "删除失败" });
   }
 });
 
-// PUT /api/v1/community/:id/like - 点赞
-router.put("/:id/like", requireAuth, async (req: Request, res: Response) => {
+// PUT /api/v1/community/:id/like - 点赞/取消点赞（切换）
+router.put("/:id/like", async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const client = getSupabaseClient();
+    const pid = id as string;
 
-    const { data: existing } = await client.from("posts").select("likes").eq("id", id).single();
-    if (!existing) {
-      return res.status(404).json({ success: false, message: "帖子不存在" });
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
     }
 
-    const newLikes = (existing.likes || 0) + 1;
-    const { error } = await client.from("posts").update({ likes: newLikes }).eq("id", id);
-
-    if (error) {
-      return res.status(500).json({ success: false, message: "点赞失败" });
+    // 检查帖子是否存在
+    const [post] = await db.select().from(posts).where(eq(posts.id, pid)).limit(1);
+    if (!post) {
+      return res.status(404).json({ success: false, error: "帖子不存在" });
     }
 
-    res.json({ success: true, data: { likes: newLikes } });
+    // 检查是否已点赞
+    const [existingLike] = await db.select().from(postLikes)
+      .where(and(eq(postLikes.postId, pid), eq(postLikes.userId, req.user.id)))
+      .limit(1);
+
+    if (existingLike) {
+      // 取消点赞
+      await db.delete(postLikes)
+        .where(eq(postLikes.id, existingLike.id));
+      const newLikes = Math.max(0, (post.likes || 0) - 1);
+      await db.update(posts).set({ likes: newLikes }).where(eq(posts.id, pid));
+      res.json({ success: true, data: { likes: newLikes, isLiked: false } });
+    } else {
+      // 点赞
+      await db.insert(postLikes).values({
+        postId: pid,
+        userId: req.user.id,
+      });
+      const newLikes = (post.likes || 0) + 1;
+      await db.update(posts).set({ likes: newLikes }).where(eq(posts.id, pid));
+      res.json({ success: true, data: { likes: newLikes, isLiked: true } });
+    }
   } catch (err) {
     console.error("Like post error:", err);
-    res.status(500).json({ success: false, message: "服务器错误" });
+    res.status(500).json({ success: false, error: "操作失败" });
+  }
+});
+
+// POST /api/v1/community/follow - 关注用户
+router.post("/follow", async (req: Request, res: Response) => {
+  try {
+    const { followingName } = req.body;
+    if (!followingName) {
+      return res.status(400).json({ success: false, error: "参数不完整" });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    // 不能关注自己
+    if (req.user.nickname === followingName) {
+      return res.status(400).json({ success: false, error: "不能关注自己" });
+    }
+
+    // 查找被关注用户
+    const [followingUser] = await db.select().from(users)
+      .where(eq(users.nickname, followingName))
+      .limit(1);
+
+    if (!followingUser) {
+      return res.status(404).json({ success: false, error: "用户不存在" });
+    }
+
+    // 检查是否已关注
+    const [existingFollow] = await db.select().from(follows)
+      .where(and(
+        eq(follows.followerId, req.user.id),
+        eq(follows.followingId, followingUser.id),
+      ))
+      .limit(1);
+
+    if (existingFollow) {
+      return res.status(409).json({ success: false, error: "已关注该用户" });
+    }
+
+    const [newFollow] = await db.insert(follows).values({
+      followerId: req.user.id,
+      followingId: followingUser.id,
+    }).returning();
+
+    res.json({ success: true, data: toCamelCase(newFollow) });
+  } catch (err) {
+    console.error("Follow error:", err);
+    res.status(500).json({ success: false, error: "关注失败" });
+  }
+});
+
+// DELETE /api/v1/community/follow - 取消关注
+router.delete("/follow", async (req: Request, res: Response) => {
+  try {
+    const { followingName } = req.body;
+    if (!followingName) {
+      return res.status(400).json({ success: false, error: "参数不完整" });
+    }
+
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    // 查找被关注用户
+    const [followingUser] = await db.select().from(users)
+      .where(eq(users.nickname, followingName))
+      .limit(1);
+
+    if (!followingUser) {
+      return res.status(404).json({ success: false, error: "用户不存在" });
+    }
+
+    await db.delete(follows)
+      .where(and(
+        eq(follows.followerId, req.user.id),
+        eq(follows.followingId, followingUser.id),
+      ));
+
+    res.json({ success: true, message: "已取消关注" });
+  } catch (err) {
+    console.error("Unfollow error:", err);
+    res.status(500).json({ success: false, error: "取消关注失败" });
+  }
+});
+
+// DELETE /api/v1/community/:id - 删除帖子
+router.delete("/:id", async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const pid = id as string;
+
+    if (!req.user) {
+      return res.status(401).json({ success: false, error: "请先登录" });
+    }
+
+    const [post] = await db.select().from(posts)
+      .where(eq(posts.id, pid))
+      .limit(1);
+
+    if (!post) {
+      return res.status(404).json({ success: false, error: "帖子不存在" });
+    }
+
+    // 校验权限：只能删除自己的帖子
+    if (post.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: "无权限删除该帖子" });
+    }
+
+    await db.delete(posts).where(eq(posts.id, pid));
+
+    res.json({ success: true, message: "删除成功" });
+  } catch (err) {
+    console.error("Delete post error:", err);
+    res.status(500).json({ success: false, error: "删除失败" });
   }
 });
 

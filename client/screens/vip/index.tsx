@@ -318,8 +318,8 @@ export default function VipCenterScreen() {
                   <Text className="text-white/60 text-xs mt-1.5">
                     {remainCount <= 10
                       ? isVip
-                        ? `⚠️ 本月剩余 ${remainCount} 次，升级更高等级享更多`
-                        : `⚠️ 今日剩余 ${remainCount} 次，升级VIP享更多调用`
+                        ? `本月剩余 ${remainCount} 次，升级更高等级享更多`
+                        : `今日剩余 ${remainCount} 次，升级VIP享更多调用`
                       : isVip
                         ? `本月剩余 ${remainCount} 次调用`
                         : `今日剩余 ${remainCount} 次调用（${maxTokens}token/次）`}

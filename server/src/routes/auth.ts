@@ -12,10 +12,15 @@ import { getSupabaseCredentials, getSupabaseServiceRoleKey } from "../storage/da
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { db } from "../storage/database/client.js";
 import { users } from "../storage/database/shared/schema.js";
-import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 const router = Router();
+
+// OTP 存储（内存中，生产环境应使用 Redis）
+const otpStore = new Map<string, { code: string; expiresAt: number; lastSentAt: number }>();
+const OTP_EXPIRES_IN = 5 * 60 * 1000; // 5 分钟
+const OTP_RATE_LIMIT = 60 * 1000; // 60 秒限流
 
 /**
  * POST /api/v1/auth/register
@@ -86,6 +91,112 @@ router.post("/register", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Register error:", err);
     res.status(500).json({ error: err.message || "注册失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/password-login
+ * 手机号+密码登录（基于数据库中的 bcrypt 密码）
+ * Body: { phone: string, password: string }
+ */
+router.post("/password-login", async (req: Request, res: Response) => {
+  try {
+    const { phone, password } = req.body;
+    if (!phone || !password) {
+      res.status(400).json({ error: "手机号和密码不能为空" });
+      return;
+    }
+
+    // 查询用户
+    const [user] = await db.select().from(users).where(eq(users.email, phone)).limit(1);
+    if (!user) {
+      res.status(401).json({ error: "用户不存在" });
+      return;
+    }
+
+    if (!user.passwordHash) {
+      res.status(401).json({ error: "未设置密码，请使用验证码登录" });
+      return;
+    }
+
+    // 验证密码
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) {
+      res.status(401).json({ error: "密码错误" });
+      return;
+    }
+
+    // 生成 token
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    const phoneToken = `phone_${user.id}_${expiresAt}`;
+
+    res.json({
+      token: phoneToken,
+      refreshToken: phoneToken,
+      expiresIn: 7 * 24 * 60 * 60,
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        avatar: user.avatar,
+        bio: user.bio,
+        role: user.role,
+      },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Password login error:", err);
+    res.status(500).json({ error: err.message || "登录失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/set-password
+ * 设置密码（通过 OTP 验证后设置）
+ * Body: { phone: string, password: string, code: string }
+ */
+router.post("/set-password", async (req: Request, res: Response) => {
+  try {
+    const { phone, password, code } = req.body;
+    if (!phone || !password || !code) {
+      res.status(400).json({ error: "手机号、密码和验证码不能为空" });
+      return;
+    }
+    if (password.length < 6) {
+      res.status(400).json({ error: "密码长度不能少于6位" });
+      return;
+    }
+
+    // 验证 OTP
+    const storedOtp = otpStore.get(phone);
+    if (!storedOtp || storedOtp.code !== code) {
+      res.status(400).json({ error: "验证码错误" });
+      return;
+    }
+    if (Date.now() > storedOtp.expiresAt) {
+      otpStore.delete(phone);
+      res.status(400).json({ error: "验证码已过期" });
+      return;
+    }
+    // 删除已使用的 OTP
+    otpStore.delete(phone);
+
+    // 查询用户
+    const [existingUser] = await db.select().from(users).where(eq(users.email, phone)).limit(1);
+    if (!existingUser) {
+      res.status(404).json({ error: "用户不存在" });
+      return;
+    }
+
+    // 更新密码
+    const passwordHash = await bcrypt.hash(password, 10);
+    await db.update(users)
+      .set({ passwordHash: passwordHash })
+      .where(eq(users.id, existingUser.id));
+
+    res.json({ success: true, message: "密码设置成功" });
+  } catch (err: any) {
+    console.error("[AUTH] Set password error:", err);
+    res.status(500).json({ error: err.message || "设置密码失败" });
   }
 });
 
@@ -184,11 +295,18 @@ router.get("/me", async (req: Request, res: Response) => {
       return;
     }
 
-    // 游客令牌验证 (格式: guest_UUID_TIMESTAMP)
+    // 游客令牌验证 (格式: guest_<uuid>_<expiresAt>)
     if (token.startsWith("guest_")) {
       const parts = token.split("_");
-      if (parts.length >= 2) {
+      if (parts.length >= 3) {
         const guestId = parts[1];
+        const expiresAt = parseInt(parts[2], 10);
+        
+        // 检查 token 是否已过期
+        if (isNaN(expiresAt) || Date.now() > expiresAt) {
+          return res.status(401).json({ error: "游客令牌已过期，请重新登录" });
+        }
+        
         const result = await db.select().from(users).where(eq(users.id, guestId)).limit(1);
         if (result.length > 0) {
           return res.json({
@@ -206,12 +324,18 @@ router.get("/me", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "游客令牌无效" });
     }
 
-    // Phone 令牌验证 (格式: phone_PHONE_TIMESTAMP)
+    // 手机验证码令牌验证 (格式: phone_<userId>_<expiresAt>)
     if (token.startsWith("phone_")) {
       const parts = token.split("_");
-      if (parts.length >= 2) {
-        const phone = parts[1];
-        const result = await db.select().from(users).where(eq(users.email, phone)).limit(1);
+      if (parts.length >= 3) {
+        const userId = parts[1];
+        const expiresAt = parseInt(parts[2], 10);
+        
+        if (isNaN(expiresAt) || Date.now() > expiresAt) {
+          return res.status(401).json({ error: "登录已过期，请重新登录" });
+        }
+        
+        const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
         if (result.length > 0) {
           return res.json({
             user: {
@@ -220,13 +344,14 @@ router.get("/me", async (req: Request, res: Response) => {
               nickname: result[0].nickname,
               avatar: result[0].avatar || "",
               bio: result[0].bio || "",
-              role: result[0].role || "user",
+              isGuest: false,
             },
           });
         }
       }
       return res.status(401).json({ error: "手机令牌无效" });
     }
+
 
     // 验证 token
     const { url, anonKey } = getSupabaseCredentials();
@@ -257,7 +382,6 @@ router.get("/me", async (req: Request, res: Response) => {
         nickname: user.nickname,
         avatar: user.avatar,
         bio: user.bio,
-        role: user.role || "user",
       },
     });
   } catch (err: any) {
@@ -270,56 +394,36 @@ router.get("/me", async (req: Request, res: Response) => {
  * POST /api/v1/auth/guest
  * 游客登录（无账号，快速体验）
  */
-router.post("/guest", async (req: Request, res: Response) => {
+// 游客 Token 有效期（7天）
+const GUEST_TOKEN_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000;
+
+router.post("/guest", async (_req: Request, res: Response) => {
   try {
-    const { phone } = req.body || {};
-
-    // 如果提供了手机号，尝试查找已有用户
-    if (phone) {
-      const [existingUser] = await db.select()
-        .from(users)
-        .where(eq(users.email, phone))
-        .limit(1);
-
-      if (existingUser) {
-        const guestToken = `guest_${existingUser.id}_${Date.now()}`;
-        return res.json({
-          token: guestToken,
-          user: {
-            id: existingUser.id,
-            email: existingUser.email,
-            nickname: existingUser.nickname || "用户" + existingUser.email?.slice(-4),
-            avatar: existingUser.avatar || "",
-            bio: existingUser.bio || "",
-            role: existingUser.role || "user",
-            isGuest: true,
-          },
-        });
-      }
-    }
-
-    // 没有提供手机号或用户不存在 → 创建新游客
     const guestId = crypto.randomUUID();
     const guestName = "游客" + guestId.slice(0, 6).toUpperCase();
+    const expiresAt = Date.now() + GUEST_TOKEN_EXPIRES_IN;
 
     const [guestUser] = await db.insert(users).values({
       id: guestId,
-      email: phone || `guest_${guestId}@guest.app`,
+      email: `guest_${guestId}@guest.app`,
       nickname: guestName,
       avatar: "",
       bio: "游客用户",
     }).returning();
 
-    const guestToken = `guest_${guestId}_${Date.now()}`;
+    // 生成带过期时间的 guest token（格式：guest_<uuid>_<expiresAt>）
+    const guestToken = `guest_${guestId}_${expiresAt}`;
 
     res.json({
       token: guestToken,
+      refreshToken: guestToken,
+      expiresIn: GUEST_TOKEN_EXPIRES_IN / 1000,
       user: {
         id: guestUser.id,
         email: guestUser.email,
         nickname: guestUser.nickname,
-        avatar: guestUser.avatar,
-        bio: guestUser.bio,
+        avatar: guestUser.avatar || "",
+        bio: guestUser.bio || "",
         isGuest: true,
       },
     });
@@ -329,28 +433,9 @@ router.post("/guest", async (req: Request, res: Response) => {
   }
 });
 
-// ===== In-Memory OTP Store =====
-interface OtpEntry {
-  code: string;
-  expiresAt: number;
-  lastSentAt: number;
-  used: boolean;
-}
-const otpStore = new Map<string, OtpEntry>();
-
-// 定时清理过期的 OTP（每 5 分钟执行一次）
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of otpStore.entries()) {
-    if (now > entry.expiresAt || entry.used) {
-      otpStore.delete(key);
-    }
-  }
-}, 5 * 60 * 1000);
-
 /**
  * POST /api/v1/auth/send-otp
- * 发送手机验证码
+ * 发送手机验证码（占位）
  */
 router.post("/send-otp", async (req: Request, res: Response) => {
   try {
@@ -359,42 +444,34 @@ router.post("/send-otp", async (req: Request, res: Response) => {
       res.status(400).json({ error: "手机号不能为空" });
       return;
     }
-
-    // 验证手机号格式（简单校验）
-    if (!/^1\d{10}$/.test(phone)) {
-      res.status(400).json({ error: "手机号格式不正确" });
+    // 限流检查
+    const lastSent = otpStore.get(phone);
+    if (lastSent && (Date.now() - lastSent.lastSentAt) < OTP_RATE_LIMIT) {
+      res.status(429).json({ error: "发送太频繁，请稍后重试" });
       return;
     }
 
-    const now = Date.now();
-    const existing = otpStore.get(phone);
-
-    // 限制发送频率：同一手机号 60 秒内只能发一次
-    if (existing && (now - existing.lastSentAt) < 60 * 1000) {
-      const remaining = Math.ceil(60 - (now - existing.lastSentAt) / 1000);
-      res.status(429).json({ error: `发送过于频繁，请 ${remaining} 秒后再试` });
-      return;
-    }
-
-    // 生成随机 6 位数字验证码
+    // 生成6位随机验证码
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = now + 5 * 60 * 1000; // 5 分钟过期
-
-    otpStore.set(phone, { code, expiresAt, lastSentAt: now, used: false });
-
-    console.log(`[AUTH] OTP sent to ${phone}: ${code}`);
-    // 实际生产环境应接入 SMS 服务商发送短信
-    // 开发阶段将验证码返回给前端便于调试
-    res.json({ success: true, message: "验证码已发送" });
+    otpStore.set(phone, {
+      code,
+      expiresAt: Date.now() + OTP_EXPIRES_IN,
+      lastSentAt: Date.now(),
+    });
+    console.log(`[AUTH] Send OTP to ${phone}: ${code}`);
+    res.json({ success: true, message: "验证码已发送", code });
   } catch (err: any) {
     console.error("[AUTH] Send OTP error:", err);
     res.status(500).json({ error: err.message || "发送验证码失败" });
   }
 });
 
+// 手机验证码 Token 有效期（7天）
+const PHONE_TOKEN_EXPIRES_IN = 7 * 24 * 60 * 60 * 1000;
+
 /**
  * POST /api/v1/auth/verify-otp
- * 验证手机验证码
+ * 验证手机验证码（占位）
  */
 router.post("/verify-otp", async (req: Request, res: Response) => {
   try {
@@ -403,42 +480,37 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
       res.status(400).json({ error: "手机号和验证码不能为空" });
       return;
     }
-
-    const entry = otpStore.get(phone);
-    if (!entry) {
+    
+    // 验证 OTP
+    const storedOtp = otpStore.get(phone);
+    if (!storedOtp) {
       res.status(400).json({ error: "请先获取验证码" });
       return;
     }
-
-    // 检查是否已使用（防重复使用）
-    if (entry.used) {
-      otpStore.delete(phone);
-      res.status(400).json({ error: "验证码已使用，请重新获取" });
-      return;
-    }
-
-    // 检查是否过期
-    if (Date.now() > entry.expiresAt) {
-      otpStore.delete(phone);
-      res.status(400).json({ error: "验证码已过期，请重新获取" });
-      return;
-    }
-
-    // 校验验证码
-    if (code !== entry.code) {
+    if (storedOtp.code !== code) {
       res.status(400).json({ error: "验证码错误" });
       return;
     }
+    if (Date.now() > storedOtp.expiresAt) {
+      otpStore.delete(phone);
+      res.status(400).json({ error: "验证码已过期" });
+      return;
+    }
+    // 删除已使用的 OTP
+    otpStore.delete(phone);
 
-    // 验证成功后立即标记为已使用（不可重复使用）
-    entry.used = true;
+    const expiresAt = Date.now() + PHONE_TOKEN_EXPIRES_IN;
 
     // 查找或创建用户
     const [existingUser] = await db.select().from(users).where(eq(users.email, phone));
 
     if (existingUser) {
+      // 生成带过期时间的 phone token（格式：phone_<userId>_<expiresAt>）
+      const phoneToken = `phone_${existingUser.id}_${expiresAt}`;
       res.json({
-        token: `phone_${phone}_${Date.now()}`,
+        token: phoneToken,
+        refreshToken: phoneToken,
+        expiresIn: PHONE_TOKEN_EXPIRES_IN / 1000,
         user: {
           id: existingUser.id,
           email: existingUser.email,
@@ -451,14 +523,18 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     }
 
     // 创建新用户
+    const userId = crypto.randomUUID();
     const [newUser] = await db.insert(users).values({
-      id: crypto.randomUUID(),
+      id: userId,
       email: phone,
       nickname: `用户${phone.slice(-4)}`,
     }).returning();
 
+    const phoneToken = `phone_${userId}_${expiresAt}`;
     res.json({
-      token: `phone_${phone}_${Date.now()}`,
+      token: phoneToken,
+      refreshToken: phoneToken,
+      expiresIn: PHONE_TOKEN_EXPIRES_IN / 1000,
       user: {
         id: newUser.id,
         email: newUser.email,
@@ -470,65 +546,6 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Verify OTP error:", err);
     res.status(500).json({ error: err.message || "验证失败" });
-  }
-});
-
-/**
- * POST /password-login
- * 手机号 + 密码登录（用于 账号密码 登录方式）
- * Body: phone, password
- */
-router.post("/password-login", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { phone, password } = req.body;
-    if (!phone || !password) { res.status(400).json({ error: "手机号和密码不能为空" }); return; }
-
-    const client = getSupabaseClient();
-    const { data: user, error } = await client
-      .from("users")
-      .select("id, email, nickname, avatar, password_hash, role")
-      .eq("email", phone)
-      .maybeSingle();
-
-    if (error || !user) { res.status(400).json({ error: "账号不存在" }); return; }
-    if (!user.password_hash) { res.status(400).json({ error: "该账号未设置密码，请使用验证码登录" }); return; }
-
-    const valid = bcrypt.compareSync(password, user.password_hash);
-    if (!valid) { res.status(400).json({ error: "密码错误" }); return; }
-
-    const token = `phone_${phone}_${Date.now()}`;
-    res.json({ token, user: { id: user.id, email: user.email, nickname: user.nickname, avatar: user.avatar, role: user.role } });
-  } catch (err) {
-    console.error("密码登录失败:", err);
-    res.status(500).json({ error: "密码登录失败" });
-  }
-});
-
-/**
- * POST /set-password
- * 设置/修改密码（需要登录态）
- * Body: password, code(OTP验证码)
- */
-router.post("/set-password", async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { phone, code, password } = req.body;
-    if (!phone || !code || !password) { res.status(400).json({ error: "参数不完整" }); return; }
-    if (password.length < 6) { res.status(400).json({ error: "密码至少6位" }); return; }
-
-    // 验证 OTP
-    const entry = otpStore.get(phone);
-    if (!entry || entry.used || entry.code !== code || Date.now() > entry.expiresAt) {
-      res.status(400).json({ error: "验证码无效或已过期" }); return;
-    }
-    entry.used = true;
-
-    const hash = bcrypt.hashSync(password, 10);
-    const client = getSupabaseClient();
-    await client.from("users").update({ password_hash: hash }).eq("email", phone);
-    res.json({ success: true, message: "密码设置成功" });
-  } catch (err) {
-    console.error("设置密码失败:", err);
-    res.status(500).json({ error: "设置密码失败" });
   }
 });
 
