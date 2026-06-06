@@ -17,6 +17,12 @@ export const users = pgTable("users", {
 	consecutiveDays: integer("consecutive_days").default(0),
 	todayWordCount: integer("today_word_count").default(0),
 	lastActiveDate: text("last_active_date").default(''),
+	vipLevel: integer("vip_level").default(0),
+	vipExpiresAt: text("vip_expires_at").default(''),
+	dailyAiCount: integer("daily_ai_count").default(0),
+	lastResetDate: text("last_reset_date").default(''),
+	monthlyAiCount: integer("monthly_ai_count").default(0),
+	lastMonthlyReset: text("last_monthly_reset").default(''),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });

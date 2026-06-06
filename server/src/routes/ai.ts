@@ -2,8 +2,12 @@ import { Router, type Request, type Response } from "express";
 import { LLMClient, ImageGenerationClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import type { LLMConfig } from "coze-coding-dev-sdk";
 import { requireAuth } from "../middleware/auth.js";
+import { aiRateLimit } from "../middleware/aiRateLimit.js";
 
 const router = Router();
+
+// Apply AI rate limiting to all routes
+router.use(aiRateLimit);
 
 const config = new Config();
 const client = new LLMClient(config);

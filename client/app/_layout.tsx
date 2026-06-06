@@ -40,6 +40,8 @@ export default function RootLayout() {
           <Stack.Screen name="help-feedback" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="about" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="user-profile" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="vip" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="vip-packages" options={{ title: "", animation: 'slide_from_right' }} />
         </Stack>
         <Toast />
       </AuthGuard>

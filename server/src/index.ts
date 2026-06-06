@@ -6,6 +6,7 @@ import aiRouter from "./routes/ai.js";
 import communityRouter from "./routes/community.js";
 import authRouter from "./routes/auth.js";
 import usersRouter from "./routes/users.js";
+import vipRouter from "./routes/vip.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -29,6 +30,7 @@ app.use('/api/v1/ai', aiRouter);
 app.use('/api/v1/community', communityRouter);
 app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/users', usersRouter);
+app.use('/api/v1/vip', vipRouter);
 
 // ===== Global Error Handler =====
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
