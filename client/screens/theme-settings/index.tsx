@@ -20,8 +20,22 @@ import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Uniwind } from 'uniwind';
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+
+const THEME_KEY = "user_theme";
+
+// 将自定义主题映射到 Uniwind 支持的值
+function mapToUniwindTheme(themeId: string): "system" | "light" | "dark" {
+  switch (themeId) {
+    case "dark": return "dark";
+    case "sepia":
+    case "green":
+    case "light": return "light";
+    default: return "system";
+  }
+}
 
 interface ThemeOption {
   id: string;
@@ -157,8 +171,11 @@ export default function ThemeSettingsPage() {
         body: JSON.stringify({ theme: themeId }),
       });
       const json = await res.json();
-      if (json.success) {
+      if (json.success || json.theme) {
         setCurrentTheme(themeId);
+        // 保存到本地并立即应用
+        await AsyncStorage.setItem(THEME_KEY, themeId);
+        Uniwind.setTheme(mapToUniwindTheme(themeId));
       } else {
         Alert.alert("保存失败", json.message || "请稍后重试");
       }

@@ -4,7 +4,7 @@ import type { LLMConfig } from "coze-coding-dev-sdk";
 import multer from "multer";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { db } from "../storage/database/client.js";
-import { inspirations, books } from "../storage/database/shared/schema.js";
+import { inspirations, books, users } from "../storage/database/shared/schema.js";
 import { eq, and } from "drizzle-orm";
 import { toCamelCase, toSnakeCaseTopLevel } from "../utils/case-transform.js";
 import { quotaMiddleware } from "../middleware/quota.middleware.js";
@@ -17,6 +17,20 @@ const router = Router();
 function getUserId(req: Request): string {
   if (!req.user) throw new Error("未登录");
   return req.user.id;
+}
+
+// 从数据库读取用户AI模型偏好，静默回退到默认模型
+async function getUserAiModel(userId: string): Promise<string> {
+  try {
+    const [userRow] = await db.select({ aiSettings: users.aiSettings }).from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (userRow?.aiSettings && typeof userRow.aiSettings === "object") {
+      const settings = userRow.aiSettings as Record<string, any>;
+      if (settings.aiModel) return settings.aiModel;
+    }
+  } catch {}
+  return "doubao-seed-2-0-lite-260215";
 }
 
 function generateId(): string {
@@ -188,7 +202,7 @@ router.post("/ai-generate", quotaMiddleware('book_generate'), async (req: Reques
 
     const stream = client.stream(
       [{ role: "user", content: prompt }],
-      { model: "doubao-seed-2-0-lite-260215", temperature: 0.9 }
+      { model: await getUserAiModel(userId), temperature: 0.9 }
     );
 
     let fullContent = "";
@@ -885,9 +899,23 @@ router.post("/ai-dialogue", quotaMiddleware('ai_chat'), async (req: Request, res
     // Add current message
     msgs.push({ role: "user", content: message });
 
+    // 从用户设置中获取AI模型偏好
+    let aiModel = "doubao-seed-2-0-lite-260215";
+    try {
+      const [userRow] = await db.select({ aiSettings: users.aiSettings }).from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (userRow?.aiSettings && typeof userRow.aiSettings === "object") {
+        const settings = userRow.aiSettings as Record<string, any>;
+        if (settings.aiModel) aiModel = settings.aiModel;
+      }
+    } catch (e) {
+      // 静默回退到默认模型
+    }
+
     const stream = client.stream(
       msgs,
-      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
+      { model: aiModel, temperature: 0.8 }
     );
 
     for await (const chunk of stream) {
@@ -1045,7 +1073,7 @@ xxx
     const stream = client.stream(
       [{ role: "system", content: "你是一个专业的网文大纲生成专家，擅长根据用户需求生成结构化的小说大纲。" },
        { role: "user", content: prompt }],
-      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
+      { model: await getUserAiModel(userId), temperature: 0.8 }
     );
 
     let fullContent = "";
@@ -1191,7 +1219,7 @@ router.post("/generate", quotaMiddleware('content_generate'), async (req: Reques
 
     const stream = client.stream(
       [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
-      { model: "doubao-seed-2-0-lite-260215", temperature: 0.9 }
+      { model: await getUserAiModel(userId), temperature: 0.9 }
     );
 
     let fullContent = "";
@@ -1251,7 +1279,7 @@ ${chapterList || outline || ""}
     const stream = client.stream(
       [{ role: "system", content: "你是一个专业的小说出版顾问，擅长为小说起名、写简介和设计封面。" },
        { role: "user", content: prompt }],
-      { model: "doubao-seed-2-0-lite-260215", temperature: 0.8 }
+      { model: await getUserAiModel(userId), temperature: 0.8 }
     );
 
     let fullContent = "";

@@ -22,15 +22,19 @@ export default function ProfileScreen() {
   const [totalWords, setTotalWords] = useState(0);
   const [consecutiveDays, setConsecutiveDays] = useState(0);
   const [todayWords, setTodayWords] = useState(0);
+  const [vipLevel, setVipLevel] = useState(0);
+  const [vipPlanName, setVipPlanName] = useState('');
+  const [dailyAiCount, setDailyAiCount] = useState(0);
+  const [usedDailyAi, setUsedDailyAi] = useState(0);
   const [showDataStats, setShowDataStats] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const fetchStats = useCallback(async () => {
     try {
       const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE}/api/v1/users/stats`, {
-        headers: token ? { "x-session": token } : {},
-      });
+      const headers: Record<string, string> = {};
+      if (token) headers["x-session"] = token;
+      const res = await fetch(`${API_BASE}/api/v1/users/stats`, { headers });
       const json = await res.json();
       if (json.bookCount !== undefined) {
         setBookCount(json.bookCount);
@@ -43,10 +47,34 @@ export default function ProfileScreen() {
     }
   }, []);
 
+  const fetchVipInfo = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const headers: Record<string, string> = {};
+      if (token) headers["x-session"] = token;
+      const res = await fetch(`${API_BASE}/api/v1/vip/info`, { headers });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setVipLevel(json.data.vipLevel ?? 0);
+        setVipPlanName(json.data.planName || '');
+        setDailyAiCount(json.data.dailyAiCount ?? 0);
+        setUsedDailyAi(json.data.usedDailyAi ?? 0);
+      } else if (json.vipLevel !== undefined) {
+        setVipLevel(json.vipLevel);
+        setVipPlanName(json.planName || '');
+        setDailyAiCount(json.dailyAiCount ?? 0);
+        setUsedDailyAi(json.usedDailyAi ?? 0);
+      }
+    } catch (e) {
+      console.error("获取VIP信息失败", e);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchStats();
-    }, [fetchStats])
+      fetchVipInfo();
+    }, [fetchStats, fetchVipInfo])
   );
 
   const settingsSections = [
@@ -109,8 +137,18 @@ export default function ProfileScreen() {
               )}
             </View>
             <View className="flex-1">
-              <Text className="text-xl font-bold text-white">{user?.nickname || "码字达人"}</Text>
+              <View className="flex-row items-center gap-2">
+                <Text className="text-xl font-bold text-white">{user?.nickname || "码字达人"}</Text>
+                {vipLevel > 0 && (
+                  <View className="bg-yellow-400/30 rounded-full px-2 py-0.5">
+                    <Text className="text-[10px] font-bold text-yellow-200">{vipPlanName}</Text>
+                  </View>
+                )}
+              </View>
               <Text className="text-sm text-white/70 mt-0.5">{bookCount} 部作品 · {consecutiveDays} 天连续</Text>
+              {dailyAiCount > 0 && (
+                <Text className="text-xs text-white/50 mt-0.5">AI次数 {usedDailyAi}/{dailyAiCount}</Text>
+              )}
             </View>
             <View className="bg-white/20 rounded-full p-2.5">
               <FontAwesome6 name="chevron-right" size={14} color="#fff" />

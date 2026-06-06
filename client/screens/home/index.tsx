@@ -291,8 +291,8 @@ function BookPickerModal({ visible, books, selectedId, onSelect, onClose }: {
 }
 
 // ===== Unified Insert Modal (supports outline / chapter / inspiration) =====
-function InsertModal({ visible, bookId, content, insertTarget, onClose }: {
-  visible: boolean; bookId: string; content: string; insertTarget: string;
+function InsertModal({ visible, bookId, content, insertTarget, token, onClose }: {
+  visible: boolean; bookId: string; content: string; insertTarget: string; token: string | null;
   onClose: (target: string, title: string, chapterId?: string | null) => void;
 }) {
   const [chapters, setChapters] = useState<any[]>([]);
@@ -309,13 +309,14 @@ function InsertModal({ visible, bookId, content, insertTarget, onClose }: {
     setTitle("AI 生成内容");
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`);
+        const authH = { "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) };
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`, { headers: authH });
         const json = await res.json();
         setChapters(json.data || []);
       } catch (e) { /* silent */ }
       setLoading(false);
     })();
-  }, [bookId, visible, insertTarget]);
+  }, [bookId, visible, insertTarget, token]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onClose("", "")}>
@@ -570,11 +571,13 @@ export default function HomeScreen() {
   const [books, setBooks] = useState<any[]>([]);
   const fetchBooks = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing`);
+      const res = await fetch(`${API_BASE}/api/v1/writing`, {
+        headers: { "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) },
+      });
       const json = await res.json();
       if (json.success) setBooks(json.data || []);
     } catch (e) { /* silent */ }
-  }, []);
+  }, [token]);
   useFocusEffect(useCallback(() => { fetchBooks(); }, [fetchBooks]));
 
   const addMessage = (role: "ai" | "user", content: string, step?: string, skillName?: string) => {
@@ -687,57 +690,53 @@ export default function HomeScreen() {
       return;
     }
     setActiveSkill(skill);
-  }, [activeBook, addMessage]);
+  }, [activeBook, addMessage, token]);
 
   // ===== Insert AI content into book =====
   // ===== Insert content into book (supports outline, chapter, inspiration) =====
   const handleInsertToBook = useCallback(async (content: string, title: string, target: string, chapterId?: string | null) => {
     if (!activeBook?.id || !content) return;
+    const authHeaders = { "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) };
     try {
       let res;
       const baseUrl = `${API_BASE}/api/v1/writing/${activeBook.id}`;
 
       if (target === "outline") {
-        // Insert into outline - append to existing outline
-        const outlineRes = await fetch(`${baseUrl}/outlines`);
+        const outlineRes = await fetch(`${baseUrl}/outlines`, { headers: authHeaders });
         const outlineJson = await outlineRes.json();
         const existingOutline = outlineJson.success ? (outlineJson.data?.outline || "") : "";
         const mergedOutline = existingOutline ? existingOutline + "\n\n---\n\n" + content : content;
         res = await fetch(`${baseUrl}/outlines`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           body: JSON.stringify({ outline: mergedOutline }),
         });
       } else if (target === "inspiration") {
-        // Insert into inspirations
-        const inspRes = await fetch(`${baseUrl}/inspirations`);
+        const inspRes = await fetch(`${baseUrl}/inspirations`, { headers: authHeaders });
         const inspJson = await inspRes.json();
         const oldData = inspJson.success ? (inspJson.data || []) : [];
         const newInsp = { id: Date.now().toString(), title: title || "AI 灵感", content, createdAt: new Date().toISOString() };
         oldData.push(newInsp);
         res = await fetch(`${baseUrl}/inspirations`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           body: JSON.stringify({ data: oldData }),
         });
       } else {
-        // Insert as chapter
         if (chapterId && chapterId !== "new") {
-          // Replace existing chapter
           res = await fetch(`${baseUrl}/chapters/${chapterId}`, {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({ title, content }),
           });
         } else {
-          // Create new chapter
-          const bookRes = await fetch(`${baseUrl}`);
+          const bookRes = await fetch(`${baseUrl}`, { headers: authHeaders });
           const bookJson = await bookRes.json();
           const vols = bookJson.success ? (bookJson.data?.volumes || []) : [];
           const firstVol = vols.length > 0 ? vols[0] : null;
           res = await fetch(`${baseUrl}/chapters`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: authHeaders,
             body: JSON.stringify({ title, content, volumeId: firstVol?.id || null }),
           });
         }
@@ -1106,6 +1105,7 @@ export default function HomeScreen() {
         bookId={activeBook?.id || ""}
         content={pendingInsertContent}
         insertTarget={insertTarget}
+        token={token}
         onClose={(target, title, chapterId) => {
           if (target && title) {
             handleInsertToBook(pendingInsertContent, title, target, chapterId);

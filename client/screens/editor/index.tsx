@@ -251,7 +251,7 @@ export default function EditorScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title: chapterTitle, content }),
       });
       const json = await res.json();
@@ -292,7 +292,7 @@ export default function EditorScreen() {
     try {
       await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ outline: outlineHtml }),
       });
       setBookOutline(outlineHtml);
@@ -343,7 +343,7 @@ export default function EditorScreen() {
     setIsGenerating(true);
     setGeneratedContent("");
     const body = JSON.stringify({ prompt: "请检查并修正以下文本中的错别字和语法错误，直接返回修正后的完整文本：\n" + content.slice(-3000), style: "default", wordCount: 3000 });
-    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, { method: "POST", headers: getAuthHeaders(), body });
     sseRef.current = sse;
     sse.addEventListener("message", (event: any) => {
       if (!event.data) return;
@@ -365,7 +365,7 @@ export default function EditorScreen() {
       const volId = json.success && json.data.volumes?.[0]?.id;
       if (!volId) { Alert.alert("提示", "请先在书籍详情页创建卷"); return; }
       const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/volumes/${volId}/chapters`, {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: "新章节" }),
+        method: "POST", headers: getAuthHeaders(), body: JSON.stringify({ title: "新章节" }),
       });
       const j = await res.json();
       if (j.success) router.push("/editor", { bookId, chapterId: j.data.id });
@@ -480,7 +480,7 @@ export default function EditorScreen() {
       item: "生成10个网络小说神器/法宝名:", ability: "生成10个技能/功法名:", place: "生成10个地名/秘境名:",
     };
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: prompts[nameType], style: "default", wordCount: 200 }),
     });
     sseRef.current = sse;
@@ -504,7 +504,7 @@ export default function EditorScreen() {
       systemPrompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅：\n${context.slice(-1000)}\n---润色要求---\n${aiPrompt.trim()}`;
     }
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: systemPrompt, style: "default", wordCount: 1000 }),
     });
     sseRef.current = sse;
@@ -554,7 +554,7 @@ export default function EditorScreen() {
     pushUndo(content);
     const lastText = content.slice(-2000);
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: `从以下文字提取关键词(逗号分隔):\n${lastText}`, style: "default", wordCount: 200 }),
     });
     sseRef.current = sse;
@@ -737,7 +737,7 @@ export default function EditorScreen() {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
+                        method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
@@ -750,7 +750,7 @@ export default function EditorScreen() {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
+                        method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
@@ -764,7 +764,7 @@ export default function EditorScreen() {
                       const context = content.slice(-1500);
                       const prompt = `请根据以上上下文风格，自然地续写接下来的内容。保持叙事节奏、人物性格和文风一致，不要重复已有内容：\n---上下文---\n${context}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
-                        method: "POST", headers: { "Content-Type": "application/json" },
+                        method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
                       sseRef.current = sse;
@@ -844,9 +844,11 @@ export default function EditorScreen() {
                       onPress={() => {
                         const text = sym.includes("\n") ? "\n\n" : sym;
                         const pos = cursorPosition ?? content.length;
+                        // 成对符号（如“”「」【】《》）光标插入中间
+                        const isPair = sym.length === 2 && sym[0] !== sym[1];
                         const newContent = content.slice(0, pos) + text + content.slice(pos);
                         setContent(newContent);
-                        setCursorPosition(pos + text.length);
+                        setCursorPosition(pos + (isPair ? 1 : text.length));
                         pushUndo(newContent);
                       }}
                       className="items-center justify-center px-3 py-2 rounded-lg"

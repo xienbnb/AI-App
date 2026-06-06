@@ -4,6 +4,7 @@ import { Screen } from "@/components/Screen";
 import { useState, useCallback } from "react";
 import { useFocusEffect } from "expo-router";
 import { FontAwesome6 } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
 
@@ -71,12 +72,22 @@ export default function CommunityScreen() {
     }
   };
 
+  const getAuthHeaders = async () => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      if (token) headers["x-session"] = token;
+    } catch {}
+    return headers;
+  };
+
   const handleCreatePost = async () => {
     if (!newTitle.trim()) return;
+    const headers = await getAuthHeaders();
     try {
       const res = await fetch(`${API_BASE}/api/v1/community`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ userName: "用户", title: newTitle.trim(), content: newContent.trim(), tag: newTag }),
       });
       const json = await res.json();
@@ -92,8 +103,9 @@ export default function CommunityScreen() {
   };
 
   const handleLike = async (postId: string) => {
+    const headers = await getAuthHeaders();
     try {
-      const res = await fetch(`${API_BASE}/api/v1/community/${postId}/like`, { method: "PUT" });
+      const res = await fetch(`${API_BASE}/api/v1/community/${postId}/like`, { method: "PUT", headers });
       const json = await res.json();
       if (json.success) {
         setPosts((prev) =>

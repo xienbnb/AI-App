@@ -106,14 +106,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const updateUser = useCallback((userData: Partial<UserInfo>) => {
-
-  const getStoredPhone = useCallback(async () => {
-    return AsyncStorage.getItem(PHONE_KEY);
-  }, []);
-
-  const savePhone = useCallback(async (phone: string) => {
-    await AsyncStorage.setItem(PHONE_KEY, phone);
-  }, []);
     setUser((prev) => {
       if (!prev) return prev;
       const updated = { ...prev, ...userData };
