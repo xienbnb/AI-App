@@ -55,12 +55,13 @@ function countWords(text: string): number {
 }
 
 // === Books CRUD ===
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data, error } = await client
       .from("books")
       .select("*")
+      .eq("user_id", req.user!.id)
       .order("created_at", { ascending: false });
 
     if (error) throw new Error(`查询书籍失败: ${error.message}`);
@@ -543,13 +544,14 @@ router.post("/:id/chapters", requireAuth, async (req: Request, res: Response) =>
 });
 
 // GET /:id/chapters/:chapterId - 获取单个章节内容
-router.get("/:id/chapters/:chapterId", async (req: Request, res: Response) => {
+router.get("/:id/chapters/:chapterId", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -649,13 +651,14 @@ router.delete("/:id/chapters/:chapterId", requireAuth, async (req: Request, res:
 });
 
 // === Export Chapter ===
-router.get("/:id/chapters/:chapterId/export", async (req: Request, res: Response) => {
+router.get("/:id/chapters/:chapterId/export", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error: fetchError } = await client
       .from("books")
       .select("volumes")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .single();
 
     if (fetchError) throw new Error(`查询书籍失败: ${fetchError.message}`);
@@ -686,7 +689,7 @@ router.get("/:id/chapters/:chapterId/export", async (req: Request, res: Response
 });
 
 // GET /:id/outline/export - 导出大纲为MD文件
-router.get("/:id/outline/export", async (req: Request, res: Response) => {
+router.get("/:id/outline/export", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error } = await client
@@ -1221,13 +1224,14 @@ ${chapterList || outline || ""}
 });
 
 // === Outlines ===
-router.get("/:id/outlines", async (req: Request, res: Response) => {
+router.get("/:id/outlines", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
     const { data: book, error } = await client
       .from("books")
       .select("outline")
       .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
       .maybeSingle();
 
     if (error) throw new Error(`查询大纲失败: ${error.message}`);
@@ -1256,9 +1260,16 @@ router.put("/:id/outlines", requireAuth, async (req: Request, res: Response) => 
 });
 
 // === Outline Items (structured manual outlines) ===
-router.get("/:id/outline-items", async (req: Request, res: Response) => {
+router.get("/:id/outline-items", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("outlines")
       .select("content")
@@ -1307,9 +1318,16 @@ router.put("/:id/outline-items", requireAuth, async (req: Request, res: Response
 });
 
 // === Settings ===
-router.get("/:id/settings", async (req: Request, res: Response) => {
+router.get("/:id/settings", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("user_settings")
       .select("data")
@@ -1362,9 +1380,16 @@ router.put("/:id/settings", requireAuth, async (req: Request, res: Response) => 
 });
 
 // === Inspirations ===
-router.get("/:id/inspirations", async (req: Request, res: Response) => {
+router.get("/:id/inspirations", requireAuth, async (req: Request, res: Response) => {
   try {
     const client = getSupabaseClient();
+    const { data: book } = await client
+      .from("books")
+      .select("id")
+      .eq("id", req.params.id)
+      .eq("user_id", req.user!.id)
+      .maybeSingle();
+    if (!book) return res.status(404).json({ success: false, message: "未找到书籍" });
     const { data, error } = await client
       .from("inspirations")
       .select("data")
