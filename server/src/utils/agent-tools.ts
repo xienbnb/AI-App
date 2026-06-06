@@ -1,11 +1,9 @@
 import { db } from "../storage/database/client.js";
-import { books, outlines } from "../storage/database/shared/schema.js";
-import { eq, and, desc } from "drizzle-orm";
+import { books, outlines, userSettings } from "../storage/database/shared/schema.js";
+import { eq, desc } from "drizzle-orm";
 
 // ============================================================
 // Agent 工具函数
-// Agent 内部通过 LLM 决定调用哪些工具来完成用户请求
-// 每个工具返回 { success: boolean, data: any, message: string }
 // ============================================================
 
 export interface ToolResult {
@@ -14,9 +12,15 @@ export interface ToolResult {
   message: string;
 }
 
-/**
- * 1. 创建书籍
- */
+/** 统一获取 supabase client（避免动态 import 报错） */
+async function getSupabase() {
+  const mod = await import("../storage/database/supabase-client.js");
+  return mod.getSupabaseClient();
+}
+
+// ============================================================
+// 1. 创建书籍
+// ============================================================
 export async function createBook(
   userId: string,
   title: string,
@@ -40,19 +44,26 @@ export async function createBook(
     return {
       success: true,
       data: { bookId: book.id, title: book.title },
-      message: `✅ 书籍《${title}》创建成功！ID: ${book.id}`,
+      message: `书籍《${title}》创建成功！ID: ${book.id}`,
     };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 创建书籍失败: ${err.message}` };
+    return { success: false, data: null, message: `创建书籍失败: ${err.message}` };
   }
 }
 
-/**
- * 2. 保存/更新大纲
- */
-export async function saveOutline(bookId: string, content: string): Promise<ToolResult> {
+// ============================================================
+// 2. 保存大纲（结构化 outline items → outlines 表）
+//    匹配前端 detail 页面的 outline-items API 格式
+//    items: [{ type: "大纲"|"细纲", title: string, content: string }]
+// ============================================================
+export async function saveOutline(
+  bookId: string,
+  items: Array<{ type: string; title: string; content: string }>,
+): Promise<ToolResult> {
   try {
-    // 先检查是否已有大纲
+    const contentJson = JSON.stringify(items);
+    const now = new Date().toISOString();
+
     const [existing] = await db
       .select({ id: outlines.id })
       .from(outlines)
@@ -62,30 +73,31 @@ export async function saveOutline(bookId: string, content: string): Promise<Tool
     if (existing) {
       await db
         .update(outlines)
-        .set({ content, updatedAt: new Date().toISOString() })
+        .set({ content: contentJson, updatedAt: now })
         .where(eq(outlines.id, existing.id));
     } else {
       await db.insert(outlines).values({
         bookId: bookId as any,
-        content,
+        content: contentJson,
       });
     }
 
-    // 同时更新 books 表的 outline 字段
+    // 同步更新 books.outline 字段（用于首页展示）
+    const summary = items.map((i) => `[${i.type}] ${i.title}`).join("; ");
     await db
       .update(books)
-      .set({ outline: content, updatedAt: new Date().toISOString() })
+      .set({ outline: summary, updatedAt: now })
       .where(eq(books.id, bookId as any));
 
-    return { success: true, data: null, message: `✅ 大纲保存成功！共 ${content.length} 字` };
+    return { success: true, data: items, message: `大纲保存成功！共 ${items.length} 项` };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 保存大纲失败: ${err.message}` };
+    return { success: false, data: null, message: `保存大纲失败: ${err.message}` };
   }
 }
 
-/**
- * 3. 获取书籍信息（含卷、章节）
- */
+// ============================================================
+// 3. 获取书籍详细信息
+// ============================================================
 export async function getBookInfo(bookId: string): Promise<ToolResult> {
   try {
     const [book] = await db
@@ -95,34 +107,53 @@ export async function getBookInfo(bookId: string): Promise<ToolResult> {
         category: books.category,
         description: books.description,
         status: books.status,
-        outline: books.outline,
-        chapters: books.chapterCount,
+        chapterCount: books.chapterCount,
         wordCount: books.wordCount,
         volumes: books.volumes,
-        outlineCharacters: books.outlineCharacters,
-        outlineWorldBuilding: books.outlineWorldBuilding,
+        outline: books.outline,
       })
       .from(books)
       .where(eq(books.id, bookId as any))
       .limit(1);
 
     if (!book) {
-      return { success: false, data: null, message: "❌ 未找到该书籍" };
+      return { success: false, data: null, message: "未找到该书籍" };
     }
+
+    // 获取大纲
+    const [outlineRow] = await db
+      .select({ content: outlines.content })
+      .from(outlines)
+      .where(eq(outlines.bookId, bookId as any))
+      .limit(1);
+    let outlineItems: any[] = [];
+    if (outlineRow?.content) {
+      try { outlineItems = JSON.parse(outlineRow.content); } catch {}
+    }
+
+    // 获取设定（user_settings 表）
+    const [settingsRow] = await db
+      .select({ data: userSettings.data })
+      .from(userSettings)
+      .where(eq(userSettings.bookId, bookId as any))
+      .limit(1);
+    const worldSettings = (settingsRow?.data as any[]) || [];
+
+    const chapters = (book.volumes as any[])?.reduce((sum: number, v: any) => sum + (v.chapters?.length || 0), 0) || 0;
 
     return {
       success: true,
-      data: book,
-      message: `📚 《${book.title}》 - ${book.status} | 章节: ${book.chapters} | 字数: ${book.wordCount}`,
+      data: { ...book, outlineItems, worldSettings },
+      message: `《${book.title}》- ${book.status} | 卷: ${(book.volumes as any[])?.length || 0} | 章节: ${chapters} | 字数: ${book.wordCount}`,
     };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 获取书籍信息失败: ${err.message}` };
+    return { success: false, data: null, message: `获取书籍信息失败: ${err.message}` };
   }
 }
 
-/**
- * 4. 列出用户所有书籍
- */
+// ============================================================
+// 4. 列出用户所有书籍
+// ============================================================
 export async function listBooks(userId: string): Promise<ToolResult> {
   try {
     const bookList = await db
@@ -141,45 +172,29 @@ export async function listBooks(userId: string): Promise<ToolResult> {
       .limit(20);
 
     if (bookList.length === 0) {
-      return { success: true, data: [], message: "📭 你还没有创建任何书籍" };
+      return { success: true, data: [], message: "你还没有创建任何书籍" };
     }
 
-    const summary = bookList
-      .map((b) => `  - 《${b.title}》(${b.status}) ${b.chapters}章 ${b.wordCount}字`)
-      .join("\n");
-
-    return {
-      success: true,
-      data: bookList,
-      message: `📚 你的书籍列表 (共${bookList.length}本):\n${summary}`,
-    };
+    return { success: true, data: bookList, message: `共 ${bookList.length} 本书` };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 获取书籍列表失败: ${err.message}` };
+    return { success: false, data: null, message: `获取书籍列表失败: ${err.message}` };
   }
 }
 
-/**
- * 5. 创建卷
- */
-export async function createVolume(
-  bookId: string,
-  title: string,
-): Promise<ToolResult> {
+// ============================================================
+// 5. 创建卷
+// ============================================================
+export async function createVolume(bookId: string, title: string): Promise<ToolResult> {
   try {
     const [book] = await db
       .select({ volumes: books.volumes })
       .from(books)
       .where(eq(books.id, bookId as any))
       .limit(1);
-
-    if (!book) return { success: false, data: null, message: "❌ 书籍不存在" };
+    if (!book) return { success: false, data: null, message: "书籍不存在" };
 
     const volumes = (book.volumes as any[]) || [];
-    const newVolume = {
-      id: crypto.randomUUID(),
-      title,
-      sortOrder: volumes.length + 1,
-    };
+    const newVolume = { id: crypto.randomUUID(), title, sortOrder: volumes.length + 1, chapters: [] };
     volumes.push(newVolume);
 
     await db
@@ -187,23 +202,18 @@ export async function createVolume(
       .set({ volumes, updatedAt: new Date().toISOString() })
       .where(eq(books.id, bookId as any));
 
-    return {
-      success: true,
-      data: newVolume,
-      message: `✅ 卷《${title}》创建成功！`,
-    };
+    return { success: true, data: newVolume, message: `卷《${title}》创建成功！` };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 创建卷失败: ${err.message}` };
+    return { success: false, data: null, message: `创建卷失败: ${err.message}` };
   }
 }
 
-/**
- * 6. 获取章节列表
- */
+// ============================================================
+// 6. 获取章节列表
+// ============================================================
 export async function getChapters(bookId: string): Promise<ToolResult> {
   try {
-    const supabaseClient = (await import("../storage/database/supabase-client.js")).getSupabaseClient;
-    const sb = supabaseClient();
+    const sb = await getSupabase();
     const { data, error } = await sb
       .from("chapters")
       .select("id, title, chapter_number, volume_id, word_count, status, created_at")
@@ -211,25 +221,19 @@ export async function getChapters(bookId: string): Promise<ToolResult> {
       .order("chapter_number", { ascending: true });
 
     if (error) throw error;
-
     if (!data || data.length === 0) {
-      return { success: true, data: [], message: "📭 该书籍还没有章节" };
+      return { success: true, data: [], message: "该书籍还没有章节" };
     }
 
-    const summary = (data as any[]).map((c) => `  - 第${c.chapter_number}章 ${c.title}`).join("\n");
-    return {
-      success: true,
-      data,
-      message: `📖 共 ${data.length} 章:\n${summary}`,
-    };
+    return { success: true, data, message: `共 ${data.length} 章` };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 获取章节列表失败: ${err.message}` };
+    return { success: false, data: null, message: `获取章节列表失败: ${err.message}` };
   }
 }
 
-/**
- * 7. 创建章节
- */
+// ============================================================
+// 7. 创建章节
+// ============================================================
 export async function createChapter(
   bookId: string,
   volumeId: string | null,
@@ -237,9 +241,7 @@ export async function createChapter(
   content: string,
 ): Promise<ToolResult> {
   try {
-    // 获取当前最大章节号
-    const supabaseClient = (await import("../storage/database/supabase-client.js")).getSupabaseClient;
-    const sb = supabaseClient();
+    const sb = await getSupabase();
     const { data: maxChapter } = await sb
       .from("chapters")
       .select("chapter_number")
@@ -268,7 +270,7 @@ export async function createChapter(
 
     if (error) throw error;
 
-    // 更新书籍的章节数和字数
+    // 更新书籍字数
     await db
       .update(books)
       .set({
@@ -281,20 +283,19 @@ export async function createChapter(
     return {
       success: true,
       data,
-      message: `✅ 第${chapterNumber}章《${title}》创建成功！共 ${content.length} 字`,
+      message: `第${chapterNumber}章《${title}》创建成功！${content.length}字`,
     };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 创建章节失败: ${err.message}` };
+    return { success: false, data: null, message: `创建章节失败: ${err.message}` };
   }
 }
 
-/**
- * 8. 读取章节内容
- */
+// ============================================================
+// 8. 读取章节内容
+// ============================================================
 export async function readChapter(chapterId: string): Promise<ToolResult> {
   try {
-    const supabaseClient = (await import("../storage/database/supabase-client.js")).getSupabaseClient;
-    const sb = supabaseClient();
+    const sb = await getSupabase();
     const { data, error } = await sb
       .from("chapters")
       .select("id, title, content, chapter_number, book_id, status, word_count")
@@ -302,134 +303,99 @@ export async function readChapter(chapterId: string): Promise<ToolResult> {
       .single();
 
     if (error) throw error;
-    if (!data) return { success: false, data: null, message: "❌ 章节不存在" };
+    if (!data) return { success: false, data: null, message: "章节不存在" };
 
     return {
       success: true,
       data,
-      message: `📖 第${data.chapter_number}章《${data.title}》(${data.word_count}字)`,
+      message: `第${data.chapter_number}章《${data.title}》(${data.word_count}字)`,
     };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 读取章节失败: ${err.message}` };
+    return { success: false, data: null, message: `读取章节失败: ${err.message}` };
   }
 }
 
-/**
- * 9. 保存角色/人物设定
- */
-export async function saveCharacter(
+// ============================================================
+// 9. 保存世界设定（角色/物品/金手指/世界背景 → user_settings 表）
+//    匹配前端 detail 页面的 WorldSetting 格式
+// ============================================================
+export async function saveWorldSetting(
   bookId: string,
-  name: string,
-  description: string,
-  traits: Record<string, any> = {},
+  items: Array<{
+    type: string;      // "角色" | "物品" | "世界背景" | "金手指"
+    name: string;
+    description: string;
+  }>,
 ): Promise<ToolResult> {
   try {
-    const [book] = await db
-      .select({ outlineCharacters: books.outlineCharacters })
-      .from(books)
-      .where(eq(books.id, bookId as any))
-      .limit(1);
-
-    if (!book) return { success: false, data: null, message: "❌ 书籍不存在" };
-
-    const characters = (book.outlineCharacters as any[]) || [];
-    const newChar = {
-      id: crypto.randomUUID(),
-      name,
-      description,
-      traits,
-      createdAt: new Date().toISOString(),
-    };
-    characters.push(newChar);
-
-    await db
-      .update(books)
-      .set({ outlineCharacters: characters as any, updatedAt: new Date().toISOString() })
-      .where(eq(books.id, bookId as any));
-
-    return {
-      success: true,
-      data: newChar,
-      message: `✅ 角色「${name}」保存成功！`,
-    };
-  } catch (err: any) {
-    return { success: false, data: null, message: `❌ 保存角色失败: ${err.message}` };
-  }
-}
-
-/**
- * 10. 获取所有角色
- */
-export async function getCharacters(bookId: string): Promise<ToolResult> {
-  try {
-    const [book] = await db
-      .select({ outlineCharacters: books.outlineCharacters })
-      .from(books)
-      .where(eq(books.id, bookId as any))
-      .limit(1);
-
-    if (!book) return { success: false, data: null, message: "❌ 书籍不存在" };
-
-    const characters = (book.outlineCharacters as any[]) || [];
-
-    if (characters.length === 0) {
-      return { success: true, data: [], message: "📭 还没有角色设定" };
+    if (items.length === 0) {
+      return { success: false, data: null, message: "没有待保存的设定项" };
     }
 
-    const summary = characters.map((c: any) => `  - ${c.name}: ${c.description?.slice(0, 30)}...`).join("\n");
-    return {
-      success: true,
-      data: characters,
-      message: `👥 共 ${characters.length} 个角色:\n${summary}`,
-    };
+    const now = new Date().toISOString();
+    const newItems = items.map((item) => ({
+      id: crypto.randomUUID(),
+      type: item.type,
+      name: item.name,
+      description: item.description,
+    }));
+
+    // 读取已有设定，合并
+    const [existing] = await db
+      .select({ id: userSettings.id, data: userSettings.data })
+      .from(userSettings)
+      .where(eq(userSettings.bookId, bookId as any))
+      .limit(1);
+
+    let allItems: any[] = [];
+    if (existing?.data && Array.isArray(existing.data)) {
+      allItems = existing.data as any[];
+    }
+    allItems.push(...newItems);
+
+    if (existing) {
+      await db
+        .update(userSettings)
+        .set({ data: allItems as any, updatedAt: now })
+        .where(eq(userSettings.id, existing.id));
+    } else {
+      await db.insert(userSettings).values({
+        bookId: bookId as any,
+        data: allItems as any,
+      });
+    }
+
+    const typeCount = items.reduce((acc: Record<string, number>, i) => {
+      acc[i.type] = (acc[i.type] || 0) + 1;
+      return acc;
+    }, {});
+    const summary = Object.entries(typeCount)
+      .map(([k, v]) => `${k}x${v}`)
+      .join(", ");
+
+    return { success: true, data: newItems, message: `设定保存成功！${summary}` };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 获取角色列表失败: ${err.message}` };
+    return { success: false, data: null, message: `保存设定失败: ${err.message}` };
   }
 }
 
-/**
- * 11. 更新书籍信息（状态、描述等）
- */
-export async function updateBook(
-  bookId: string,
-  updates: Record<string, any>,
-): Promise<ToolResult> {
+// ============================================================
+// 10. 更新书籍信息
+// ============================================================
+export async function updateBook(bookId: string, updates: Record<string, any>): Promise<ToolResult> {
   try {
     await db
       .update(books)
       .set({ ...updates, updatedAt: new Date().toISOString() })
       .where(eq(books.id, bookId as any));
-
-    return { success: true, data: null, message: `✅ 书籍信息已更新` };
+    return { success: true, data: null, message: "书籍信息已更新" };
   } catch (err: any) {
-    return { success: false, data: null, message: `❌ 更新书籍失败: ${err.message}` };
-  }
-}
-
-/**
- * 12. 更新书籍大纲设定（世界观、主线分析等）
- */
-export async function saveWorldBuilding(
-  bookId: string,
-  worldBuilding: string,
-): Promise<ToolResult> {
-  try {
-    await db
-      .update(books)
-      .set({
-        outlineWorldBuilding: worldBuilding,
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(books.id, bookId as any));
-
-    return { success: true, data: null, message: `✅ 世界观设定已保存！` };
-  } catch (err: any) {
-    return { success: false, data: null, message: `❌ 保存世界观失败: ${err.message}` };
+    return { success: false, data: null, message: `更新书籍失败: ${err.message}` };
   }
 }
 
 // ============================================================
-// 工具注册表 — Agent 用这个表查找可用的工具
+// 工具注册表
 // ============================================================
 
 export interface ToolDefinition {
@@ -442,12 +408,12 @@ export interface ToolDefinition {
 export const agentTools: ToolDefinition[] = [
   {
     name: "create_book",
-    description: "创建一本新书。调用此工具创建书籍后，应继续用其他工具完善大纲、角色等设定。",
+    description: "创建一本新书。创建后必须继续创建卷和章节。",
     parameters: {
       type: "object",
       properties: {
         title: { type: "string", description: "书名" },
-        category: { type: "string", description: "分类（玄幻/都市/历史/科幻/悬疑/言情/其他）" },
+        category: { type: "string", description: "分类: 玄幻/都市/历史/科幻/悬疑/言情/其他" },
         description: { type: "string", description: "书籍简介" },
       },
       required: ["title"],
@@ -456,42 +422,47 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "list_books",
-    description: "列出用户所有的书籍。用于了解用户有哪些作品。",
-    parameters: {
-      type: "object",
-      properties: {},
-      required: [],
-    },
+    description: "列出用户所有书籍。",
+    parameters: { type: "object", properties: {}, required: [] },
     handler: (userId) => listBooks(userId),
   },
   {
     name: "get_book_info",
-    description: "获取某本书的详细信息，包括状态、大纲、卷列表、角色等。",
+    description: "获取书籍详细信息（含大纲、设定、卷列表）。了解已创建的内容后，再决定下一步操作。",
     parameters: {
       type: "object",
-      properties: {
-        bookId: { type: "string", description: "书籍ID" },
-      },
+      properties: { bookId: { type: "string", description: "书籍ID" } },
       required: ["bookId"],
     },
     handler: (_, args) => getBookInfo(args.bookId),
   },
   {
     name: "save_outline",
-    description: "保存或更新书籍的大纲内容。大纲应包括章节规划、主线剧情等。",
+    description: "保存结构化大纲。items 是数组，每项包含 type (大纲或细纲), title, content。必须包含完整的章节规划。",
     parameters: {
       type: "object",
       properties: {
         bookId: { type: "string", description: "书籍ID" },
-        content: { type: "string", description: "大纲内容，建议包含分卷/分章规划" },
+        items: {
+          type: "array",
+          description: "大纲项数组，每项: {type: 大纲|细纲, title: string, content: string}",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", description: "类型: 大纲 或 细纲" },
+              title: { type: "string", description: "标题" },
+              content: { type: "string", description: "详细内容" },
+            },
+          },
+        },
       },
-      required: ["bookId", "content"],
+      required: ["bookId", "items"],
     },
-    handler: (_, args) => saveOutline(args.bookId, args.content),
+    handler: (_, args) => saveOutline(args.bookId, args.items),
   },
   {
     name: "create_volume",
-    description: "在书籍中创建新的卷（部/册）。",
+    description: "创建卷（部/册）。必须先创建卷，再在卷下创建章节。一般玄幻小说建议分3-5卷。",
     parameters: {
       type: "object",
       properties: {
@@ -504,91 +475,71 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "get_chapters",
-    description: "获取某本书的章节列表。",
+    description: "获取章节列表。",
     parameters: {
       type: "object",
-      properties: {
-        bookId: { type: "string", description: "书籍ID" },
-      },
+      properties: { bookId: { type: "string", description: "书籍ID" } },
       required: ["bookId"],
     },
     handler: (_, args) => getChapters(args.bookId),
   },
   {
     name: "create_chapter",
-    description: "创建新章节，需指定所属书籍、所属卷（可选）、标题和正文内容。正文内容应当完整。",
+    description: "创建新章节。必须先创建卷，然后在该卷下创建章节。正文需要包含完整的叙事内容。",
     parameters: {
       type: "object",
       properties: {
         bookId: { type: "string", description: "书籍ID" },
-        volumeId: { type: "string", description: "所属卷ID（可选）" },
+        volumeId: { type: "string", description: "所属卷ID（必填，先create_volume获取）" },
         title: { type: "string", description: "章节标题" },
-        content: { type: "string", description: "章节正文" },
+        content: { type: "string", description: "章节正文，须完整写出该章节的全部内容" },
       },
-      required: ["bookId", "title", "content"],
+      required: ["bookId", "volumeId", "title", "content"],
     },
-    handler: (_, args) => createChapter(args.bookId, args.volumeId || null, args.title, args.content),
+    handler: (_, args) => createChapter(args.bookId, args.volumeId, args.title, args.content),
   },
   {
     name: "read_chapter",
-    description: "读取某章节的完整内容。用于了解已写的内容以续写或修改。",
+    description: "读取章节完整内容，用于续写/修改时了解已写内容。",
     parameters: {
       type: "object",
-      properties: {
-        chapterId: { type: "string", description: "章节ID" },
-      },
+      properties: { chapterId: { type: "string", description: "章节ID" } },
       required: ["chapterId"],
     },
     handler: (_, args) => readChapter(args.chapterId),
   },
   {
-    name: "save_character",
-    description: "创建或保存角色设定。用于记录角色名称、外形、性格、背景等信息。",
+    name: "save_world_setting",
+    description: "保存世界设定（角色/物品/世界背景/金手指等）。items 数组每项包含 type, name, description。\n修仙玄幻小说必须包含: 角色(主角/配角/反派等需包含境界、武器、功法、法宝)、物品(丹药/法器/材料等)、金手指(系统/传承/宝物等)、世界背景(势力分布/修炼体系/地理)",
     parameters: {
       type: "object",
       properties: {
         bookId: { type: "string", description: "书籍ID" },
-        name: { type: "string", description: "角色名" },
-        description: { type: "string", description: "角色描述（外形、性格等）" },
-        traits: { type: "object", description: "角色属性（如年龄、职业、能力等）" },
+        items: {
+          type: "array",
+          description: "设定项数组",
+          items: {
+            type: "object",
+            properties: {
+              type: { type: "string", description: "类型: 角色/物品/世界背景/金手指" },
+              name: { type: "string", description: "名称" },
+              description: { type: "string", description: "详细描述" },
+            },
+          },
+        },
       },
-      required: ["bookId", "name", "description"],
+      required: ["bookId", "items"],
     },
-    handler: (_, args) => saveCharacter(args.bookId, args.name, args.description, args.traits || {}),
-  },
-  {
-    name: "get_characters",
-    description: "获取某本书的所有角色设定。",
-    parameters: {
-      type: "object",
-      properties: {
-        bookId: { type: "string", description: "书籍ID" },
-      },
-      required: ["bookId"],
-    },
-    handler: (_, args) => getCharacters(args.bookId),
-  },
-  {
-    name: "save_world_building",
-    description: "保存世界观设定，包括世界背景、势力、地理等。",
-    parameters: {
-      type: "object",
-      properties: {
-        bookId: { type: "string", description: "书籍ID" },
-        worldBuilding: { type: "string", description: "世界观设定内容" },
-      },
-      required: ["bookId", "worldBuilding"],
-    },
-    handler: (_, args) => saveWorldBuilding(args.bookId, args.worldBuilding),
+    handler: (_, args) => saveWorldSetting(args.bookId, args.items),
   },
   {
     name: "update_book",
-    description: "更新书籍信息，如状态、描述等。",
+    description: "更新书籍信息（状态、描述等）。",
     parameters: {
       type: "object",
       properties: {
         bookId: { type: "string", description: "书籍ID" },
-        updates: { type: "object", description: "要更新的字段（如 status, description）" },
+        updates: { type: "object", description: "要更新的字段" },
       },
       required: ["bookId", "updates"],
     },
@@ -596,16 +547,14 @@ export const agentTools: ToolDefinition[] = [
   },
 ];
 
-/**
- * 根据名称查找工具
- */
+// ============================================================
+// 工具查找 & 系统提示
+// ============================================================
+
 export function findTool(name: string): ToolDefinition | undefined {
   return agentTools.find((t) => t.name === name);
 }
 
-/**
- * 生成工具描述文本（给 LLM 的系统提示用）
- */
 export function getToolsSystemPrompt(): string {
   const descriptions = agentTools.map((t) => {
     const params = t.parameters.properties
@@ -616,5 +565,16 @@ export function getToolsSystemPrompt(): string {
     return `### ${t.name}\n描述: ${t.description}\n参数:\n${params}`;
   });
 
-  return `## 可用工具\n\n你可以使用以下工具来完成用户的创作需求。每次调用工具时，请返回一个 JSON 格式的工具调用指令:\n\n\`\`\`json\n{"tool": "工具名", "args": {参数}}\n\`\`\`\n\n工具执行结果会返回给你，请根据结果继续操作或给用户回复。\n\n${descriptions.join("\n\n")}`;
+  return [
+    "## 可用工具\n",
+    "你可以使用以下工具来完成用户的创作需求。每次调用工具时，请在回复中输出以下格式：",
+    "",
+    '```json',
+    '{"tool": "工具名", "args": {参数}}',
+    '```',
+    "",
+    "工具执行结果会返回给你。继续分析结果，执行下一步，直到任务全部完成。",
+    "",
+    descriptions.join("\n\n"),
+  ].join("\n");
 }
