@@ -36,8 +36,16 @@ import RNSSE from "react-native-sse";
 import * as Haptics from "expo-haptics";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  const token = await AsyncStorage.getItem("auth_token");
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["x-session"] = token;
+  return headers;
+}
 
 // ========== 封面图片列表 ==========
 const COVER_IMAGES_MAN = Array.from({ length: 16 }, (_, i) => ({
@@ -325,7 +333,8 @@ export default function WorksScreen() {
 
   const fetchBooks = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing`);
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_BASE}/api/v1/writing`, { headers });
       const json = await res.json();
       if (json.success) setBooks(json.data);
     } catch (e) {
@@ -383,9 +392,10 @@ export default function WorksScreen() {
         status: newStatus,
       };
       body.coverImage = customCoverUrl.trim() || selectedCover;
+      const headers = await getAuthHeaders();
       const res = await fetch(`${API_BASE}/api/v1/writing/${editingBookId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
       const json = await res.json();
@@ -407,9 +417,10 @@ export default function WorksScreen() {
       return;
     }
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${API_BASE}/api/v1/writing`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTitle.trim(),
           description: newDesc.trim(),
@@ -439,9 +450,10 @@ export default function WorksScreen() {
     }
     setAiGenerating(true);
     try {
+      const headers = await getAuthHeaders();
       const res = await fetch(`${API_BASE}/api/v1/writing/ai-generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { ...headers, "Content-Type": "application/json" },
         body: JSON.stringify({ topic: aiTopic.trim() }),
       });
       const json = await res.json();
@@ -469,7 +481,11 @@ export default function WorksScreen() {
   // 删除书籍
   const executeDeleteBook = async (book: Book) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, { method: "DELETE" });
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, {
+        method: "DELETE",
+        headers: token ? { "x-session": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
+      });
       const json = await res.json();
       if (json.success) {
         setConfirmDeleteBook(null);
