@@ -62,6 +62,68 @@ const DEFAULT_SKILLS: Skill[] = [
   { id: "blurb", name: "爆款简介", desc: "仅生成作品简介与章节标题", prompt: "你是一个小说简介创作师。请严格只生成吸引人的小说简介、推荐语和封面文案。不要创建书籍、不要写正文。", enabled: true },
 ];
 
+// ===== Available models (same as AI settings page) =====
+const PRESET_MODELS = [
+  { id: "doubao-seed-2-0-lite-260215", name: "豆包 Lite", provider: "ByteDance", desc: "轻量快速，适合日常创作" },
+  { id: "doubao-seed-2-0-pro-260215", name: "豆包 Pro", provider: "ByteDance", desc: "更强能力，适合复杂任务" },
+  { id: "deepseek-v3-2-251201", name: "DeepSeek V3", provider: "DeepSeek", desc: "深度推理，逻辑严谨" },
+  { id: "kimi-k2-5-260127", name: "Kimi K2", provider: "Moonshot", desc: "长文本处理，理解力强" },
+  { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", provider: "Anthropic", desc: "安全可控，创意出色" },
+  { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", desc: "全能模型，综合表现优秀" },
+];
+
+// ===== Model Picker Modal =====
+function ModelPickerModal({ visible, selectedId, onSelect, onClose }: {
+  visible: boolean; selectedId: string; onSelect: (modelId: string) => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 justify-end bg-black/40">
+          <View className="bg-white rounded-t-3xl pb-8 max-h-[65%]">
+            <View className="items-center pt-4 pb-2">
+              <View className="w-10 h-1 bg-gray-300 rounded-full" />
+            </View>
+            <Text className="text-lg font-bold text-gray-900 text-center mb-1">选择 AI 模型</Text>
+            <Text className="text-sm text-gray-500 text-center mb-4">不同模型适合不同创作场景</Text>
+            <ScrollView className="px-4" showsVerticalScrollIndicator={false}>
+              {PRESET_MODELS.map((model) => (
+                <TouchableOpacity
+                  key={model.id}
+                  className={`flex-row items-center gap-3 rounded-2xl p-3.5 mb-2 border ${
+                    selectedId === model.id ? "border-indigo-300 bg-indigo-50" : "border-gray-100 bg-white"
+                  }`}
+                  onPress={() => { onSelect(model.id); onClose(); }}
+                >
+                  <View className={`w-9 h-9 rounded-xl items-center justify-center ${
+                    selectedId === model.id ? "bg-indigo-500" : "bg-indigo-50"
+                  }`}>
+                    <FontAwesome6 name="brain" size={15} color={selectedId === model.id ? "#fff" : "#6366F1"} />
+                  </View>
+                  <View className="flex-1">
+                    <View className="flex-row items-center gap-2">
+                      <Text className={`text-sm font-semibold ${selectedId === model.id ? "text-indigo-700" : "text-gray-900"}`}>
+                        {model.name}
+                      </Text>
+                      {selectedId === model.id && (
+                        <View className="bg-indigo-500 rounded-full px-1.5 py-0.5">
+                          <Text className="text-[10px] text-white font-medium">当前</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text className="text-xs text-gray-400 mt-0.5">{model.provider} · {model.desc}</Text>
+                  </View>
+                  <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 const INSPIRATION_CHIPS = [
   "创作一本玄幻修仙小说",
   "重生回到高中改写人生",
@@ -471,6 +533,10 @@ export default function HomeScreen() {
   const [showInsertModal, setShowInsertModal] = useState(false);
   const [insertTarget, setInsertTarget] = useState<"outline" | "chapter" | "inspiration" | "chapter_replace">("chapter");
 
+  // Selected AI model
+  const [selectedModel, setSelectedModel] = useState("doubao-seed-2-0-lite-260215");
+  const [showModelPicker, setShowModelPicker] = useState(false);
+
   const sseRef = useRef<any>(null);
 
   const cleanupSSE = () => {
@@ -508,7 +574,7 @@ export default function HomeScreen() {
     } catch (e) { /* silent */ }
   }, []);
 
-  // Load last session + active book on mount
+  // Load last session + active book + selected model on mount
   useEffect(() => {
     (async () => {
       await loadSkills();
@@ -536,6 +602,15 @@ export default function HomeScreen() {
       try {
         const bookRaw = await AsyncStorage.getItem("active_book");
         if (bookRaw) setActiveBook(JSON.parse(bookRaw));
+      } catch {}
+      // Load saved AI model
+      try {
+        const savedModel = await AsyncStorage.getItem("selected_ai_model");
+        if (savedModel) {
+          // Validate it's one of the known models
+          const valid = PRESET_MODELS.find(m => m.id === savedModel);
+          if (valid) setSelectedModel(savedModel);
+        }
       } catch {}
     })();
   }, []);
@@ -628,6 +703,7 @@ export default function HomeScreen() {
           skillName: skill?.name || null,
           bookId: activeBook?.id || null,
           bookTitle: activeBook?.title || null,
+          model: selectedModel,
         }),
       });
       sseRef.current = sse;
@@ -834,6 +910,12 @@ export default function HomeScreen() {
     } catch (e) { /* silent */ }
   }, [deleteTarget, sessionList, resetDialog, currentSessionId]);
 
+  // ===== Handle model selection =====
+  const handleModelSelect = useCallback((modelId: string) => {
+    setSelectedModel(modelId);
+    AsyncStorage.setItem("selected_ai_model", modelId);
+  }, []);
+
   // ===== Build session items =====
   const curSid = currentSessionId;
   const sessionsToShow = sessionList.slice(0, 8);
@@ -866,12 +948,15 @@ export default function HomeScreen() {
         <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center" onPress={() => setSidebarOpen(true)}>
           <FontAwesome6 name="bars" size={18} color="#374151" />
         </TouchableOpacity>
-        <View className="flex-row items-center gap-2">
+        <TouchableOpacity className="flex-row items-center gap-2 active:opacity-70" onPress={() => setShowModelPicker(true)}>
           <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
-            <FontAwesome6 name="robot" size={11} color="#6366F1" />
+            <FontAwesome6 name="brain" size={11} color="#6366F1" />
           </View>
-          <Text className="text-sm font-medium text-gray-700">豆包 Seed 2.0</Text>
-        </View>
+          <Text className="text-sm font-medium text-gray-700">
+            {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
+          </Text>
+          <FontAwesome6 name="chevron-down" size={9} color="#9CA3AF" />
+        </TouchableOpacity>
         <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={resetDialog}>
           <FontAwesome6 name="plus" size={13} color="#6366F1" />
         </TouchableOpacity>
@@ -1093,6 +1178,7 @@ export default function HomeScreen() {
       </View>
 
       {/* Modals */}
+      <ModelPickerModal visible={showModelPicker} selectedId={selectedModel} onSelect={handleModelSelect} onClose={() => setShowModelPicker(false)} />
       <SkillPickerModal visible={showSkillPicker} skills={skills} onSelect={handleSkillSelect} onClose={() => setShowSkillPicker(false)} />
       <BookPickerModal visible={showBookPicker} books={books} selectedId={activeBook?.id || null} onSelect={(book) => {
         setActiveBook(book);

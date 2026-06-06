@@ -899,15 +899,17 @@ router.post("/ai-dialogue", quotaMiddleware('ai_chat'), async (req: Request, res
     // Add current message
     msgs.push({ role: "user", content: message });
 
-    // 从用户设置中获取AI模型偏好
-    let aiModel = "doubao-seed-2-0-lite-260215";
+    // 确定AI模型（优先级：前端传参 > DB设置 > 默认值）
+    let aiModel = req.body.model || "doubao-seed-2-0-lite-260215";
     try {
-      const [userRow] = await db.select({ aiSettings: users.aiSettings }).from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-      if (userRow?.aiSettings && typeof userRow.aiSettings === "object") {
-        const settings = userRow.aiSettings as Record<string, any>;
-        if (settings.aiModel) aiModel = settings.aiModel;
+      if (!req.body.model) {
+        const [userRow] = await db.select({ aiSettings: users.aiSettings }).from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (userRow?.aiSettings && typeof userRow.aiSettings === "object") {
+          const settings = userRow.aiSettings as Record<string, any>;
+          if (settings.aiModel) aiModel = settings.aiModel;
+        }
       }
     } catch (e) {
       // 静默回退到默认模型
