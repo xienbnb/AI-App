@@ -30,6 +30,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Screen } from "@/components/Screen";
+import { useAuth } from "@/contexts/AuthContext";
 import { useFocusEffect } from "expo-router";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -120,6 +121,8 @@ const defaultInspirations: Inspiration[] = [];
 export default function DetailScreen() {
   const router = useSafeRouter();
   const { id } = useSafeSearchParams<{ id: string }>();
+  const { token } = useAuth();
+  const getAuthHeaders = useCallback(() => ({ "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) }), [token]);
   const [book, setBook] = useState<Book | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -204,7 +207,7 @@ export default function DetailScreen() {
     if (!id) return;
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}`);
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success) setBook(json.data);
     } catch (e) {
@@ -218,7 +221,7 @@ export default function DetailScreen() {
   const fetchOutlines = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`);
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success) setOutlines(json.data || []);
     } catch (e) { console.error("获取大纲失败", e); }
@@ -228,7 +231,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ items: newOutlines }),
       });
       const json = await res.json();
@@ -240,7 +243,7 @@ export default function DetailScreen() {
   const fetchSettings = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`);
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success) setSettings(json.data || []);
     } catch (e) { console.error("获取设定失败", e); }
@@ -250,7 +253,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ data: newSettings }),
       });
       const json = await res.json();
@@ -262,7 +265,7 @@ export default function DetailScreen() {
   const fetchInspirations = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`);
+      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success) setInspirations(json.data || []);
     } catch (e) { console.error("获取灵感失败", e); }
@@ -272,7 +275,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ data: newInspirations }),
       });
       const json = await res.json();
@@ -302,7 +305,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${volumeId}/chapters`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title: chapterTitle.trim() }),
       });
       const json = await res.json();
@@ -324,7 +327,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title: name }),
       });
       const json = await res.json();
@@ -347,11 +350,11 @@ export default function DetailScreen() {
     setDeleteConfirmInfo(null);
     try {
       if (type === "chapter") {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${itemId}`, { method: "DELETE" });
+        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) await fetchBook();
       } else if (type === "volume") {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE" });
+        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) await fetchBook();
       }
@@ -367,7 +370,7 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${chapterId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ title: newTitle.trim() }),
       });
       const json = await res.json();
@@ -1121,7 +1124,7 @@ export default function DetailScreen() {
                     try {
                       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${editingVolume.id}`, {
                         method: "PUT",
-                        headers: { "Content-Type": "application/json" },
+                        headers: getAuthHeaders(),
                         body: JSON.stringify({ title: editVolumeTitle.trim() }),
                       });
                       const json = await res.json();

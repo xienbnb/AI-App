@@ -39,6 +39,7 @@ import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -50,6 +51,8 @@ export default function EditorScreen() {
   const router = useSafeRouter();
   const { bookId, chapterId } = useSafeSearchParams<{ bookId: string; chapterId: string }>();
   const { width: screenWidth } = useWindowDimensions();
+  const { token } = useAuth();
+  const getAuthHeaders = useCallback(() => ({ "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) }), [token]);
 
   // ===== 核心数据 =====
   const [content, setContent] = useState("");
@@ -203,7 +206,7 @@ export default function EditorScreen() {
     const load = async () => {
       if (!bookId || !chapterId) return;
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`);
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, { headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) {
           setContent(json.data.content || "");
@@ -213,7 +216,7 @@ export default function EditorScreen() {
         }
       } catch (e) { console.error("获取章节失败", e); }
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`);
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, { headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) {
           setBookTitle(json.data.title);
@@ -357,7 +360,7 @@ export default function EditorScreen() {
   const handleNewChapter = async () => {
     if (!bookId) return;
     try {
-      const bookRes = await fetch(`${API_BASE}/api/v1/writing/${bookId}`);
+      const bookRes = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, { headers: getAuthHeaders() });
       const json = await bookRes.json();
       const volId = json.success && json.data.volumes?.[0]?.id;
       if (!volId) { Alert.alert("提示", "请先在书籍详情页创建卷"); return; }
@@ -443,7 +446,7 @@ export default function EditorScreen() {
     const idx = chapterList.findIndex(c => c.id === chapterId);
     if (idx > 0) {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterList[idx - 1].id}`);
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterList[idx - 1].id}`, { headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) { setPrevChapterContent(json.data.content?.slice(0, 500) || ""); setPrevChapterVisible(true); }
       } catch {}
@@ -541,7 +544,7 @@ export default function EditorScreen() {
     Alert.alert("确认删除", `删除"${chapterTitle}"？不可撤销。`, [
       { text: "取消", style: "cancel" },
       { text: "删除", style: "destructive", onPress: async () => {
-        try { await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, { method: "DELETE" }); router.back(); } catch {}
+        try { await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, { method: "DELETE", headers: getAuthHeaders() }); router.back(); } catch {}
       }},
     ]);
   };
