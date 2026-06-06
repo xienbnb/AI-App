@@ -152,6 +152,34 @@ export default function LoginScreen() {
     }
   }, [phone, password, agreeTerms]);
 
+  // 游客登录
+  const handleGuestLogin = useCallback(async () => {
+    if (!agreeTerms) {
+      alert("请先阅读并同意服务条款和隐私政策");
+      return;
+    }
+    setLoading(true);
+    try {
+      const storedPhone = await getStoredPhone();
+      const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/auth/guest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: storedPhone || "" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        await login(data.token);
+        router.replace("/");
+      } else {
+        alert(data.error || "游客登录失败");
+      }
+    } catch {
+      alert("网络错误，请重试");
+    } finally {
+      setLoading(false);
+    }
+  }, [agreeTerms, getStoredPhone, login, router]);
+
   return (
     <Screen>
       <KeyboardAvoidingView
@@ -277,6 +305,18 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {/* 游客模式入口 */}
+          <TouchableOpacity
+            className="mt-4 py-3 rounded-2xl border border-gray-200/60 items-center"
+            onPress={handleGuestLogin}
+            activeOpacity={0.6}
+          >
+            <View className="flex-row items-center justify-center">
+              <FontAwesome6 name="user-astronaut" size={16} color="#6B7280" />
+              <Text className="text-sm text-gray-500 ml-2">游客模式浏览</Text>
+            </View>
+          </TouchableOpacity>
 
           {/* ====== OTP MODE ====== */}
           {mode === "otp" && (

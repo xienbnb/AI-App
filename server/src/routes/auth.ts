@@ -270,20 +270,46 @@ router.get("/me", async (req: Request, res: Response) => {
  * POST /api/v1/auth/guest
  * 游客登录（无账号，快速体验）
  */
-router.post("/guest", async (_req: Request, res: Response) => {
+router.post("/guest", async (req: Request, res: Response) => {
   try {
+    const { phone } = req.body || {};
+
+    // 如果提供了手机号，尝试查找已有用户
+    if (phone) {
+      const [existingUser] = await db.select()
+        .from(users)
+        .where(eq(users.email, phone))
+        .limit(1);
+
+      if (existingUser) {
+        const guestToken = `guest_${existingUser.id}_${Date.now()}`;
+        return res.json({
+          token: guestToken,
+          user: {
+            id: existingUser.id,
+            email: existingUser.email,
+            nickname: existingUser.nickname || "用户" + existingUser.email?.slice(-4),
+            avatar: existingUser.avatar || "",
+            bio: existingUser.bio || "",
+            role: existingUser.role || "user",
+            isGuest: true,
+          },
+        });
+      }
+    }
+
+    // 没有提供手机号或用户不存在 → 创建新游客
     const guestId = crypto.randomUUID();
     const guestName = "游客" + guestId.slice(0, 6).toUpperCase();
 
     const [guestUser] = await db.insert(users).values({
       id: guestId,
-      email: `guest_${guestId}@guest.app`,
+      email: phone || `guest_${guestId}@guest.app`,
       nickname: guestName,
       avatar: "",
       bio: "游客用户",
     }).returning();
 
-    // 生成一个简单的 guest token
     const guestToken = `guest_${guestId}_${Date.now()}`;
 
     res.json({

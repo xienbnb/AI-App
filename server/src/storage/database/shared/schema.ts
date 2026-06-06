@@ -8,6 +8,15 @@ export const users = pgTable("users", {
 	avatar: text().default(''),
 	bio: text().default(''),
 	role: text().notNull().default('user'),
+	penName: text("pen_name").default(''),
+	gender: text().default(''),
+	phone: text().default(''),
+	realName: text("real_name").default(''),
+	theme: text().default('system'),
+	aiSettings: jsonb("ai_settings").default('{}'),
+	consecutiveDays: integer("consecutive_days").default(0),
+	todayWordCount: integer("today_word_count").default(0),
+	lastActiveDate: text("last_active_date").default(''),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
@@ -74,4 +83,19 @@ export const posts = pgTable("posts", {
 	featured: integer("featured").notNull().default(0),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const feedback = pgTable("feedback", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: text("user_id").notNull().default(''),
+	content: text().notNull().default(''),
+	contact: text().default(''),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const follows = pgTable("follows", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	followerId: text("follower_id").notNull(),
+	followingId: text("following_id").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
