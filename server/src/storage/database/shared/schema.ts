@@ -112,6 +112,17 @@ export const feedback = pgTable("feedback", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
+// ==================== Agent 对话系统 ====================
+
+export const agentConversations = pgTable("agent_conversations", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	userId: text("user_id").notNull().default(''),
+	title: text("title").notNull().default('新对话'),
+	messages: jsonb("messages").notNull().default('[]'),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
 export const follows = pgTable("follows", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	followerId: text("follower_id").notNull(),

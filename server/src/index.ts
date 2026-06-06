@@ -9,6 +9,7 @@ import usersRouter from "./routes/users.js";
 import vipRouter from "./routes/vip.js";
 import backupRouter from "./routes/backup.js";
 import workflowRouter from "./routes/workflow.js";
+import agentRouter from "./routes/agent.js";
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.middleware.js";
 
@@ -47,6 +48,7 @@ app.use('/api/v1/users', authMiddleware, usersRouter);
 app.use('/api/v1/vip', authMiddleware, vipRouter);
 app.use('/api/v1/backup', authMiddleware, backupRouter);
 app.use('/api/v1/workflow', authMiddleware, quotaMiddleware('ai_generate'), workflowRouter);
+app.use('/api/v1/agent', authMiddleware, agentRouter);
 
 // 404 handler
 app.use((req, res) => {

@@ -537,6 +537,164 @@ export default function HomeScreen() {
   const [selectedModel, setSelectedModel] = useState("doubao-seed-2-0-lite-260215");
   const [showModelPicker, setShowModelPicker] = useState(false);
 
+  // API base
+  const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "";
+
+  // ===== Agent Mode =====
+  const [isAgentMode, setIsAgentMode] = useState(false);
+  const [agentConversations, setAgentConversations] = useState<any[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
+  const [agentStreamContent, setAgentStreamContent] = useState("");
+  const [agentActionStatus, setAgentActionStatus] = useState<string>("");
+  const agentSseRef = useRef<any>(null);
+
+  const getAuthHeaders = useCallback(() => ({
+    "Content-Type": "application/json",
+    ...(token ? { "x-session": token } : {}),
+  }), [token]);
+
+  const cleanupAgentSSE = () => {
+    if (agentSseRef.current) {
+      try { agentSseRef.current.close(); } catch (e) { /* ignore */ }
+      agentSseRef.current = null;
+    }
+  };
+
+  // Load agent conversations
+  const loadAgentConversations = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/agent/conversations`, {
+        headers: getAuthHeaders(),
+      });
+      const json = await res.json();
+      if (json.success) setAgentConversations(json.data || []);
+    } catch (e) { /* silent */ }
+  }, [token, API_BASE, getAuthHeaders]);
+
+  // Create new agent conversation
+  const handleNewAgentConv = async () => {
+    setActiveConvId(null);
+    setAgentMessages([]);
+    setAgentStreamContent("");
+    setAgentActionStatus("");
+    setInputText("");
+  };
+
+  // Load agent conversation messages
+  const handleLoadAgentConv = async (convId: string) => {
+    setActiveConvId(convId);
+    cleanupAgentSSE();
+    setIsAiThinking(false);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/agent/conversations/${convId}`, {
+        headers: getAuthHeaders(),
+      });
+      const json = await res.json();
+      if (json.success && json.data?.messages) {
+        const msgs = json.data.messages.map((m: any) => ({
+          role: m.role === "assistant" ? "ai" : m.role,
+          content: m.content,
+        }));
+        setAgentMessages(msgs);
+      }
+    } catch (e) { /* silent */ }
+  };
+
+  // Delete agent conversation
+  const handleDeleteAgentConv = async (convId: string) => {
+    try {
+      await fetch(`${API_BASE}/api/v1/agent/conversations/${convId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      setAgentConversations(prev => prev.filter(c => c.id !== convId));
+      if (activeConvId === convId) {
+        setActiveConvId(null);
+        setAgentMessages([]);
+      }
+    } catch (e) { /* silent */ }
+  };
+
+  // Send message to Agent
+  const sendAgentChat = async (text: string) => {
+    if (!text.trim() || !token) return;
+    const userMsg: ChatMessage = { role: "user", content: text };
+    setAgentMessages(prev => [...prev, userMsg]);
+    setInputText("");
+    setIsAiThinking(true);
+    setAgentStreamContent("");
+    setAgentActionStatus("");
+
+    cleanupAgentSSE();
+
+    try {
+      const sse = new RNSSE(`${API_BASE}/api/v1/agent/execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session": token,
+        },
+        body: JSON.stringify({
+          message: text,
+          conversationId: activeConvId,
+        }),
+      });
+      agentSseRef.current = sse;
+      let fullContent = "";
+
+      sse.addEventListener("message", (event: any) => {
+        if (!event.data) return;
+        if (event.data === "[DONE]") {
+          sse.close();
+          agentSseRef.current = null;
+          setIsAiThinking(false);
+          // Load conversations list (re-fetch to get new/updated)
+          loadAgentConversations();
+          return;
+        }
+        try {
+          const parsed = JSON.parse(event.data);
+          if (parsed.type === "text") {
+            fullContent += parsed.content || "";
+            setAgentStreamContent(fullContent);
+          } else if (parsed.type === "action_start") {
+            setAgentActionStatus(`[执行] ${parsed.tool}...`);
+          } else if (parsed.type === "action_result") {
+            if (parsed.success) {
+              setAgentActionStatus(`[完成] ${parsed.tool}`);
+            } else {
+              setAgentActionStatus(`[失败] ${parsed.tool}`);
+            }
+          } else if (parsed.type === "error") {
+            setAgentActionStatus(`[错误] ${parsed.message}`);
+          }
+        } catch (e) {
+          fullContent += event.data;
+          setAgentStreamContent(fullContent);
+        }
+      });
+
+      sse.addEventListener("error", (event: any) => {
+        sse.close();
+        agentSseRef.current = null;
+        setIsAiThinking(false);
+        if (fullContent) {
+          setAgentMessages(prev => [...prev, { role: "ai", content: fullContent }]);
+        } else {
+          setAgentMessages(prev => [...prev, { role: "ai", content: "抱歉，Agent 出错了，请稍后重试。" }]);
+        }
+        setAgentStreamContent("");
+        setAgentActionStatus("");
+        loadAgentConversations();
+      });
+    } catch (e: any) {
+      setIsAiThinking(false);
+      setAgentMessages(prev => [...prev, { role: "ai", content: `连接错误: ${e.message || "未知错误"}` }]);
+    }
+  };
+
   const sseRef = useRef<any>(null);
 
   const cleanupSSE = () => {
@@ -865,6 +1023,10 @@ export default function HomeScreen() {
   // ===== Send =====
   const handleSend = () => {
     if (!inputText.trim() || isAiThinking) return;
+    if (isAgentMode) {
+      sendAgentChat(inputText.trim());
+      return;
+    }
     const skill = activeSkill;
     setActiveSkill(null);
     sendFreeChat(inputText.trim(), skill);
@@ -945,21 +1107,40 @@ export default function HomeScreen() {
     <View className="flex-1 bg-white overflow-hidden">
       {/* Top Bar */}
       <View className="flex-row items-center justify-between px-4 border-b border-gray-100" style={{ paddingTop: insets.top + 4, paddingBottom: 10 }}>
-        <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center" onPress={() => setSidebarOpen(true)}>
-          <FontAwesome6 name="bars" size={18} color="#374151" />
-        </TouchableOpacity>
-        <TouchableOpacity className="flex-row items-center gap-2 active:opacity-70" onPress={() => setShowModelPicker(true)}>
-          <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
-            <FontAwesome6 name="brain" size={11} color="#6366F1" />
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center" onPress={() => setSidebarOpen(true)}>
+            <FontAwesome6 name="bars" size={18} color="#374151" />
+          </TouchableOpacity>
+          {/* Mode Toggle */}
+          <View className="flex-row bg-gray-100 rounded-xl p-0.5">
+            <TouchableOpacity
+              className={`px-3 py-1.5 rounded-[10px] ${!isAgentMode ? "bg-white shadow-sm" : ""}`}
+              onPress={() => { setIsAgentMode(false); setIsAiThinking(false); cleanupAgentSSE(); }}
+            >
+              <Text className={`text-xs font-medium ${!isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>技能对话</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`px-3 py-1.5 rounded-[10px] ${isAgentMode ? "bg-white shadow-sm" : ""}`}
+              onPress={() => { setIsAgentMode(true); handleNewAgentConv(); loadAgentConversations(); }}
+            >
+              <Text className={`text-xs font-medium ${isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>写作Agent</Text>
+            </TouchableOpacity>
           </View>
-          <Text className="text-sm font-medium text-gray-700">
-            {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
-          </Text>
-          <FontAwesome6 name="chevron-down" size={9} color="#9CA3AF" />
-        </TouchableOpacity>
-        <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={resetDialog}>
-          <FontAwesome6 name="plus" size={13} color="#6366F1" />
-        </TouchableOpacity>
+        </View>
+        <View className="flex-row items-center gap-2">
+          <TouchableOpacity className="flex-row items-center gap-2 active:opacity-70" onPress={() => setShowModelPicker(true)}>
+            <View className="w-6 h-6 rounded-full bg-indigo-100 items-center justify-center">
+              <FontAwesome6 name="brain" size={11} color="#6366F1" />
+            </View>
+            <Text className="text-sm font-medium text-gray-700">
+              {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "选择模型"}
+            </Text>
+            <FontAwesome6 name="chevron-down" size={9} color="#9CA3AF" />
+          </TouchableOpacity>
+          <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={isAgentMode ? handleNewAgentConv : resetDialog}>
+            <FontAwesome6 name="plus" size={13} color="#6366F1" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Book Context Bar */}
@@ -994,6 +1175,107 @@ export default function HomeScreen() {
 
       {/* Messages Area */}
       <ScrollView ref={scrollRef} className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
+        {/* Agent Mode Messages */}
+        {isAgentMode ? (
+          <>
+            {agentMessages.length === 0 && (
+              <View className="mb-6">
+                <View className="items-center py-8 mb-2">
+                  <View className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 items-center justify-center mb-4" style={{ backgroundColor: "#10B981" }}>
+                    <FontAwesome6 name="wand-magic-sparkles" size={22} color="white" />
+                  </View>
+                  <Text className="text-lg font-bold text-gray-900 mb-1">写作Agent</Text>
+                  <Text className="text-sm text-gray-500 text-center px-6 leading-5">
+                    我可以帮你从零开始创建一本完整的小说，包括设定、大纲、人物和章节。
+                    只需说出你的想法，我会一步步完成。
+                  </Text>
+                </View>
+                {/* Agent Suggestions */}
+                <View className="mb-4">
+                  <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
+                  {[
+                    { title: "创作一本玄幻修仙小说", desc: "废材逆袭，觉醒上古血脉" },
+                    { title: "我想写一本都市言情小说", desc: "霸道总裁与菜鸟编辑的甜蜜日常" },
+                    { title: "帮我写一个科幻故事", desc: "星际时代，人类发现远古文明遗迹" },
+                    { title: "设计一本悬疑推理小说", desc: "古宅凶案，层层反转的谜题" },
+                  ].map((s, i) => (
+                    <TouchableOpacity key={i} className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-emerald-100 active:bg-emerald-50/30" onPress={() => setInputText(s.title)}>
+                      <View className="w-9 h-9 rounded-xl bg-emerald-50 items-center justify-center mr-3">
+                        <FontAwesome6 name="wand-magic-sparkles" size={15} color="#10B981" />
+                      </View>
+                      <View className="flex-1">
+                        <Text className="text-sm font-semibold text-gray-800">{s.title}</Text>
+                        <Text className="text-xs text-gray-400 mt-0.5">{s.desc}</Text>
+                      </View>
+                      <FontAwesome6 name="chevron-right" size={11} color="#CBD5E1" />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+            {agentMessages.map((msg, i) => (
+              <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+                {msg.role === "ai" && (
+                  <View className="flex-row gap-2 max-w-[90%]">
+                    <View className="w-8 h-8 rounded-full bg-emerald-100 items-center justify-center mt-1 shrink-0">
+                      <FontAwesome6 name="wand-magic-sparkles" size={13} color="#10B981" />
+                    </View>
+                    <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink border border-emerald-100/50">
+                      <MarkdownContent content={msg.content} />
+                    </View>
+                  </View>
+                )}
+                {msg.role === "user" && (
+                  <View className="bg-emerald-600 rounded-2xl rounded-tr-sm px-4 py-3 max-w-[80%]">
+                    <Text className="text-sm text-white leading-6 flex-shrink flex-wrap">{msg.content}</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+            {/* Agent Streaming */}
+            {isAiThinking && (
+              <View className="mb-4 items-start">
+                <View className="flex-row gap-2 max-w-[90%]">
+                  <View className="w-8 h-8 rounded-full bg-emerald-100 items-center justify-center mt-1 shrink-0">
+                    <FontAwesome6 name="wand-magic-sparkles" size={13} color="#10B981" />
+                  </View>
+                  <View className="flex-1">
+                    {agentActionStatus ? (
+                      <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-emerald-100">
+                        <View className="flex-row items-center gap-2 mb-1">
+                          <ActivityIndicator size="small" color="#10B981" />
+                          <Text className="text-sm font-medium text-emerald-700">{agentActionStatus}</Text>
+                        </View>
+                        {agentStreamContent ? (
+                          <View className="mt-2 pt-2 border-t border-emerald-200">
+                            <Text className="text-sm text-emerald-800">{agentStreamContent}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : (
+                      <>
+                        {agentStreamContent ? (
+                          <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-emerald-100 flex-shrink">
+                            <MarkdownContent content={agentStreamContent} isStream />
+                          </View>
+                        ) : (
+                          <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3">
+                            <View className="flex-row items-center gap-2">
+                              <ActivityIndicator size="small" color="#10B981" />
+                              <Text className="text-sm text-emerald-700">Agent 思考中...</Text>
+                            </View>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                </View>
+              </View>
+            )}
+            <View className="h-4" />
+          </>
+        ) : (
+          <>
         {messages.map((msg, i) => (
           <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
             {msg.role === "ai" && (
@@ -1099,20 +1381,41 @@ export default function HomeScreen() {
         )}
 
         <View className="h-4" />
+          </>
+        )}
       </ScrollView>
 
       {/* Input Bar */}
       <View className="border-t border-gray-100 px-4 pt-2 pb-4 bg-white">
-        {!isAiThinking && messages.length <= 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
-            <View className="flex-row gap-2">
-              {INSPIRATION_CHIPS.map((chip, i) => (
-                <TouchableOpacity key={i} className="bg-gray-50 rounded-full px-3.5 py-1.5 border border-gray-200" onPress={() => setInputText(chip)}>
-                  <Text className="text-xs text-gray-500">{chip}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
+        {!isAiThinking && (
+          isAgentMode ? (
+            agentMessages.length === 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
+                <View className="flex-row gap-2">
+                  {[
+                    "创作一本玄幻修仙小说", "写都市言情故事",
+                    "设计科幻世界观", "悬疑推理小说",
+                  ].map((chip, i) => (
+                    <TouchableOpacity key={i} className="bg-emerald-50 rounded-full px-3.5 py-1.5 border border-emerald-200" onPress={() => setInputText(chip)}>
+                      <Text className="text-xs text-emerald-700">{chip}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            )
+          ) : (
+            messages.length <= 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
+                <View className="flex-row gap-2">
+                  {INSPIRATION_CHIPS.map((chip, i) => (
+                    <TouchableOpacity key={i} className="bg-gray-50 rounded-full px-3.5 py-1.5 border border-gray-200" onPress={() => setInputText(chip)}>
+                      <Text className="text-xs text-gray-500">{chip}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
+            )
+          )
         )}
 
         <View className="flex-row items-end gap-2">
@@ -1149,16 +1452,18 @@ export default function HomeScreen() {
             <FontAwesome6 name="paperclip" size={15} color={isAiThinking ? "#CBD5E1" : "#64748B"} />
           </TouchableOpacity>
 
-          <TouchableOpacity className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200" onPress={() => setShowSkillPicker(true)}>
-            <FontAwesome6 name="at" size={15} color="#9333EA" />
-          </TouchableOpacity>
+          {!isAgentMode && (
+            <TouchableOpacity className="w-9 h-9 rounded-xl bg-purple-50 items-center justify-center border border-purple-200" onPress={() => setShowSkillPicker(true)}>
+              <FontAwesome6 name="at" size={15} color="#9333EA" />
+            </TouchableOpacity>
+          )}
 
           <View className="flex-1 bg-gray-50 rounded-2xl border border-gray-200 flex-row items-center px-3">
             <TextInput
               className="flex-1 py-2.5 text-gray-900 text-sm max-h-20 leading-5"
               value={inputText}
               onChangeText={setInputText}
-              placeholder={activeSkill ? `输入内容以使用 [${activeSkill.name}] 技能...` : isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
+              placeholder={isAgentMode ? "告诉Agent你想创作什么类型的小说..." : activeSkill ? `输入内容以使用 [${activeSkill.name}] 技能...` : isAiThinking ? "AI 正在回复中..." : "输入你的想法..."}
               placeholderTextColor="#94A3B8"
               multiline
               editable={!isAiThinking}
@@ -1168,7 +1473,7 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity
-            className={`w-9 h-9 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? "bg-indigo-500" : "bg-gray-200"}`}
+            className={`w-9 h-9 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? (isAgentMode ? "bg-emerald-500" : "bg-indigo-500") : "bg-gray-200"}`}
             onPress={handleSend}
             disabled={!inputText.trim() || isAiThinking}
           >
@@ -1216,16 +1521,66 @@ export default function HomeScreen() {
         <TouchableOpacity className="flex-1 bg-black/40" activeOpacity={1} onPress={() => setSidebarOpen(false)}>
           <View className="w-[75%] h-full bg-white pt-12" onStartShouldSetResponder={() => true}>
             <View className="px-4 mb-4">
-              <Text className="text-lg font-bold text-gray-900">对话历史</Text>
-              <Text className="text-xs text-gray-400 mt-1">共 {sessionList.length} 条记录</Text>
+              <View className="flex-row items-center justify-between">
+                <View>
+                  <Text className="text-lg font-bold text-gray-900">{isAgentMode ? "Agent 对话" : "对话历史"}</Text>
+                  <Text className="text-xs text-gray-400 mt-1">
+                    共 {isAgentMode ? agentConversations.length : sessionList.length} 条记录
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-50 active:bg-emerald-100"
+                  onPress={() => { handleNewAgentConv(); setSidebarOpen(false); }}
+                >
+                  <FontAwesome6 name="plus" size={11} color="#10B981" />
+                  <Text className="text-xs text-emerald-700 font-medium">新建</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <ScrollView className="flex-1 px-3">
-              {sessionList.length === 0 ? (
-                <View className="items-center py-10">
-                  <FontAwesome6 name="comments" size={28} color="#D1D5DB" />
-                  <Text className="text-sm text-gray-400 mt-3">暂无对话记录</Text>
-                </View>
-              ) : sessionItems}
+              {isAgentMode ? (
+                agentConversations.length === 0 ? (
+                  <View className="items-center py-10">
+                    <FontAwesome6 name="wand-magic-sparkles" size={28} color="#D1D5DB" />
+                    <Text className="text-sm text-gray-400 mt-3">暂无 Agent 对话</Text>
+                    <TouchableOpacity className="mt-4 px-4 py-2 rounded-xl bg-emerald-50" onPress={() => { handleNewAgentConv(); setSidebarOpen(false); }}>
+                      <Text className="text-sm text-emerald-600 font-medium">+ 开始新对话</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  agentConversations.map((conv: any) => {
+                    const isActive = conv.id === activeConvId;
+                    const dateStr = new Date(conv.updated_at || conv.created_at).toLocaleDateString("zh-CN", {
+                      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+                    });
+                    return (
+                      <TouchableOpacity
+                        key={conv.id}
+                        className={`flex-row items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 ${isActive ? "bg-emerald-50" : "active:bg-gray-50"}`}
+                        onPress={() => { handleLoadAgentConv(conv.id); setSidebarOpen(false); }}
+                      >
+                        <FontAwesome6 name="wand-magic-sparkles" size={13} color={isActive ? "#10B981" : "#9CA3AF"} />
+                        <View className="flex-1">
+                          <Text className={`text-sm ${isActive ? "text-emerald-600 font-medium" : "text-gray-600"}`} numberOfLines={1}>
+                            {conv.title || "新对话"}
+                          </Text>
+                          <Text className="text-xs text-gray-400 mt-0.5">{dateStr}</Text>
+                        </View>
+                        <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center" onPress={() => handleDeleteAgentConv(conv.id)}>
+                          <FontAwesome6 name="trash-can" size={12} color="#EF4444" />
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    );
+                  })
+                )
+              ) : (
+                sessionList.length === 0 ? (
+                  <View className="items-center py-10">
+                    <FontAwesome6 name="comments" size={28} color="#D1D5DB" />
+                    <Text className="text-sm text-gray-400 mt-3">暂无对话记录</Text>
+                  </View>
+                ) : sessionItems
+              )}
             </ScrollView>
           </View>
         </TouchableOpacity>
