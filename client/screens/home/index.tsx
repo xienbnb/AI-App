@@ -666,6 +666,7 @@ export default function HomeScreen() {
           message: text,
           conversationId: activeConvId,
           model: selectedModel,
+          bookId: activeBook?.id || null,
         }),
       });
       agentSseRef.current = sse;
@@ -1453,48 +1454,66 @@ export default function HomeScreen() {
           )
         )}
 
-        {/* 底部输入区 - Coze 风格 */}
-        <View className="border-t border-gray-100 pt-3 pb-1" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight - 20 : (insets?.bottom || 8) + 4 }}>
+        {/* 底部输入区 */}
+        <View className="border-t border-gray-100 bg-white" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : (insets?.bottom || 8) }}>
           {/* AI 状态指示 */}
           {isAiThinking && (
-            <View className="flex-row items-center justify-center gap-1.5 mb-2">
+            <View className="flex-row items-center justify-center gap-1.5 py-2">
               <View className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
               <Text className="text-xs text-gray-400">AI 生成中...</Text>
               {agentActionStatus ? <Text className="text-xs text-gray-400">· {agentActionStatus}</Text> : null}
             </View>
           )}
 
+          {/* 挂载书籍芯片 */}
+          {activeBook && (
+            <TouchableOpacity
+              className="mx-3 mb-1 flex-row items-center gap-1.5 self-start bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1"
+              onPress={() => setShowBookPicker(true)}
+            >
+              <FontAwesome6 name="book-open" size={10} color="#D97706" />
+              <Text className="text-[11px] font-medium text-amber-700 max-w-[130px]" numberOfLines={1}>{activeBook.title}</Text>
+              <FontAwesome6 name="chevron-down" size={6} color="#D97706" />
+            </TouchableOpacity>
+          )}
+
           {/* 主输入容器 */}
-          <View className="mx-2 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-            {/* 模型芯片 + 输入行 */}
+          <View className="mx-3 rounded-xl border border-gray-200 bg-white overflow-hidden">
+            {/* 输入行 */}
             <View className="flex-row items-end">
-              {/* 模型选择芯片 */}
+              {/* 模型选择 */}
               <TouchableOpacity
-                className="flex-row items-center gap-1 h-7 px-2.5 mx-2 mt-2 bg-indigo-50 rounded-full active:opacity-70"
+                className="flex-row items-center gap-1 h-6 px-2 mx-2.5 mt-2.5 bg-indigo-50 rounded-md active:opacity-70"
                 onPress={() => setShowModelPicker(true)}
               >
-                <FontAwesome6 name="brain" size={10} color="#6366F1" />
-                <Text className="text-[11px] font-medium text-indigo-600 max-w-[80px]" numberOfLines={1}>
+                <FontAwesome6 name="brain" size={9} color="#6366F1" />
+                <Text className="text-[10px] font-medium text-indigo-600 max-w-[72px]" numberOfLines={1}>
                   {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "模型"}
                 </Text>
-                <FontAwesome6 name="chevron-down" size={6} color="#818CF8" />
+                <FontAwesome6 name="chevron-down" size={5} color="#818CF8" />
               </TouchableOpacity>
 
               {/* 输入框 */}
               <TextInput
-                className="flex-1 px-3 py-3 text-gray-900 text-[15px] leading-6 max-h-24 min-h-[44px]"
+                className="flex-1 px-1 py-2.5 text-gray-900 text-[15px] leading-6 max-h-24 min-h-[42px]"
                 value={inputText}
                 onChangeText={setInputText}
-                placeholder={isAgentMode ? "告诉Agent你想创作什么小说..." : isAiThinking ? "AI 正在回复中..." : activeSkill ? `使用[${activeSkill.name}]...` : "输入想法..."}
+                placeholder={isAgentMode ? "告诉Agent你的创作需求..." : isAiThinking ? "AI 正在回复..." : activeSkill ? `使用[${activeSkill.name}]...` : "输入想法..."}
                 placeholderTextColor="#94A3B8"
                 multiline
                 editable={!isAiThinking}
               />
             </View>
 
-            {/* 底部工具栏行 */}
-            <View className="flex-row items-center justify-between px-2 pb-1.5">
-              <View className="flex-row items-center gap-1">
+            {/* 底部工具栏 */}
+            <View className="flex-row items-center justify-between px-2 pb-1">
+              <View className="flex-row items-center gap-0.5">
+                {/* 挂载书籍按钮 */}
+                {!activeBook && (
+                  <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100" onPress={() => setShowBookPicker(true)}>
+                    <FontAwesome6 name="book-open" size={13} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
                 {/* 文件上传 */}
                 <TouchableOpacity
                   className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100"
@@ -1530,24 +1549,24 @@ export default function HomeScreen() {
                   }}
                   disabled={isAiThinking}
                 >
-                  <FontAwesome6 name="paperclip" size={14} color={isAiThinking ? "#CBD5E1" : "#94A3B8"} />
+                  <FontAwesome6 name="paperclip" size={13} color={isAiThinking ? "#CBD5E1" : "#94A3B8"} />
                 </TouchableOpacity>
-
                 {/* 技能选择 @ */}
                 {!isAgentMode && (
                   <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100" onPress={() => setShowSkillPicker(true)}>
-                    <FontAwesome6 name="at" size={14} color="#A855F7" />
+                    <FontAwesome6 name="at" size={13} color="#A855F7" />
                   </TouchableOpacity>
                 )}
               </View>
 
               {/* 发送按钮 */}
               <TouchableOpacity
-                className={`w-8 h-8 rounded-full items-center justify-center ${inputText.trim() && !isAiThinking ? (isAgentMode ? "bg-emerald-500" : "bg-indigo-500") : "bg-gray-200"}`}
+                className="w-9 h-9 rounded-full items-center justify-center"
+                style={{ backgroundColor: inputText.trim() && !isAiThinking ? (isAgentMode ? "#10B981" : "#6366F1") : "#E5E7EB" }}
                 onPress={handleSend}
                 disabled={!inputText.trim() || isAiThinking}
               >
-                <FontAwesome6 name="arrow-up" size={13} color={inputText.trim() && !isAiThinking ? "white" : "#CBD5E1"} solid />
+                <FontAwesome6 name="arrow-up" size={14} color={inputText.trim() && !isAiThinking ? "white" : "#CBD5E1"} solid />
               </TouchableOpacity>
             </View>
           </View>

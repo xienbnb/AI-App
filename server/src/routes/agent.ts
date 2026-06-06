@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { LLMClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import { db } from "../storage/database/client.js";
-import { users, agentConversations } from "../storage/database/shared/schema.js";
+import { users, books, userSettings, agentConversations } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
 import { findTool, getToolsSystemPrompt, type ToolResult } from "../utils/agent-tools.js";
 
@@ -135,7 +135,7 @@ router.post("/execute", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "未登录" });
     }
     const userId = req.user.id;
-    const { message, conversationId, model } = req.body;
+    const { message, conversationId, model, bookId } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "message 是必填参数" });
@@ -197,7 +197,33 @@ router.post("/execute", async (req: Request, res: Response) => {
       }
     }
 
-    // ---- 4. Agent 主循环 ----
+    // ---- 4. 加载挂载书籍信息 ----
+    if (bookId) {
+      try {
+        const [book] = await db
+          .select({
+            id: books.id,
+            title: books.title,
+            genre: books.genre,
+            outline: books.outline,
+          })
+          .from(books)
+          .where(eq(books.id, bookId))
+          .limit(1);
+        if (book) {
+          // 读取角色和设定
+          const [settings] = await db.select({ data: userSettings.data }).from(userSettings).where(eq(userSettings.bookId, bookId)).limit(1);
+          llmMessages.push({
+            role: "system",
+            content: `## 当前挂载书籍信息\n标题：${book.title}\n类型：${book.genre || "未设置"}\n大纲：${book.outline || "无"}\n角色/设定：${JSON.stringify(settings?.data || [])}\n\n当用户要求修改/续写/编辑时，请使用对应的工具操作此书。`,
+          });
+        }
+      } catch (e) {
+        console.error("加载挂载书籍失败:", e);
+      }
+    }
+
+    // ---- 5. Agent 主循环 ----
     const selectedModel = model || (await getUserPreferredModel(userId));
     const llmClient = getUserLLMClient(userId);
     let toolRound = 0;
