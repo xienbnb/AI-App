@@ -122,14 +122,14 @@ export default function EditorScreen() {
   // ===== 外观设置状态 =====
   type AppTheme = "light" | "dark" | "sepia" | "green";
   type AppFont = "sans" | "serif" | "mono";
-  type LineSpacing = "tight" | "normal" | "relaxed" | "wide";
-  type PageMargin = "narrow" | "comfortable" | "wide";
+  type LineSpacing = number;
+  type PageMargin = "narrow" | "normal" | "wide" | "center";
   
   const [appTheme, setAppTheme] = useState<AppTheme>("light");
   const [appFont, setAppFont] = useState<AppFont>("sans");
   const [fontSizeIndex, setFontSizeIndex] = useState(1); // 0-3
-  const [lineSpacing, setLineSpacing] = useState<LineSpacing>("normal");
-  const [pageMargin, setPageMargin] = useState<PageMargin>("comfortable");
+  const [lineSpacing, setLineSpacing] = useState<LineSpacing>(1.8);
+  const [pageMargin, setPageMargin] = useState<PageMargin>("narrow");
   const [appearanceVisible, setAppearanceVisible] = useState(false);
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [addContentVisible, setAddContentVisible] = useState(false);
@@ -380,9 +380,9 @@ export default function EditorScreen() {
       const header = format === "md" ? `# ${chapterTitle}\n\n---\n\n` : `${chapterTitle}\n${"━".repeat(20)}\n\n`;
       const text = header + content;
       const fileName = `${chapterTitle || "未命名章节"}.${format}`;
-      const uri = `${FileSystem.cacheDirectory}${fileName}`;
+      const uri = `${(FileSystem as any).cacheDirectory}${fileName}`;
       await FileSystem.writeAsStringAsync(uri, text, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: (FileSystem as any).EncodingType.UTF8,
       });
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
@@ -809,7 +809,7 @@ export default function EditorScreen() {
                     color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
                     fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,
                     textAlignVertical: "top",
-                    textAlign: pageMargin === "center" ? "center" : pageMargin === "justify" ? "justify" : "left",
+                    textAlign: pageMargin === "center" ? "center" : "left",
                     paddingHorizontal: pageMargin === "narrow" ? 8 : pageMargin === "wide" ? 4 : 0,
                   }}
                   placeholder="开始创作你的故事..."

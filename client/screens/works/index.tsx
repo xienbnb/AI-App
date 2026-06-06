@@ -519,8 +519,8 @@ export default function WorksScreen() {
       }
 
       const fileName = `${bookTitle.replace(/[\\/:*?"<>|]/g, "_")}.md`;
-      const uri = `${FileSystem.cacheDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(uri, md, { encoding: FileSystem.EncodingType.UTF8 });
+      const uri = `${(FileSystem as any).cacheDirectory}${fileName}`;
+      await FileSystem.writeAsStringAsync(uri, md, { encoding: (FileSystem as any).EncodingType.UTF8 });
       const isAvailable = await Sharing.isAvailableAsync();
       if (isAvailable) {
         await Sharing.shareAsync(uri, { mimeType: "text/markdown", dialogTitle: `导出《${bookTitle}》` });

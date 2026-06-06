@@ -874,7 +874,7 @@ export default function DetailScreen() {
           <View className="px-3 py-1.5 rounded-full bg-white flex-row items-center gap-1.5"
             style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 4, elevation: 2 }}>
             <FontAwesome6 name="pen" size={10} color="#6B7280" />
-            <Text className="text-xs text-gray-600">{formatWordCount(book.wordCount || book.totalWords)}字</Text>
+            <Text className="text-xs text-gray-600">{formatWordCount(book.wordCount ?? 0)}字</Text>
           </View>
         </View>
 

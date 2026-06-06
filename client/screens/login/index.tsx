@@ -226,7 +226,7 @@ export default function LoginScreen() {
                 <TouchableOpacity
                   className="w-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl py-4 items-center shadow-lg shadow-amber-500/30"
                   onPress={() => handleSendOTP()}
-                  disabled={otpLoading || phone.length < 11}
+                  disabled={otpLoading || phone.length < 11 || !agreeTerms}
                   activeOpacity={0.7}
                 >
                   {otpLoading ? (
@@ -248,7 +248,9 @@ export default function LoginScreen() {
 
               {/* Social methods */}
               <View className="flex-row justify-center gap-8 mb-6">
-                <TouchableOpacity className="items-center" activeOpacity={0.6}>
+                <TouchableOpacity className="items-center" activeOpacity={0.6}
+            disabled={!agreeTerms}
+            style={{ opacity: agreeTerms ? 1 : 0.5 }}>
                   <View className="w-14 h-14 rounded-full bg-green-500 items-center justify-center mb-2 shadow-sm">
                     <FontAwesome6 name="weixin" size={24} color="white" />
                   </View>
@@ -351,10 +353,37 @@ export default function LoginScreen() {
                 />
               </View>
 
+              {/* Agreement checkbox */}
+              <TouchableOpacity
+                className="flex-row items-center mb-4"
+                onPress={() => setAgreeTerms(!agreeTerms)}
+                activeOpacity={0.6}
+              >
+                <View
+                  className={`w-5 h-5 rounded-md border-2 items-center justify-center mr-2 ${
+                    agreeTerms
+                      ? "bg-amber-500 border-amber-500"
+                      : "border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {agreeTerms && <MaterialIcons name="check" size={14} color="white" />}
+                </View>
+                <Text className="text-xs text-gray-400">
+                  已阅读并同意{" "}
+                </Text>
+                <TouchableOpacity onPress={() => setShowAgreement("tos")}>
+                  <Text className="text-xs text-amber-500 font-medium">《用户协议》</Text>
+                </TouchableOpacity>
+                <Text className="text-xs text-gray-400"> 和 </Text>
+                <TouchableOpacity onPress={() => setShowAgreement("privacy")}>
+                  <Text className="text-xs text-amber-500 font-medium">《隐私政策》</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl py-4 items-center shadow-lg shadow-amber-500/30 mb-4"
                 onPress={handleOTPLogin}
-                disabled={loading || otpCode.length < 6}
+                disabled={loading || otpCode.length < 6 || !agreeTerms}
                 activeOpacity={0.7}
               >
                 {loading ? (
@@ -438,10 +467,37 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* Agreement checkbox */}
+              <TouchableOpacity
+                className="flex-row items-center mb-4"
+                onPress={() => setAgreeTerms(!agreeTerms)}
+                activeOpacity={0.6}
+              >
+                <View
+                  className={`w-5 h-5 rounded-md border-2 items-center justify-center mr-2 ${
+                    agreeTerms
+                      ? "bg-amber-500 border-amber-500"
+                      : "border-gray-300 dark:border-gray-600"
+                  }`}
+                >
+                  {agreeTerms && <MaterialIcons name="check" size={14} color="white" />}
+                </View>
+                <Text className="text-xs text-gray-400">
+                  已阅读并同意{" "}
+                </Text>
+                <TouchableOpacity onPress={() => setShowAgreement("tos")}>
+                  <Text className="text-xs text-amber-500 font-medium">《用户协议》</Text>
+                </TouchableOpacity>
+                <Text className="text-xs text-gray-400"> 和 </Text>
+                <TouchableOpacity onPress={() => setShowAgreement("privacy")}>
+                  <Text className="text-xs text-amber-500 font-medium">《隐私政策》</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 className="w-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl py-4 items-center shadow-lg shadow-amber-500/30 mb-4"
                 onPress={handlePasswordLogin}
-                disabled={loading || !phone || !password}
+                disabled={loading || !phone || !password || !agreeTerms}
                 activeOpacity={0.7}
               >
                 {loading ? (

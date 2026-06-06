@@ -1330,8 +1330,7 @@ router.get("/:id/outline-items", async (req: Request, res: Response) => {
     const { data, error } = await client
       .from("outlines")
       .select("content")
-      .eq("book_id", req.params.id)
-      .eq("user_id", userId)
+      .eq("book_id", req.params.id as string)
       .maybeSingle();
     if (error) throw new Error(`查询大纲条目失败: ${error.message}`);
     let items: any[] = [];
@@ -1377,7 +1376,6 @@ router.get("/:id/settings", async (req: Request, res: Response) => {
       .from("user_settings")
       .select("data")
       .eq("book_id", req.params.id)
-      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw new Error(`查询设定失败: ${error.message}`);
@@ -1396,7 +1394,6 @@ router.put("/:id/settings", async (req: Request, res: Response) => {
       .from("user_settings")
       .select("id")
       .eq("book_id", req.params.id)
-      .eq("user_id", userId)
       .maybeSingle();
 
     if (existing) {
@@ -1408,7 +1405,7 @@ router.put("/:id/settings", async (req: Request, res: Response) => {
     } else {
       const { error } = await client
         .from("user_settings")
-        .insert({ book_id: req.params.id, user_id: userId, data: req.body.data || [] });
+        .insert({ book_id: req.params.id, data: req.body.data || [] });
       if (error) throw new Error(`创建设定失败: ${error.message}`);
     }
     res.json({ success: true });
@@ -1426,8 +1423,7 @@ router.get("/:id/inspirations", async (req: Request, res: Response) => {
     const { data, error } = await client
       .from("inspirations")
       .select("data")
-      .eq("book_id", req.params.id)
-      .eq("user_id", userId)
+      .eq("book_id", req.params.id as string)
       .maybeSingle();
 
     if (error) throw new Error(`查询灵感失败: ${error.message}`);
@@ -1445,20 +1441,19 @@ router.put("/:id/inspirations", async (req: Request, res: Response) => {
     const { data: existing } = await client
       .from("inspirations")
       .select("id")
-      .eq("book_id", req.params.id)
-      .eq("user_id", userId)
+      .eq("book_id", req.params.id as string)
       .maybeSingle();
 
     if (existing) {
       const { error } = await client
         .from("inspirations")
         .update({ data: req.body.data || [] })
-        .eq("book_id", req.params.id);
+        .eq("book_id", req.params.id as string);
       if (error) throw new Error(`更新灵感失败: ${error.message}`);
     } else {
       const { error } = await client
         .from("inspirations")
-        .insert({ book_id: req.params.id, user_id: userId, data: req.body.data || [] });
+        .insert({ book_id: req.params.id as string, data: req.body.data || [] });
       if (error) throw new Error(`创建灵感失败: ${error.message}`);
     }
     res.json({ success: true });

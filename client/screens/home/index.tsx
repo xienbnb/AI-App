@@ -20,6 +20,7 @@ import { useFocusEffect } from "expo-router";
 import RNSSE from "react-native-sse";
 import * as DocumentPicker from "expo-document-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/contexts/AuthContext";
 
 import Markdown from "react-native-markdown-display";
 
@@ -439,6 +440,7 @@ export default function HomeScreen() {
   const router = useSafeRouter();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
+  const { token } = useAuth();
 
   // Chat session
   const sessionIdRef = useRef<string>("init_0");
@@ -614,7 +616,7 @@ export default function HomeScreen() {
       cleanupSSE();
       const sse = new RNSSE(`${API_BASE}/api/v1/writing/ai-dialogue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) },
         body: JSON.stringify({
           message: userText,
           history,
