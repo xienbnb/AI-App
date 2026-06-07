@@ -409,6 +409,8 @@ router.post("/guest", async (_req: Request, res: Response) => {
       nickname: guestName,
       avatar: "",
       bio: "游客用户",
+      role: "guest",
+      lastActiveAt: new Date().toISOString(),
     }).returning();
 
     // 生成带过期时间的 guest token（格式：guest_<uuid>_<expiresAt>）

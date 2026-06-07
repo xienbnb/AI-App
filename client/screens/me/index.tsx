@@ -156,6 +156,14 @@ export default function ProfileScreen() {
       items: [
         { icon: "crown", label: "会员中心", color: "#F59E0B", onPress: () => router.push("/vip") },
         { icon: "gem", label: "VIP套餐", color: "#8B5CF6", onPress: () => router.push("/vip-packages") },
+        { icon: "gift", label: "福利中心", color: "#EC4899", onPress: () => router.push("/welfare") },
+      ],
+    },
+    {
+      title: "财务管理",
+      items: [
+        { icon: "receipt", label: "扣费明细", color: "#3B82F6", onPress: () => router.push("/billing") },
+        { icon: "cart-shopping", label: "充值字数", color: "#10B981", onPress: () => router.push("/recharge") },
       ],
     },
     {
@@ -166,8 +174,16 @@ export default function ProfileScreen() {
       ],
     },
     {
-      title: "系统设置",
+      title: "社区与内容",
       items: [
+        { icon: "users", label: "社区管理", color: "#F59E0B", onPress: () => router.push("/community-manage") },
+        { icon: "book-open", label: "操作教程", color: "#6366F1", onPress: () => router.push("/tutorial") },
+      ],
+    },
+    {
+      title: "其他",
+      items: [
+        { icon: "circle-info", label: "关于我们", color: "#6B7280", onPress: () => router.push("/about") },
         { icon: "gear", label: "设置", color: "#6B7280", onPress: () => router.push("/settings") },
         ...((isAuthenticated
           ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]

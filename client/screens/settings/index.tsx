@@ -4,6 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
   Alert,
   Modal,
   Platform,
@@ -70,10 +71,116 @@ function SettingsItem({
   );
 }
 
+// ---- 配额卡片组件 ----
+function QuotaCard() {
+  const router = useSafeRouter();
+  const [quota, setQuota] = useState<{ tokenBalance: number; dailyUsed: number; dailyLimit: number; totalApiCalls: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const API = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const token = await AsyncStorage.getItem("auth_token");
+        const headers: Record<string, string> = {};
+        if (token) headers["x-session"] = token;
+        const res = await fetch(`${API}/api/v1/vip/quota`, { headers });
+        const json = await res.json();
+        if (json.success) setQuota(json.data);
+      } catch (e) {
+        console.error("获取配额失败", e);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  if (loading) return null;
+  if (!quota) {
+    return (
+      <View className="mx-4 mt-3">
+        <TouchableOpacity
+          className="bg-white rounded-2xl p-4 border border-gray-100 items-center"
+          onPress={() => router.push("/recharge")}
+        >
+          <Text className="text-sm text-indigo-500 font-medium">查看字数额度</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const tokenPercent = Math.min((quota.dailyUsed / quota.dailyLimit) * 100, 100);
+
+  return (
+    <View className="mx-4 mt-3">
+      <TouchableOpacity
+        className="bg-white rounded-2xl p-5 border border-gray-100"
+        onPress={() => router.push("/recharge")}
+        activeOpacity={0.7}
+      >
+        <View className="flex-row items-center justify-between mb-4">
+          <Text className="text-sm font-semibold text-gray-900">字数额度</Text>
+          <View className="flex-row items-center">
+            <Text className="text-lg font-bold text-indigo-600">
+              {quota.tokenBalance.toLocaleString()}
+            </Text>
+            <Text className="text-xs text-gray-400 ml-1">字</Text>
+            <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" style={{ marginLeft: 8 }} />
+          </View>
+        </View>
+
+        {/* 今日已用 */}
+        <View className="mb-1">
+          <View className="flex-row items-center justify-between mb-1.5">
+            <Text className="text-xs text-gray-400">今日已用</Text>
+            <Text className="text-xs text-gray-500">{quota.dailyUsed.toLocaleString()}/{quota.dailyLimit.toLocaleString()} 字</Text>
+          </View>
+          <View className="h-2 rounded-full bg-gray-100 overflow-hidden">
+            <View className="h-full rounded-full bg-indigo-400" style={{ width: `${tokenPercent}%` }} />
+          </View>
+        </View>
+
+        {/* 调用次数 */}
+        <View className="flex-row items-center mt-3 pt-3 border-t border-gray-50">
+          <FontAwesome6 name="microchip" size={12} color="#9CA3AF" />
+          <Text className="text-xs text-gray-400 ml-2">累计调用次数</Text>
+          <Text className="text-xs font-medium text-gray-600 ml-auto">
+            {quota.totalApiCalls?.toLocaleString() || 0} 次
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function SettingsScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [quota, setQuota] = useState<{ tokenBalance: number; dailyUsed: number; dailyLimit: number; totalApiCalls: number } | null>(null);
+  const [loadingQuota, setLoadingQuota] = useState(true);
+
+  useEffect(() => {
+    fetchQuota();
+  }, []);
+
+  const fetchQuota = async () => {
+    try {
+      setLoadingQuota(true);
+      const token = await AsyncStorage.getItem("auth_token");
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) headers["x-session"] = token;
+      const res = await fetch(`${API_BASE}/api/v1/vip/quota`, { headers });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setQuota(json.data);
+      }
+    } catch (e) {
+      console.error("获取配额失败", e);
+    } finally {
+      setLoadingQuota(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert("退出账号", "确定要退出当前账号吗？", [
@@ -204,6 +311,9 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* 字数额度 */}
+        <QuotaCard />
 
         {/* 账号与安全 */}
         <View className="mx-4 mt-6">

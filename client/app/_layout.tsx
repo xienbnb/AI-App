@@ -51,6 +51,10 @@ export default function RootLayout() {
           <Stack.Screen name="vip-packages" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="recharge" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="account-security" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="billing" options={{ title: "扣费明细", animation: 'slide_from_right' }} />
+          <Stack.Screen name="community-manage" options={{ title: "社区管理", animation: 'slide_from_right' }} />
+          <Stack.Screen name="tutorial" options={{ title: "操作教程", animation: 'slide_from_right' }} />
+          <Stack.Screen name="welfare" options={{ title: "福利中心", animation: 'slide_from_right' }} />
         </Stack>
         <Toast />
       </AuthGuard>

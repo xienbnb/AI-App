@@ -10,8 +10,10 @@ import vipRouter from "./routes/vip.js";
 import backupRouter from "./routes/backup.js";
 import workflowRouter from "./routes/workflow.js";
 import agentRouter from "./routes/agent.js";
+import billingRouter from "./routes/billing.js";
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.middleware.js";
+import { cleanupGuestUsers } from "./services/cleanup.service.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -49,6 +51,7 @@ app.use('/api/v1/vip', authMiddleware, vipRouter);
 app.use('/api/v1/backup', authMiddleware, backupRouter);
 app.use('/api/v1/workflow', authMiddleware, quotaMiddleware('ai_generate'), workflowRouter);
 app.use('/api/v1/agent', authMiddleware, agentRouter);
+app.use('/api/v1/billing', authMiddleware, billingRouter);
 
 // 404 handler
 app.use((req, res) => {
@@ -82,6 +85,30 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
     error: "服务器内部错误",
   });
 });
+
+// ===== 定时任务：清理7天未活动的游客账号 =====
+setInterval(async () => {
+  try {
+    const result = await cleanupGuestUsers();
+    if (result.deleted > 0) {
+      console.log(`[Cleanup] 已删除 ${result.deleted} 个未活跃游客账号`);
+    }
+  } catch (err: any) {
+    console.error("[Cleanup] Guest cleanup error:", err?.message || err);
+  }
+}, 6 * 60 * 60 * 1000); // 每6小时执行一次
+
+// 启动时立即执行一次
+setTimeout(async () => {
+  try {
+    const result = await cleanupGuestUsers();
+    if (result.deleted > 0) {
+      console.log(`[Cleanup] 启动清理: 已删除 ${result.deleted} 个未活跃游客账号`);
+    }
+  } catch (err: any) {
+    console.error("[Cleanup] Initial cleanup error:", err?.message || err);
+  }
+}, 10000); // 启动后10秒执行
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}/`);

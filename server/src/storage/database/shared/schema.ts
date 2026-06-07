@@ -230,3 +230,15 @@ export const userTaskRecords = pgTable("user_task_records", {
 	completedAt: timestamp("completed_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	claimedAt: timestamp("claimed_at", { withTimezone: true, mode: 'string' }),
 });
+
+export const billingRecords = pgTable("billing_records", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+	type: text("type").notNull().default('deduction'),
+	title: text("title").notNull().default(''),
+	amount: integer("amount").notNull().default(0),
+	balanceAfter: integer("balance_after").notNull().default(0),
+	detail: text("detail").default(''),
+	metadata: jsonb("metadata").default('{}'),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});

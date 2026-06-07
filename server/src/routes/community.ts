@@ -130,6 +130,58 @@ router.get("/user/:userName", async (req: Request, res: Response) => {
   }
 });
 
+// ==================== 我的帖子（需要登录，必须放在/:id之前） ====================
+
+// GET /api/v1/community/my-posts - 获取当前用户自己的帖子
+router.get("/my-posts", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, error: "请先登录" });
+
+    // 游客用户ID不是UUID格式，直接返回空
+    if (typeof req.user.id === 'string' && req.user.id.startsWith('guest_')) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const data = await db.select().from(posts)
+      .where(eq(posts.userId, req.user.id))
+      .orderBy(desc(posts.createdAt));
+
+    res.json({ success: true, data: data.map((row: any) => ({
+      ...toCamelCase(row),
+      status: "published",
+      views: 0,
+      likes: row.likes || 0,
+      summary: (row.content || "").slice(0, 100),
+    })) });
+  } catch (err) {
+    console.error("Get my posts error:", err);
+    res.status(500).json({ success: false, error: "获取失败" });
+  }
+});
+
+// DELETE /api/v1/community/my-posts/:id - 删除自己的帖子
+router.delete("/my-posts/:id", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    if (!req.user) return res.status(401).json({ success: false, error: "请先登录" });
+
+    const { id } = req.params;
+    const [post] = await db.select().from(posts)
+      .where(eq(posts.id, id as string))
+      .limit(1);
+
+    if (!post) return res.status(404).json({ success: false, error: "帖子不存在" });
+    if (post.userId !== req.user.id) return res.status(403).json({ success: false, error: "无权限删除" });
+
+    await db.delete(posts).where(eq(posts.id, id as string));
+    res.json({ success: true, message: "删除成功" });
+  } catch (err) {
+    console.error("Delete my post error:", err);
+    res.status(500).json({ success: false, error: "删除失败" });
+  }
+});
+
+// ==================== 动态参数路由（必须放在最后） ====================
+
 // GET /api/v1/community/:id - 获取帖子详情
 router.get("/:id", async (req: Request, res: Response) => {
   try {
@@ -189,11 +241,7 @@ router.get("/:id/comments", async (req: Request, res: Response) => {
 });
 
 // ==================== 写操作（需要登录） ====================
-// 以下路由需要认证
-router.use(authMiddleware);
-
-// POST /api/v1/community - 创建帖子
-router.post("/", async (req: Request, res: Response) => {
+router.post("/", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { title, content, tag } = req.body;
     if (!title?.trim()) {
@@ -223,7 +271,7 @@ router.post("/", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/community/:id/comments - 创建评论
-router.post("/:id/comments", async (req: Request, res: Response) => {
+router.post("/:id/comments", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { content, parentId } = req.body;
@@ -263,7 +311,7 @@ router.post("/:id/comments", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/community/comments/:commentId - 删除评论
-router.delete("/comments/:commentId", async (req: Request, res: Response) => {
+router.delete("/comments/:commentId", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { commentId } = req.params;
 
@@ -308,7 +356,7 @@ router.delete("/comments/:commentId", async (req: Request, res: Response) => {
 });
 
 // PUT /api/v1/community/:id/like - 点赞/取消点赞（切换）
-router.put("/:id/like", async (req: Request, res: Response) => {
+router.put("/:id/like", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const pid = id as string;
@@ -352,7 +400,7 @@ router.put("/:id/like", async (req: Request, res: Response) => {
 });
 
 // POST /api/v1/community/follow - 关注用户
-router.post("/follow", async (req: Request, res: Response) => {
+router.post("/follow", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { followingName } = req.body;
     if (!followingName) {
@@ -402,7 +450,7 @@ router.post("/follow", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/community/follow - 取消关注
-router.delete("/follow", async (req: Request, res: Response) => {
+router.delete("/follow", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { followingName } = req.body;
     if (!followingName) {
@@ -436,7 +484,7 @@ router.delete("/follow", async (req: Request, res: Response) => {
 });
 
 // DELETE /api/v1/community/:id - 删除帖子
-router.delete("/:id", async (req: Request, res: Response) => {
+router.delete("/:id", authMiddleware, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const pid = id as string;
