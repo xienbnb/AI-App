@@ -35,6 +35,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFocusEffect } from "expo-router";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
+import { cacheBook, getCachedBook, cacheOutlines, getCachedOutlines, cacheSettings, getCachedSettings, cacheInspirations, getCachedInspirations, cacheVolumes, getCachedVolumes } from "@/services/local-cache";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -210,9 +211,14 @@ export default function DetailScreen() {
       setLoading(true);
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}`, { headers: getAuthHeaders() });
       const json = await res.json();
-      if (json.success) setBook(json.data);
+      if (json.success) {
+        setBook(json.data);
+        cacheBook(id, json.data).catch(() => {});
+      }
     } catch (e) {
       console.error("获取书籍详情失败", e);
+      const cached = await getCachedBook(id!).catch(() => null);
+      if (cached) setBook(cached);
     } finally {
       setLoading(false);
     }
@@ -224,8 +230,15 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, { headers: getAuthHeaders() });
       const json = await res.json();
-      if (json.success) setOutlines(json.data || []);
-    } catch (e) { console.error("获取大纲失败", e); }
+      if (json.success) {
+        setOutlines(json.data || []);
+        cacheOutlines(id, json.data || []).catch(() => {});
+      }
+    } catch (e) {
+      console.error("获取大纲失败", e);
+      const cached = await getCachedOutlines(id!).catch(() => null);
+      if (cached) setOutlines(cached);
+    }
   }, [id]);
 
   const saveOutlines = async (newOutlines: Outline[]) => {
@@ -246,8 +259,15 @@ export default function DetailScreen() {
     try {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, { headers: getAuthHeaders() });
       const json = await res.json();
-      if (json.success) setSettings(json.data || []);
-    } catch (e) { console.error("获取设定失败", e); }
+      if (json.success) {
+        setSettings(json.data || []);
+        cacheSettings(id, json.data || []).catch(() => {});
+      }
+    } catch (e) {
+      console.error("获取设定失败", e);
+      const cached = await getCachedSettings(id!).catch(() => null);
+      if (cached) setSettings(cached);
+    }
   }, [id]);
 
   const saveSettings = async (newSettings: WorldSetting[]) => {
@@ -258,7 +278,10 @@ export default function DetailScreen() {
         body: JSON.stringify({ data: newSettings }),
       });
       const json = await res.json();
-      if (json.success) setSettings(newSettings);
+      if (json.success) {
+        setSettings(newSettings);
+        cacheSettings(id!, newSettings).catch(() => {});
+      }
     } catch (e) { Alert.alert("错误", "保存设定失败"); }
   };
 
@@ -269,7 +292,9 @@ export default function DetailScreen() {
       const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success) setInspirations(json.data || []);
-    } catch (e) { console.error("获取灵感失败", e); }
+    } catch (e) {
+      console.error("获取灵感失败", e);
+    }
   }, [id]);
 
   const saveInspirations = async (newInspirations: Inspiration[]) => {
@@ -283,6 +308,7 @@ export default function DetailScreen() {
       if (json.success) setInspirations(newInspirations);
     } catch (e) { Alert.alert("错误", "保存灵感失败"); }
   };
+  useFocusEffect(useCallback(() => { fetchBook(); fetchOutlines(); fetchSettings(); fetchInspirations(); }, [fetchBook, fetchOutlines, fetchSettings, fetchInspirations]));
 
   useFocusEffect(
     useCallback(() => {

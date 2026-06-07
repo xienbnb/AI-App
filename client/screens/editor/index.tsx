@@ -40,6 +40,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
+import { cacheChapter, getCachedChapter } from "@/services/local-cache";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -66,6 +67,7 @@ export default function EditorScreen() {
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [lastSavedTitle, setLastSavedTitle] = useState("");
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isOffline, setOffline] = useState(false);
 
   // ===== AI =====
   const [aiModalVisible, setAiModalVisible] = useState(false);
@@ -209,12 +211,26 @@ export default function EditorScreen() {
         const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, { headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) {
-          setContent(json.data.content || "");
-          setChapterTitle(json.data.title || "");
-          setLastSavedContent(json.data.content || "");
-          setLastSavedTitle(json.data.title || "");
+          const content = json.data.content || "";
+          const title = json.data.title || "";
+          setContent(content);
+          setChapterTitle(title);
+          setLastSavedContent(content);
+          setLastSavedTitle(title);
+          // 缓存章节内容
+          cacheChapter(bookId, chapterId, { content, title });
         }
-      } catch (e) { console.error("获取章节失败", e); }
+      } catch (e) {
+        console.error("获取章节失败，尝试本地缓存", e);
+        const cached = await getCachedChapter(bookId, chapterId);
+        if (cached) {
+          setContent(cached.content || "");
+          setChapterTitle(cached.title || "");
+          setLastSavedContent(cached.content || "");
+          setLastSavedTitle(cached.title || "");
+          setOffline(true);
+        }
+      }
       try {
         const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, { headers: getAuthHeaders() });
         const json = await res.json();
@@ -258,8 +274,12 @@ export default function EditorScreen() {
       if (json.success) {
         setLastSavedContent(content);
         setLastSavedTitle(chapterTitle);
+        cacheChapter(bookId, chapterId, { content, title: chapterTitle });
       }
-    } catch (e) {}
+    } catch (e) {
+      // 离线时也保存到本地缓存
+      cacheChapter(bookId, chapterId, { content, title: chapterTitle });
+    }
     setIsAutoSaving(false);
   };
 
