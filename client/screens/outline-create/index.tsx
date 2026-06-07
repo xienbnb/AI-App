@@ -14,6 +14,7 @@ import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RichEditor from "@/components/RichEditor";
+import { useAuth } from "@/contexts/AuthContext";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -27,6 +28,8 @@ interface OutlineItem {
 export default function OutlineCreateScreen() {
   const router = useSafeRouter();
   const { bookId, outlineId } = useSafeSearchParams<{ bookId: string; outlineId?: string }>();
+  const { token } = useAuth();
+  const getAuthHeaders = useCallback(() => ({ "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) }), [token]);
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
@@ -46,7 +49,7 @@ export default function OutlineCreateScreen() {
     const load = async () => {
       if (!bookId) return;
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline-items`);
+        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline-items`, { headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success && Array.isArray(json.data)) {
           setAllOutlines(json.data);
@@ -105,7 +108,7 @@ export default function OutlineCreateScreen() {
 
       const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline-items`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ items: updatedItems }),
       });
       const json = await res.json();
@@ -125,7 +128,7 @@ export default function OutlineCreateScreen() {
       Alert.alert("错误", "保存失败，请重试");
     }
     setSaving(false);
-  }, [bookId, outlineId, title, allOutlines, isEditing, router]);
+  }, [bookId, outlineId, title, allOutlines, isEditing, router, getAuthHeaders]);
 
   const nightMode = false;
 
