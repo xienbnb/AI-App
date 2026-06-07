@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { LLMClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import { db } from "../storage/database/client.js";
-import { users, books, userSettings, agentConversations } from "../storage/database/shared/schema.js";
+import { users, books, outlines, userSettings, agentConversations } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
 import { findTool, getToolsSystemPrompt, type ToolResult } from "../utils/agent-tools.js";
 
@@ -198,36 +198,71 @@ router.post("/execute", async (req: Request, res: Response) => {
       }
     }
 
-    // ---- 4. 加载挂载书籍信息 ----
+    // ---- 4. 加载挂载书籍信息（完整上下文） ----
     if (bookId) {
       try {
         const [book] = await db
           .select({
             id: books.id,
             title: books.title,
-            genre: books.genre,
+            genre: books.category,
             outline: books.outline,
+            volumes: books.volumes,
           })
           .from(books)
           .where(eq(books.id, bookId))
           .limit(1);
         if (book) {
-          // 读取角色和设定
-          const [settings] = await db.select({ data: userSettings.data }).from(userSettings).where(eq(userSettings.bookId, bookId)).limit(1);
-          llmMessages.push({
-            role: "system",
-            content: `## 当前挂载书籍信息（用户正操作这本书）
+          // 读取角色/设定
+          const [settingsRow] = await db.select({ data: userSettings.data }).from(userSettings).where(eq(userSettings.bookId, bookId)).limit(1);
+          const worldSettings = (settingsRow?.data as any[]) || [];
+
+          // 读取结构化大纲（outlines 表）
+          const [outlineRow] = await db.select({ content: outlines.content }).from(outlines).where(eq(outlines.bookId, bookId)).limit(1);
+          let outlineItems: any[] = [];
+          if (outlineRow?.content) {
+            try { outlineItems = JSON.parse(outlineRow.content); } catch {}
+          }
+
+          // 构建书籍上下文文本
+          const volumesList = (book.volumes as any[]) || [];
+          const volumesText = volumesList.length > 0
+            ? volumesList.map((v: any) => `【卷】${v.title}（章节: ${v.chapters?.length || 0}）`).join("\n")
+            : "暂无卷结构";
+
+          const outlineText = outlineItems.length > 0
+            ? outlineItems.map((i: any) => `[${i.type}] ${i.title}: ${i.content?.slice(0, 100) || ""}`).join("\n")
+            : (book.outline || "暂无大纲");
+
+          const settingsText = worldSettings.length > 0
+            ? worldSettings.map((s: any) => {
+                if (typeof s === "string") return s;
+                if (s.name) return `${s.name}: ${s.description || s.content || ""}`;
+                if (s.role) return `${s.role}: ${s.description || ""}`;
+                return JSON.stringify(s);
+              }).join("\n")
+            : "暂无设定数据";
+
+          const bookContext = `## 当前挂载书籍信息（用户正操作这本书）
 标题：${book.title}
 类型：${book.genre || "未设置"}
-大纲：${book.outline || "无"}
-角色/设定：${JSON.stringify(settings?.data || [])}
+
+### 📚 卷结构
+${volumesText}
+
+### 📝 大纲/细纲
+${outlineText}
+
+### 🎭 角色与设定
+${settingsText}
 
 【重要】用户已挂载此书，你的所有操作默认都应针对这本书：
-- 用户要求修改/续写/编辑 → 使用 get_book_info 读取此书信息，再用对应工具修改
-- 用户要求查看/分析 → 使用 get_book_info 读取此书
+- 用户要求修改/续写/编辑 → 先调用 get_book_info 读取此书完整信息，再用对应工具修改
+- 用户要求查看/分析 → 调用 get_book_info 读取此书
 - 用户要求"帮我写" → 在此书下创建章节或续写
-- 除非用户明确说"创建新书"，否则绝对禁止调用 create_book！`,
-          });
+- 除非用户明确说"创建新书"，否则绝对禁止调用 create_book！`;
+
+          llmMessages.push({ role: "system", content: bookContext });
         }
       } catch (e) {
         console.error("加载挂载书籍失败:", e);

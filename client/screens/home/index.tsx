@@ -587,6 +587,16 @@ export default function HomeScreen() {
     }
   };
 
+  const handleStopAgent = () => {
+    cleanupAgentSSE();
+    setIsAiThinking(false);
+    if (agentStreamContent) {
+      setAgentMessages(prev => [...prev, { role: "ai", content: agentStreamContent }]);
+    }
+    setAgentStreamContent("");
+    setAgentActionStatus("");
+  };
+
   // Load agent conversations
   const loadAgentConversations = useCallback(async () => {
     if (!token) return;
@@ -1377,6 +1387,13 @@ export default function HomeScreen() {
                 <MarkdownContent content={streamContent} isStream />
               </View>
             </View>
+            <TouchableOpacity
+              className="ml-11 mt-2 flex-row items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-50 border border-red-200 self-start"
+              onPress={handleStopAgent}
+            >
+              <FontAwesome6 name="stop" size={10} color="#EF4444" solid />
+              <Text className="text-xs text-red-500 font-medium">停止生成</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1559,15 +1576,24 @@ export default function HomeScreen() {
                 )}
               </View>
 
-              {/* 发送按钮 */}
-              <TouchableOpacity
-                className="w-9 h-9 rounded-full items-center justify-center"
-                style={{ backgroundColor: inputText.trim() && !isAiThinking ? (isAgentMode ? "#10B981" : "#6366F1") : "#E5E7EB" }}
-                onPress={handleSend}
-                disabled={!inputText.trim() || isAiThinking}
-              >
-                <FontAwesome6 name="arrow-up" size={14} color={inputText.trim() && !isAiThinking ? "white" : "#CBD5E1"} solid />
-              </TouchableOpacity>
+              {/* 发送/停止按钮 */}
+              {isAiThinking ? (
+                <TouchableOpacity
+                  className="w-9 h-9 rounded-full items-center justify-center bg-red-500"
+                  onPress={handleStopAgent}
+                >
+                  <FontAwesome6 name="stop" size={13} color="white" solid />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  className="w-9 h-9 rounded-full items-center justify-center"
+                  style={{ backgroundColor: inputText.trim() ? (isAgentMode ? "#10B981" : "#6366F1") : "#E5E7EB" }}
+                  onPress={handleSend}
+                  disabled={!inputText.trim()}
+                >
+                  <FontAwesome6 name="arrow-up" size={14} color={inputText.trim() ? "white" : "#CBD5E1"} solid />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
