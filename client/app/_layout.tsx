@@ -56,6 +56,7 @@ export default function RootLayout() {
           <Stack.Screen name="community" options={{ title: "社区", animation: 'slide_from_right' }} />
           <Stack.Screen name="tutorial" options={{ title: "操作教程", animation: 'slide_from_right' }} />
           <Stack.Screen name="welfare" options={{ title: "福利中心", animation: 'slide_from_right' }} />
+          <Stack.Screen name="admin" options={{ title: "管理中心", animation: 'slide_from_right' }} />
         </Stack>
         <Toast />
       </AuthGuard>

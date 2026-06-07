@@ -183,10 +183,7 @@ export default function ProfileScreen() {
       items: [
         { icon: "circle-info", label: "关于我们", color: "#6B7280", onPress: () => router.push("/about") },
         { icon: "gear", label: "设置", color: "#6B7280", onPress: () => router.push("/settings") },
-        { icon: "shield-halved", label: "管理后台", color: "#4F46E5", onPress: () => {
-          const adminUrl = API_BASE.replace('/api/v1', '').replace('/api', '') + '/admin';
-          Linking.openURL(adminUrl).catch(() => Alert.alert("提示", "请使用浏览器打开管理后台"));
-        }},
+        { icon: "shield-halved", label: "管理后台", color: "#4F46E5", onPress: () => router.push("/admin") },
         ...((isAuthenticated
           ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]
           : [])),
