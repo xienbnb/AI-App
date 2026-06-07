@@ -276,7 +276,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Token余额 - 余额制 */}
+          {/* Token余额 - 长久有效 */}
           <View className="mb-4">
             <View className="flex-row items-center justify-between mb-1.5">
               <Text className="text-sm font-medium text-gray-700">字数额度</Text>
@@ -284,27 +284,33 @@ export default function ProfileScreen() {
                 {tokenBalance.toLocaleString()} 字
               </Text>
             </View>
-            <View className="h-1 w-full bg-gray-100 rounded-full" />
+            <Text className="text-xs text-gray-400">长久有效，不限时间</Text>
+            <View className="h-1 w-full bg-gray-100 rounded-full mt-1" />
           </View>
 
-          {/* AI调用余额 */}
+          {/* AI调用余额 - 月度 */}
           <View className="mb-4">
             <View className="flex-row items-center justify-between mb-1.5">
               <Text className="text-sm font-medium text-gray-700">AI调用次数</Text>
               <Text className="text-sm font-bold text-gray-900">
-                {isUnlimited ? "∞" : `${remainAiCalls} / ${dailyAiLimit}`}
+                {isUnlimited ? "∞" : `本月剩余 ${remainAiCalls} / ${dailyAiLimit}`}
               </Text>
             </View>
-            {!isUnlimited && (
-              <View className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <View
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${aiPercent * 100}%`,
-                    backgroundColor: aiPercent > 0.8 ? "#EF4444" : aiPercent > 0.5 ? "#F59E0B" : "#10B981",
-                  }}
-                />
-              </View>
+            {isUnlimited ? (
+              <Text className="text-xs text-green-500">会员不限次数</Text>
+            ) : (
+              <>
+                <View className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                  <View
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${aiPercent * 100}%`,
+                      backgroundColor: aiPercent > 0.8 ? "#EF4444" : aiPercent > 0.5 ? "#F59E0B" : "#10B981",
+                    }}
+                  />
+                </View>
+                <Text className="text-xs text-gray-400 mt-1">每月重置，办卡或做活动可增加次数</Text>
+              </>
             )}
           </View>
 

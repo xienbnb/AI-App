@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from "express";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseCredentials, getSupabaseServiceRoleKey } from "../storage/database/supabase-client.js";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
+import { authMiddleware } from "../middleware/auth.js";
 import { db } from "../storage/database/client.js";
 import { users } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
@@ -930,6 +931,96 @@ router.post("/bind-social", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Bind social error:", err);
     res.status(500).json({ error: err.message || "绑定失败" });
+  }
+});
+
+/**
+ * GET /api/v1/auth/custom-key
+ * 获取用户的 自定义API Key
+ */
+router.get("/custom-key", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    const [user] = await db.select({ id: users.id, customApiKey: users.customApiKey })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    
+    if (!user) {
+      res.status(404).json({ error: "用户不存在" });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        hasKey: !!user.customApiKey,
+        // 不返回完整的 key，只返回掩码
+        keyPreview: user.customApiKey ? user.customApiKey.slice(0, 8) + "..." + user.customApiKey.slice(-4) : "",
+      },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Get custom key error:", err);
+    res.status(500).json({ error: err.message || "获取失败" });
+  }
+});
+
+/**
+ * PUT /api/v1/auth/custom-key
+ * 设置/更新自定义 API Key
+ */
+router.put("/custom-key", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const { apiKey } = req.body;
+    
+    if (!userId) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    if (!apiKey || typeof apiKey !== 'string') {
+      res.status(400).json({ error: "请提供有效的 API Key" });
+      return;
+    }
+
+    await db.update(users).set({ customApiKey: apiKey }).where(eq(users.id, userId));
+
+    res.json({
+      success: true,
+      message: "API Key 已保存",
+      data: { keyPreview: apiKey.slice(0, 8) + "..." + apiKey.slice(-4) },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Save custom key error:", err);
+    res.status(500).json({ error: err.message || "保存失败" });
+  }
+});
+
+/**
+ * DELETE /api/v1/auth/custom-key
+ * 删除自定义 API Key
+ */
+router.delete("/custom-key", authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    await db.update(users).set({ customApiKey: "" }).where(eq(users.id, userId));
+
+    res.json({
+      success: true,
+      message: "API Key 已删除",
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Delete custom key error:", err);
+    res.status(500).json({ error: err.message || "删除失败" });
   }
 });
 

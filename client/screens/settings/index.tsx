@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Keyboard,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
@@ -109,12 +110,10 @@ function QuotaCard() {
     );
   }
 
-  const dailyTokens = quota.dailyTokens || { total: 1, used: 0 };
   const isUnlimited = quota.isUnlimited || false;
-  const isVip = quota.isVip || false;
-  const dailyRemaining = quota.daily?.remaining ?? 0;
-  const dailyTotal = quota.daily?.total ?? 100;
-  const callPercent = dailyTotal > 0 ? Math.min((1 - dailyRemaining / dailyTotal) * 100, 100) : 0;
+  const monthlyRemaining = quota.monthly?.remaining ?? 0;
+  const monthlyTotal = quota.monthly?.total ?? 100;
+  const callPercent = monthlyTotal > 0 ? Math.min((1 - monthlyRemaining / monthlyTotal) * 100, 100) : 0;
 
   return (
     <View className="mx-4 mt-3">
@@ -134,19 +133,19 @@ function QuotaCard() {
             <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" style={{ marginLeft: 8 }} />
           </View>
         </View>
-        <Text className="text-xs text-gray-400 mb-3">字数用完需购买，会员不限量</Text>
+        <Text className="text-xs text-gray-400 mb-3">字数长期有效，用完需购买</Text>
 
-        {/* AI调用次数 */}
+        {/* AI调用次数（月度制） */}
         <View className="flex-row items-center justify-between pt-3 border-t border-gray-50">
           <View className="flex-row items-center">
             <FontAwesome6 name="microchip" size={12} color="#9CA3AF" />
-            <Text className="text-xs text-gray-400 ml-2">AI调用次数</Text>
+            <Text className="text-xs text-gray-400 ml-2">AI调用次数（月度）</Text>
           </View>
           <Text className="text-xs font-medium text-gray-600">
             {isUnlimited ? (
               <Text className="text-green-500 font-bold">不限次数</Text>
             ) : (
-              `${dailyRemaining}/${dailyTotal} 次`
+              `${monthlyRemaining}/${monthlyTotal} 次`
             )}
           </Text>
         </View>
@@ -157,7 +156,7 @@ function QuotaCard() {
         )}
 
         {/* 会员标识 */}
-        {isVip && (
+        {quota?.isVip && (
           <View className="mt-3 pt-3 border-t border-gray-50 flex-row items-center">
             <FontAwesome6 name="crown" size={12} color="#F59E0B" />
             <Text className="text-xs text-amber-500 font-medium ml-1.5">
@@ -174,11 +173,16 @@ export default function SettingsScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
   const [showThemeModal, setShowThemeModal] = useState(false);
+  const [showKeyModal, setShowKeyModal] = useState(false);
+  const [customKey, setCustomKey] = useState<{ hasKey: boolean; masked: string }>({ hasKey: false, masked: '' });
+  const [keyInput, setKeyInput] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
   const [quota, setQuota] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
 
   useEffect(() => {
     fetchQuota();
+    fetchCustomKey();
   }, []);
 
   const fetchQuota = async () => {
@@ -232,6 +236,63 @@ export default function SettingsScreen() {
   const THEME_KEY = "user_theme";
   const [currentTheme, setCurrentTheme] = useState("system");
   const [themeSaving, setThemeSaving] = useState(false);
+
+  const fetchCustomKey = async () => {
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/v1/auth/custom-key`, {
+        headers: { "x-session": token },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.hasKey) {
+          setCustomKey({ hasKey: true, masked: data.maskedKey });
+          setKeyInput(data.maskedKey || '');
+        }
+      }
+    } catch {}
+  };
+
+  const handleSaveKey = async () => {
+    if (!keyInput.trim()) return;
+    setSavingKey(true);
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/v1/auth/custom-key`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-session": token || "" },
+        body: JSON.stringify({ key: keyInput.trim() }),
+      });
+      if (res.ok) {
+        setCustomKey({ hasKey: true, masked: keyInput.trim().slice(0, 8) + '...' });
+        Alert.alert("保存成功", "自定义 API Key 已设置");
+        setShowKeyModal(false);
+      } else {
+        Alert.alert("保存失败", "请检查 Key 格式后重试");
+      }
+    } catch {
+      Alert.alert("网络错误", "请检查网络后重试");
+    } finally {
+      setSavingKey(false);
+    }
+  };
+
+  const handleDeleteKey = async () => {
+    try {
+      const token = await AsyncStorage.getItem("auth_token");
+      const res = await fetch(`${API_BASE}/api/v1/auth/custom-key`, {
+        method: "DELETE",
+        headers: { "x-session": token || "" },
+      });
+      if (res.ok) {
+        setCustomKey({ hasKey: false, masked: '' });
+        setKeyInput('');
+        Alert.alert("已删除", "自定义 API Key 已移除，将使用平台 Key");
+        setShowKeyModal(false);
+      }
+    } catch {}
+  };
 
   const themeOptions = [
     { id: "system", label: "跟随系统", desc: "自动根据系统设置切换", icon: "mobile-screen-button", primary: "#4F46E5", bg: "#F9FAFB", surface: "#FFFFFF", text: "#111827" },
@@ -331,6 +392,21 @@ export default function SettingsScreen() {
 
         {/* 字数额度 */}
         <QuotaCard />
+
+        {/* AI配置：自定义Key */}
+        <View className="mx-4 mt-6">
+          <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">
+            AI 配置
+          </Text>
+          <View className="bg-white rounded-2xl overflow-hidden shadow-sm border border-gray-100">
+            <SettingsItem
+              icon="key"
+              label="自定义 API Key"
+              description={customKey?.hasKey ? "已设置，使用自己的 Key 消耗" : "未设置，使用平台 Key"}
+              onPress={() => setShowKeyModal(true)}
+            />
+          </View>
+        </View>
 
         {/* 账号与安全 */}
         <View className="mx-4 mt-6">
@@ -480,6 +556,73 @@ export default function SettingsScreen() {
                     </View>
                   )}
                 </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* 自定义 API Key Modal */}
+      <Modal visible={showKeyModal} transparent animationType="slide" onRequestClose={() => setShowKeyModal(false)}>
+        <TouchableWithoutFeedback onPress={() => setShowKeyModal(false)}>
+          <View className="flex-1 bg-black/40 justify-end">
+            <TouchableWithoutFeedback>
+              <View className="bg-white rounded-t-3xl pb-8">
+                <View className="items-center pt-3 pb-1">
+                  <View className="w-10 h-1 rounded-full bg-gray-300" />
+                </View>
+                <View className="px-6 py-3 flex-row items-center">
+                  <View className="w-10 h-10 rounded-2xl bg-emerald-50 items-center justify-center mr-3">
+                    <FontAwesome6 name="key" size={18} color="#059669" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lg font-bold text-gray-900">自定义 API Key</Text>
+                    <Text className="text-xs text-gray-400">使用自己的 Key 不计字数消耗，仅计调用次数</Text>
+                  </View>
+                  <TouchableOpacity
+                    className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                    onPress={() => setShowKeyModal(false)}
+                  >
+                    <FontAwesome6 name="xmark" size={14} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+                <View className="px-6 py-4">
+                  <Text className="text-sm font-medium text-gray-700 mb-1.5">API Key</Text>
+                  <TextInput
+                    className="w-full px-4 py-3 bg-gray-50 rounded-xl text-gray-900 border border-gray-200"
+                    placeholder="输入您的 API Key"
+                    placeholderTextColor="#9CA3AF"
+                    value={keyInput}
+                    onChangeText={setKeyInput}
+                    secureTextEntry
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {customKey.hasKey && (
+                    <Text className="text-xs text-amber-500 mt-1.5">
+                      当前已设置 Key：{customKey.masked}，修改后原 Key 将失效
+                    </Text>
+                  )}
+                </View>
+                <View className="px-6 flex-row gap-3">
+                  {customKey.hasKey && (
+                    <TouchableOpacity
+                      className="flex-1 py-3.5 rounded-xl bg-red-50 items-center"
+                      onPress={handleDeleteKey}
+                    >
+                      <Text className="text-sm font-semibold text-red-500">删除 Key</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    className={`flex-1 py-3.5 rounded-xl items-center ${savingKey ? 'bg-emerald-300' : 'bg-emerald-500'}`}
+                    onPress={handleSaveKey}
+                    disabled={savingKey || !keyInput.trim()}
+                  >
+                    <Text className="text-sm font-semibold text-white">
+                      {savingKey ? '保存中...' : '保存'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </TouchableWithoutFeedback>
           </View>

@@ -30,6 +30,7 @@ export const users = pgTable("users", {
 	wechatNickname: text("wechat_nickname").default(''),
 	qqNickname: text("qq_nickname").default(''),
 	emailVerified: boolean("email_verified").default(false),
+	customApiKey: text("custom_api_key").default(''),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });

@@ -16,7 +16,8 @@ export function quotaMiddleware(operationType: string = 'ai_generate') {
     }
 
     // 检查额度
-    const result = await checkQuota(userId);
+    const useCustomKey = req.body?.useCustomKey === true;
+    const result = await checkQuota(userId, 0, useCustomKey);
 
     if (!result.ok) {
       res.status(429).json({
@@ -29,6 +30,7 @@ export function quotaMiddleware(operationType: string = 'ai_generate') {
 
     // 将额度信息附加到请求上
     (req as any).quotaRemaining = result.remaining;
+    (req as any).useCustomKey = useCustomKey;
     
     // 记录使用（在响应后异步执行，不阻塞）
     res.on('finish', async () => {
@@ -36,7 +38,7 @@ export function quotaMiddleware(operationType: string = 'ai_generate') {
         // 如果响应成功，扣减额度
         if (res.statusCode < 400) {
           // 注意：这里不立即扣减，实际token使用量需要在AI调用完成后再更新
-          await consumeQuota(userId, operationType, 0, true);
+          await consumeQuota(userId, operationType, 0, true, undefined, useCustomKey);
         }
       } catch (err) {
           console.error("[QUOTA] Failed to consume quota:", err);
