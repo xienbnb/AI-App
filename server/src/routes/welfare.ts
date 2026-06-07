@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db } from "../storage/database/client.js";
-import { users, userTasks, userVips, posts } from "../storage/database/shared/schema.js";
+import { users, userTasks, userVips, posts, billingRecords } from "../storage/database/shared/schema.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { eq, and, sql } from "drizzle-orm";
 import { getOrCreateUserVip } from "../services/vip.service.js";
@@ -117,6 +117,15 @@ router.post("/claim", authMiddleware, async (req, res) => {
         .set({ tokenBalance: sql`COALESCE(token_balance, 0) + ${reward.token}` })
         .where(eq(userVips.userId, userId as any));
     }
+      // Record the reward in billing history
+      await db.insert(billingRecords).values({
+        userId: userId as any,
+        type: "reward",
+        title: getTaskLabel(taskType),
+        amount: reward.token,
+        detail: "完成任务「" + getTaskLabel(taskType) + "」获得 " + reward.token + " Token",
+        metadata: JSON.stringify({ taskType }),
+      });
     if (reward.calls) {
       // For VIP users, unlimited calls - no need to add
       // For free users, we can't easily add monthly calls because it auto-resets

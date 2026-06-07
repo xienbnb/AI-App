@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
@@ -35,17 +35,20 @@ export default function BillingScreen() {
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState({ totalDeductions: 0, totalRecharges: 0, totalClaims: 0 });
   const [selectedRecord, setSelectedRecord] = useState<BillingRecord | null>(null);
+  const [activeFilter, setActiveFilter] = useState("all");
+  const [refreshing, setRefreshing] = useState(false);
   const pageSize = 20;
 
-  const fetchRecords = useCallback(async (p: number = 1) => {
+  const fetchRecords = useCallback(async (p: number = 1, type?: string) => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("auth_token");
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) headers["x-session"] = token;
 
+      const typeParam = type && type !== "all" ? `&type=${type}` : "";
       const res = await fetch(
-        `${API_BASE}/api/v1/billing?page=${p}&pageSize=${pageSize}`,
+        `${API_BASE}/api/v1/billing?page=${p}&pageSize=${pageSize}${typeParam}`,
         { headers }
       );
       const json = await res.json();
@@ -64,8 +67,8 @@ export default function BillingScreen() {
   useFocusEffect(
     useCallback(() => {
       setPage(1);
-      fetchRecords(1);
-    }, [fetchRecords])
+      fetchRecords(1, activeFilter);
+    }, [fetchRecords, activeFilter])
   );
 
   const getTypeIcon = (type: string) => {
@@ -123,7 +126,6 @@ export default function BillingScreen() {
         </View>
       </View>
 
-      {/* 筛选快速标签 */}
       <View className="flex-row mx-4 mt-3 gap-2">
         {[
           { label: "全部", value: "all" },
@@ -133,10 +135,27 @@ export default function BillingScreen() {
         ].map((tab) => (
           <TouchableOpacity
             key={tab.value}
-            className="px-4 py-2 rounded-full bg-white border border-gray-200"
+            className={`px-4 py-2 rounded-full ${
+              activeFilter === tab.value
+                ? "bg-indigo-500"
+                : "bg-white border border-gray-200"
+            }`}
             activeOpacity={0.7}
+            onPress={() => {
+              setActiveFilter(tab.value);
+              setPage(1);
+              fetchRecords(1, tab.value);
+            }}
           >
-            <Text className="text-xs font-medium text-gray-600">{tab.label}</Text>
+            <Text
+              className={`text-xs font-medium ${
+                activeFilter === tab.value
+                  ? "text-white"
+                  : "text-gray-600"
+              }`}
+            >
+              {tab.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -152,7 +171,8 @@ export default function BillingScreen() {
           <Text className="text-sm text-gray-400 mt-3">暂无扣费记录</Text>
         </View>
       ) : (
-        <ScrollView className="flex-1 px-4 mt-4" contentContainerStyle={{ paddingBottom: 20 }}>
+        <ScrollView className="flex-1 px-4 mt-4" contentContainerStyle={{ paddingBottom: 20 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchRecords(1, activeFilter)} />}>
           {records.map((record) => {
             const typeInfo = getTypeIcon(record.type);
             const amount = formatAmount(record.type, record.amount);
