@@ -220,10 +220,11 @@ export default function AdminScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (!token) return; // 等待 token 加载完成
       setLoading(true);
       Promise.all([fetchDashboard(), fetchUsers(1), fetchCodes(1), fetchPosts(1), fetchBills(1), fetchSettings()])
         .finally(() => setLoading(false));
-    }, [fetchDashboard, fetchUsers, fetchCodes, fetchPosts, fetchBills, fetchSettings])
+    }, [token, fetchDashboard, fetchUsers, fetchCodes, fetchPosts, fetchBills, fetchSettings])
   );
 
   const onRefresh = useCallback(async () => {
