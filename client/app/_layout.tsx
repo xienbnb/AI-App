@@ -44,7 +44,6 @@ export default function RootLayout() {
           <Stack.Screen name="tos" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="privacy" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="my-ai-settings" options={{ title: "", animation: 'slide_from_right' }} />
-          <Stack.Screen name="theme-settings" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="help-feedback" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="about" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="user-profile" options={{ title: "", animation: 'slide_from_right' }} />

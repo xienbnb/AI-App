@@ -1,15 +1,22 @@
-import React from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  Platform,
+  TouchableWithoutFeedback,
+  KeyboardAvoidingView,
+  Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { useAuth } from "@/contexts/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Uniwind } from 'uniwind';
 
 interface SettingsItemProps {
   icon: string;
@@ -66,6 +73,7 @@ function SettingsItem({
 export default function SettingsScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
+  const [showThemeModal, setShowThemeModal] = useState(false);
 
   const handleLogout = () => {
     Alert.alert("退出账号", "确定要退出当前账号吗？", [
@@ -94,6 +102,61 @@ export default function SettingsScreen() {
       },
     ]);
   };
+
+  // --- 主题设置 ---
+  const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+  const THEME_KEY = "user_theme";
+  const [currentTheme, setCurrentTheme] = useState("system");
+  const [themeSaving, setThemeSaving] = useState(false);
+
+  const themeOptions = [
+    { id: "system", label: "跟随系统", desc: "自动根据系统设置切换", icon: "mobile-screen-button", primary: "#4F46E5", bg: "#F9FAFB", surface: "#FFFFFF", text: "#111827" },
+    { id: "light", label: "亮色模式", desc: "明亮清晰的界面", icon: "sun", primary: "#4F46E5", bg: "#FFFFFF", surface: "#F3F4F6", text: "#111827" },
+    { id: "dark", label: "深色模式", desc: "暗色背景，适合夜间", icon: "moon", primary: "#818CF8", bg: "#0F172A", surface: "#1E293B", text: "#F1F5F9" },
+    { id: "sepia", label: "护眼模式", desc: "暖色纸张质感", icon: "book", primary: "#8B6914", bg: "#FBF0D9", surface: "#F5E6C8", text: "#5B4636" },
+    { id: "green", label: "绿色模式", desc: "淡绿色背景，舒缓疲劳", icon: "leaf", primary: "#059669", bg: "#ECFDF5", surface: "#D1FAE5", text: "#064E3B" },
+  ];
+
+  function mapToUniwindTheme(themeId: string): "system" | "light" | "dark" {
+    switch (themeId) {
+      case "dark": return "dark";
+      case "sepia":
+      case "green":
+      case "light": return "light";
+      default: return "system";
+    }
+  }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(THEME_KEY);
+        if (saved) setCurrentTheme(saved);
+      } catch (e) { console.error("读取主题缓存失败", e); }
+    })();
+  }, []);
+
+  const selectTheme = useCallback(async (themeId: string) => {
+    try {
+      setThemeSaving(true);
+      await AsyncStorage.setItem(THEME_KEY, themeId);
+      setCurrentTheme(themeId);
+      Uniwind.setTheme(mapToUniwindTheme(themeId));
+      const token = await AsyncStorage.getItem("auth_token");
+      if (token) {
+        fetch(`${API_BASE}/api/v1/users/theme`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ theme: themeId }),
+        }).catch((e) => console.error("主题持久化失败", e));
+      }
+      setShowThemeModal(false);
+    } catch (e) {
+      console.error("保存主题失败", e);
+    } finally {
+      setThemeSaving(false);
+    }
+  }, []);
 
   return (
     <View className="flex-1 bg-gray-50">
@@ -191,7 +254,7 @@ export default function SettingsScreen() {
               icon="palette"
               label="界面与显示"
               description="主题、字体、布局设置"
-              onPress={() => router.push("/theme-settings")}
+              onPress={() => setShowThemeModal(true)}
             />
           </View>
         </View>
@@ -224,6 +287,80 @@ export default function SettingsScreen() {
           App Version 1.0.0
         </Text>
       </ScrollView>
+
+      {/* 主题设置 Modal */}
+      <Modal visible={showThemeModal} transparent animationType="slide">
+        <TouchableWithoutFeedback onPress={() => setShowThemeModal(false)}>
+          <View className="flex-1 bg-black/40 justify-end">
+            <TouchableWithoutFeedback>
+              <View className="bg-white rounded-t-3xl pb-8 max-h-[70%]">
+                {/* Handle */}
+                <View className="items-center pt-3 pb-1">
+                  <View className="w-10 h-1 rounded-full bg-gray-300" />
+                </View>
+                {/* Header */}
+                <View className="px-6 py-3 flex-row items-center">
+                  <View className="w-10 h-10 rounded-2xl bg-indigo-50 items-center justify-center mr-3">
+                    <FontAwesome6 name="palette" size={18} color="#4F46E5" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="text-lg font-bold text-gray-900">选择主题</Text>
+                    <Text className="text-xs text-gray-400">自定义应用外观风格</Text>
+                  </View>
+                  <TouchableOpacity
+                    className="w-8 h-8 rounded-full bg-gray-100 items-center justify-center"
+                    onPress={() => setShowThemeModal(false)}
+                  >
+                    <FontAwesome6 name="xmark" size={14} color="#6B7280" />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView className="px-6" showsVerticalScrollIndicator={false}>
+                  {themeOptions.map((t) => {
+                    const isActive = currentTheme === t.id;
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        className={`flex-row items-center p-4 mb-3 rounded-2xl border-2 ${
+                          isActive ? "border-indigo-500" : "border-gray-100"
+                        }`}
+                        onPress={() => selectTheme(t.id)}
+                        disabled={themeSaving}
+                      >
+                        <View
+                          className="w-12 h-12 rounded-xl items-center justify-center mr-3"
+                          style={{ backgroundColor: t.surface }}
+                        >
+                          <FontAwesome6 name={t.icon as any} size={18} color={t.primary} />
+                        </View>
+                        <View className="flex-1">
+                          <Text className="text-base font-semibold text-gray-900">{t.label}</Text>
+                          <Text className="text-xs text-gray-400 mt-0.5">{t.desc}</Text>
+                        </View>
+                        {/* 颜色样本 */}
+                        <View className="flex-row gap-1 mr-2">
+                          <View className="w-5 h-5 rounded-full" style={{ backgroundColor: t.primary }} />
+                          <View className="w-5 h-5 rounded-full" style={{ backgroundColor: t.bg }} />
+                          <View className="w-5 h-5 rounded-full" style={{ backgroundColor: t.text }} />
+                        </View>
+                        {isActive && (
+                          <View className="w-6 h-6 rounded-full bg-indigo-500 items-center justify-center">
+                            <FontAwesome6 name="check" size={10} color="#fff" />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {themeSaving && (
+                    <View className="items-center py-4">
+                      <Text className="text-sm text-gray-400">保存中...</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
