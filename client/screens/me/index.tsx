@@ -329,7 +329,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               className="flex-1 flex-row items-center justify-center py-3 rounded-xl gap-2"
               style={{ backgroundColor: "#4F46E5" }}
-              onPress={() => router.push("/vip-packages")}
+              onPress={() => router.push("/recharge")}
             >
               <FontAwesome6 name="cart-shopping" size={14} color="#fff" />
               <Text className="text-sm font-semibold text-white">充值字数</Text>

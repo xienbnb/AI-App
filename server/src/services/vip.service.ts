@@ -280,6 +280,7 @@ export async function getUserQuota(userId: string) {
     planType: vip.planType,
     planName: plan.name,
     status: vip.status,
+    tokenBalance: vip.tokenBalance || 0,
     daily: {
       total: plan.dailyQuota,
       used: vip.usedDaily,

@@ -152,6 +152,7 @@ export const userVips = pgTable("user_vips", {
 	usedMonthly: integer("used_monthly").notNull().default(0),
 	usedDaily: integer("used_daily").notNull().default(0),
 	usedDailyTokens: integer("used_daily_tokens").notNull().default(0),
+	tokenBalance: integer("token_balance").notNull().default(0),
 	lastResetDate: text("last_reset_date"),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
@@ -169,6 +170,17 @@ export const userApiKeys = pgTable("user_api_keys", {
 	isActive: boolean("is_active").notNull().default(true),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const tokenPackages = pgTable("token_packages", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	name: text().notNull(),
+	tokens: integer().notNull(),
+	price: text().notNull(),
+	bonusTokens: integer("bonus_tokens").default(0),
+	popular: boolean().default(false),
+	description: text().default(''),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const usageRecords = pgTable("usage_records", {

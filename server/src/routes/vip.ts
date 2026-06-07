@@ -22,7 +22,8 @@ import {
 import { clearUserClientCache } from "../utils/ai-client.js";
 import { db } from "../storage/database/client.js";
 import { users } from "../storage/database/shared/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { tokenPackages, userVips, usageRecords } from "../storage/database/shared/schema.js";
 
 const router = Router();
 
@@ -64,6 +65,7 @@ router.get("/info", async (req: Request, res: Response) => {
         remainCount: Math.max(0, (vipInfo.dailyQuota || 50) - (vipInfo.usedDaily || 0)),
         maxTokens: vipInfo.dailyTokenQuota || 2000,
         usedDailyTokens: vipInfo.usedDailyTokens || 0,
+        tokenBalance: vipInfo.tokenBalance || 0,
         tierName: isAdmin ? '管理员' : (tierMap[vipInfo.planType] || '普通用户'),
         isAdmin,
         monthlyLimit: vipInfo.monthlyQuota || 500,
@@ -368,6 +370,77 @@ router.delete("/api-keys/:id", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[VIP] Delete api key error:", err);
     res.status(400).json({ success: false, error: err.message || "删除失败" });
+  }
+});
+
+// ==================== 字数充值系统 ====================
+
+// 获取可选的字数套餐包
+router.get("/token-packages", async (_req: Request, res: Response) => {
+  try {
+    const packages = await db.select().from(tokenPackages).orderBy(tokenPackages.price);
+    res.json({ success: true, data: packages });
+  } catch (err: any) {
+    console.error("[VIP] Get token packages error:", err);
+    res.status(500).json({ success: false, error: err.message || "获取套餐失败" });
+  }
+});
+
+// 购买字数套餐（模拟支付成功，直接增加字数余额）
+router.post("/buy-tokens", async (req: Request, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, error: "未登录" });
+    }
+
+    const { packageId } = req.body;
+    if (!packageId) {
+      return res.status(400).json({ success: false, error: "请选择套餐" });
+    }
+
+    // 查询套餐信息
+    const [pkg] = await db.select().from(tokenPackages).where(eq(tokenPackages.id, packageId)).limit(1);
+    if (!pkg) {
+      return res.status(404).json({ success: false, error: "套餐不存在" });
+    }
+
+    const totalTokens = pkg.tokens + (pkg.bonusTokens || 0);
+
+    // 增加用户字数余额
+    const result = await db.update(userVips)
+      .set({
+        tokenBalance: sql`${userVips.tokenBalance} + ${totalTokens}`,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(userVips.userId, userId))
+      .returning();
+
+    // 记录使用记录
+    try {
+      await db.insert(usageRecords).values({
+        userId,
+        operationType: 'token_purchase',
+        quotaUsed: 0,
+        tokensUsed: totalTokens,
+      });
+    } catch (e) {
+      // 记录失败不影响主流程
+      console.error("[VIP] Failed to record purchase:", e);
+    }
+
+    res.json({
+      success: true,
+      message: `成功购买 ${totalTokens} 字数！`,
+      data: {
+        tokens: totalTokens,
+        packageName: pkg.name,
+        newBalance: result[0]?.tokenBalance || 0,
+      },
+    });
+  } catch (err: any) {
+    console.error("[VIP] Buy tokens error:", err);
+    res.status(500).json({ success: false, error: err.message || "购买失败" });
   }
 });
 
