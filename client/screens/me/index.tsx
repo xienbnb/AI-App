@@ -150,7 +150,6 @@ export default function ProfileScreen() {
     {
       title: "会员特权",
       items: [
-        { icon: "crown", label: "会员中心", color: "#F59E0B", onPress: () => router.push("/vip") },
         { icon: "gem", label: "VIP套餐", color: "#8B5CF6", onPress: () => router.push("/vip-packages") },
         { icon: "gift", label: "福利中心", color: "#EC4899", onPress: () => router.push("/welfare") },
       ],
