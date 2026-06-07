@@ -98,10 +98,9 @@ export default function ProfileScreen() {
       ],
     },
     {
-      title: "其他",
+      title: "系统设置",
       items: [
-        { icon: "circle-question", label: "帮助与反馈", color: "#10B981", onPress: () => router.push("/help-feedback") },
-        { icon: "info", label: "关于应用", color: "#6B7280", onPress: () => router.push("/about") },
+        { icon: "gear", label: "设置", color: "#6B7280", onPress: () => router.push("/settings") },
         ...(isAuthenticated
           ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]
           : []),

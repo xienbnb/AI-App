@@ -40,6 +40,7 @@ export default function RootLayout() {
           <Stack.Screen name="ai-map" options={{ title: "地图生成", animation: 'slide_from_right' }} />
           <Stack.Screen name="ai-image-gen" options={{ title: "图片生成", animation: 'slide_from_right' }} />
           <Stack.Screen name="ai-relationship" options={{ title: "人物关系", animation: 'slide_from_right' }} />
+          <Stack.Screen name="settings" options={{ title: "设置", animation: 'slide_from_right' }} />
           <Stack.Screen name="tos" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="privacy" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="my-ai-settings" options={{ title: "", animation: 'slide_from_right' }} />
