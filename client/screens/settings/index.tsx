@@ -74,7 +74,7 @@ function SettingsItem({
 // ---- 配额卡片组件 ----
 function QuotaCard() {
   const router = useSafeRouter();
-  const [quota, setQuota] = useState<{ tokenBalance: number; dailyUsed: number; dailyLimit: number; totalApiCalls: number } | null>(null);
+  const [quota, setQuota] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const API = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -109,7 +109,11 @@ function QuotaCard() {
     );
   }
 
-  const tokenPercent = Math.min((quota.dailyUsed / quota.dailyLimit) * 100, 100);
+  const dailyTokens = quota.dailyTokens || { total: 1, used: 0 };
+  const dailyUsed = dailyTokens.used || 0;
+  const dailyLimit = dailyTokens.total || 1;
+  const tokenPercent = Math.min((dailyUsed / dailyLimit) * 100, 100);
+  const apiCalls = quota.daily?.used || 0;
 
   return (
     <View className="mx-4 mt-3">
@@ -122,7 +126,7 @@ function QuotaCard() {
           <Text className="text-sm font-semibold text-gray-900">字数额度</Text>
           <View className="flex-row items-center">
             <Text className="text-lg font-bold text-indigo-600">
-              {quota.tokenBalance.toLocaleString()}
+              {quota.tokenBalance?.toLocaleString() || 0}
             </Text>
             <Text className="text-xs text-gray-400 ml-1">字</Text>
             <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" style={{ marginLeft: 8 }} />
@@ -133,19 +137,19 @@ function QuotaCard() {
         <View className="mb-1">
           <View className="flex-row items-center justify-between mb-1.5">
             <Text className="text-xs text-gray-400">今日已用</Text>
-            <Text className="text-xs text-gray-500">{quota.dailyUsed.toLocaleString()}/{quota.dailyLimit.toLocaleString()} 字</Text>
+            <Text className="text-xs text-gray-500">{dailyUsed.toLocaleString()}/{dailyLimit.toLocaleString()} 字</Text>
           </View>
           <View className="h-2 rounded-full bg-gray-100 overflow-hidden">
-            <View className="h-full rounded-full bg-indigo-400" style={{ width: `${tokenPercent}%` }} />
+            <View className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(0, tokenPercent)}%` }} />
           </View>
         </View>
 
         {/* 调用次数 */}
         <View className="flex-row items-center mt-3 pt-3 border-t border-gray-50">
           <FontAwesome6 name="microchip" size={12} color="#9CA3AF" />
-          <Text className="text-xs text-gray-400 ml-2">累计调用次数</Text>
+          <Text className="text-xs text-gray-400 ml-2">今日调用次数</Text>
           <Text className="text-xs font-medium text-gray-600 ml-auto">
-            {quota.totalApiCalls?.toLocaleString() || 0} 次
+            {apiCalls.toLocaleString()} 次
           </Text>
         </View>
       </TouchableOpacity>
@@ -157,7 +161,7 @@ export default function SettingsScreen() {
   const router = useSafeRouter();
   const { user, logout } = useAuth();
   const [showThemeModal, setShowThemeModal] = useState(false);
-  const [quota, setQuota] = useState<{ tokenBalance: number; dailyUsed: number; dailyLimit: number; totalApiCalls: number } | null>(null);
+  const [quota, setQuota] = useState<any>(null);
   const [loadingQuota, setLoadingQuota] = useState(true);
 
   useEffect(() => {
