@@ -1,310 +1,230 @@
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, KeyboardAvoidingView, Platform, Keyboard } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
-import { useState, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
-import { FontAwesome6 } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useState } from "react";
+import { FontAwesome6, MaterialCommunityIcons } from "@expo/vector-icons";
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+const TABS = ["关注", "广场", "作品展示", "投稿指南"];
 
-interface Post {
-  id: string;
-  userName: string;
-  title: string;
-  content: string;
-  tag: string;
-  likes: number;
-  comments: number;
-  featured: number;
-  createdAt: string;
-}
+const SAMPLE_POSTS = [
+  {
+    id: "1",
+    userName: "创作达人",
+    title: "如何写出吸引人的开篇",
+    content: "一个好的开篇能在三秒内抓住读者。我总结了三种经典的开篇方式...",
+    tag: "写作技巧",
+    likes: 128,
+    comments: 23,
+  },
+  {
+    id: "2",
+    userName: "素材君",
+    title: "古风小说常用场景素材包",
+    content: "整理了一些古风小说常用的场景描写素材，包括宫殿、庭院、战场等...",
+    tag: "素材分享",
+    likes: 89,
+    comments: 15,
+  },
+  {
+    id: "3",
+    userName: "新手上路",
+    title: "求大佬帮忙看看这段对话",
+    content: "这段对话感觉很生硬，不知道怎么改，求大家指点...",
+    tag: "求助提问",
+    likes: 34,
+    comments: 42,
+  },
+];
 
-const TAGS = ["B 全部", "W 写作技巧", "N 素材分享", "Hand 互推互评", "Q 求助提问"];
+const SHOWCASE_ITEMS = [
+  { title: "《剑镇山河》", author: "忘川", desc: "仙侠 · 124万字 · 连载中", stars: "⭐⭐⭐⭐" },
+  { title: "《时光偷不走的梦》", author: "月下", desc: "都市 · 68万字 · 已完结", stars: "⭐⭐⭐⭐⭐" },
+  { title: "《深渊之下》", author: "黑猫", desc: "悬疑 · 43万字 · 连载中", stars: "⭐⭐⭐⭐" },
+];
 
 export default function CommunityScreen() {
   const router = useSafeRouter();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [activeTag, setActiveTag] = useState("B 全部");
-  const [searchText, setSearchText] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [newTag, setNewTag] = useState("W 写作技巧");
+  const [activeTab, setActiveTab] = useState(0);
 
-  const fetchPosts = useCallback(async (tag?: string) => {
-    try {
-      setLoading(true);
-      const url = tag && tag !== "B 全部"
-        ? `${API_BASE}/api/v1/community?tag=${encodeURIComponent(tag)}`
-        : `${API_BASE}/api/v1/community`;
-      const res = await fetch(url);
-      const json = await res.json();
-      if (json.success) setPosts(json.data);
-    } catch (e) {
-      console.error("获取帖子失败", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchPosts(activeTag);
-    }, [activeTag, fetchPosts])
-  );
-
-  const handleSearch = async () => {
-    if (!searchText.trim()) {
-      fetchPosts(activeTag);
-      return;
-    }
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_BASE}/api/v1/community/search?q=${encodeURIComponent(searchText.trim())}`);
-      const json = await res.json();
-      if (json.success) setPosts(json.data);
-    } catch (e) {
-      console.error("搜索失败", e);
-    } finally {
-      setLoading(false);
-    }
+  const showComingSoon = () => {
+    Alert.alert("提示", "功能正在完善中，敬请期待");
   };
 
-  const getAuthHeaders = async () => {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    try {
-      const token = await AsyncStorage.getItem("auth_token");
-      if (token) headers["x-session"] = token;
-    } catch {}
-    return headers;
+  const handlePostPress = () => {
+    Alert.alert("提示", "功能正在完善中，敬请期待");
   };
-
-  const handleCreatePost = async () => {
-    if (!newTitle.trim()) return;
-    const headers = await getAuthHeaders();
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/community`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ userName: "用户", title: newTitle.trim(), content: newContent.trim(), tag: newTag }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setShowCreate(false);
-        setNewTitle("");
-        setNewContent("");
-        fetchPosts(activeTag);
-      }
-    } catch (e) {
-      console.error("创建失败", e);
-    }
-  };
-
-  const handleLike = async (postId: string) => {
-    const headers = await getAuthHeaders();
-    try {
-      const res = await fetch(`${API_BASE}/api/v1/community/${postId}/like`, { method: "PUT", headers });
-      const json = await res.json();
-      if (json.success) {
-        setPosts((prev) =>
-          prev.map((p) => (p.id === postId ? { ...p, likes: json.data.likes } : p))
-        );
-      }
-    } catch (e) {
-      console.error("点赞失败", e);
-    }
-  };
-
-  const formatTime = (dateStr: string) => {
-    if (!dateStr) return "";
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    if (hours < 1) return "刚刚";
-    if (hours < 24) return `${hours}小时前`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}天前`;
-    return date.toLocaleDateString("zh-CN");
-  };
-
-  const renderPost = (post: Post) => (
-    <TouchableOpacity
-      key={post.id}
-      onPress={() => router.push("/post-detail", { id: post.id })}
-      className="bg-white rounded-2xl p-4"
-      style={{
-        shadowColor: "#6366F1",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
-        elevation: 1,
-      }}
-    >
-      <View className="flex-row items-start gap-3 mb-3">
-        <TouchableOpacity
-          onPress={() => router.push("/post-detail", { id: post.id, userName: post.userName })}
-          className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 items-center justify-center"
-        >
-          <Text className="text-white font-bold text-sm">{post.userName[0]}</Text>
-        </TouchableOpacity>
-        <View className="flex-1">
-          <View className="flex-row items-center gap-2">
-            <Text className="text-sm font-medium text-gray-800">{post.userName}</Text>
-            {post.featured === 1 && (
-              <Text className="px-1.5 py-0.5 bg-yellow-100 text-yellow-600 text-[10px] rounded-full">精华</Text>
-            )}
-          </View>
-          <Text className="text-xs text-gray-400">{formatTime(post.createdAt)}</Text>
-        </View>
-      </View>
-      <Text className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-purple-100 text-purple-600 mb-2 overflow-hidden">
-        {post.tag}
-      </Text>
-      <Text className="font-semibold text-gray-800 mb-2" numberOfLines={2}>{post.title}</Text>
-      <View className="flex-row items-center gap-4">
-        <TouchableOpacity className="flex-row items-center gap-1" onPress={() => handleLike(post.id)}>
-          <FontAwesome6 name="heart" size={12} color="#9CA3AF" />
-          <Text className="text-xs text-gray-500">{post.likes}</Text>
-        </TouchableOpacity>
-        <View className="flex-row items-center gap-1">
-          <FontAwesome6 name="comment" size={12} color="#9CA3AF" />
-          <Text className="text-xs text-gray-500">{post.comments}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   return (
     <Screen>
-      <ScrollView className="flex-1">
-        {/* 顶部搜索 & 发帖 */}
-        <View className="px-4 pt-2 pb-2">
-          <View className="flex-row items-center gap-3 mb-4">
-            <View className="flex-1 relative">
-              <FontAwesome6
-                name="magnifying-glass"
-                size={14}
-                color="#9CA3AF"
-                style={{ position: "absolute", left: 14, top: 14, zIndex: 1 }}
-              />
-              <TextInput
-                placeholder="搜索话题..."
-                value={searchText}
-                onChangeText={setSearchText}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-                className="w-full px-4 py-3 rounded-xl text-sm bg-gray-100 text-gray-700 pl-10"
-              />
-            </View>
-            <TouchableOpacity
-              className="w-12 h-12 rounded-xl items-center justify-center"
-              style={{ backgroundColor: "#6366F1" }}
-              onPress={() => setShowCreate(true)}
+      {/* Header */}
+      <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <TouchableOpacity onPress={() => router.back()}>
+          <FontAwesome6 name="arrow-left" size={18} color="#6B7280" />
+        </TouchableOpacity>
+        <Text className="text-lg font-bold text-gray-900 dark:text-white">社区</Text>
+        <TouchableOpacity onPress={showComingSoon}>
+          <View className="bg-indigo-500 px-3 py-1.5 rounded-full">
+            <Text className="text-white text-xs font-medium">发帖</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View className="flex-row border-b border-gray-100 dark:border-gray-800">
+        {TABS.map((tab, index) => (
+          <TouchableOpacity
+            key={tab}
+            className={`flex-1 py-3 items-center ${activeTab === index ? "border-b-2 border-indigo-500" : ""}`}
+            onPress={() => setActiveTab(index)}
+          >
+            <Text
+              className={`text-sm ${activeTab === index ? "text-indigo-500 font-semibold" : "text-gray-500 dark:text-gray-400"}`}
             >
-              <FontAwesome6 name="pen" size={16} color="white" />
+              {tab}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
+        {/* 关注 Tab */}
+        {activeTab === 0 && (
+          <View className="py-20 items-center">
+            <MaterialCommunityIcons name="heart-outline" size={64} color="#D1D5DB" />
+            <Text className="text-gray-400 mt-4 text-base">还没有关注任何人</Text>
+            <Text className="text-gray-400 text-sm mt-1">去广场发现有趣的创作者吧</Text>
+            <TouchableOpacity
+              className="mt-4 bg-indigo-500 px-6 py-2.5 rounded-full"
+              onPress={() => setActiveTab(1)}
+            >
+              <Text className="text-white font-medium">去广场看看</Text>
             </TouchableOpacity>
           </View>
+        )}
 
-          {/* 标签页 */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4 -mx-4 px-4">
-            <View className="flex-row gap-2">
-              {TAGS.map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  onPress={() => { setActiveTag(tag); setSearchText(""); }}
-                  className={`px-4 py-2 rounded-full ${activeTag === tag ? "bg-primary-500" : "bg-gray-100"}`}
-                >
-                  <Text className={`text-xs font-medium ${activeTag === tag ? "text-white" : "text-gray-700"}`}>
-                    {tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        </View>
-
-        {/* 帖子列表 */}
-        <View className="px-4 gap-4 pb-8">
-          {loading ? (
-            <ActivityIndicator size="large" color="#6366F1" style={{ marginTop: 40 }} />
-          ) : posts.length === 0 ? (
-            <View className="items-center py-12">
-              <FontAwesome6 name="comments" size={40} color="#D1D5DB" />
-              <Text className="text-gray-400 mt-3">暂无帖子</Text>
-              <TouchableOpacity
-                className="mt-4 px-6 py-2 rounded-full"
-                style={{ backgroundColor: "#6366F1" }}
-                onPress={() => setShowCreate(true)}
-              >
-                <Text className="text-white text-sm font-medium">发起讨论</Text>
+        {/* 广场 Tab */}
+        {activeTab === 1 && (
+          <View>
+            <View className="flex-row items-center justify-between mt-4 mb-3">
+              <Text className="text-base font-semibold text-gray-800 dark:text-white">热门推荐</Text>
+              <TouchableOpacity onPress={showComingSoon}>
+                <Text className="text-indigo-500 text-sm">更多</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            posts.map(renderPost)
-          )}
-        </View>
-      </ScrollView>
-
-      {/* 创建帖子弹窗 */}
-      <Modal visible={showCreate} transparent animationType="slide">
-        <TouchableOpacity
-          style={{ flex: 1 }}
-          activeOpacity={1}
-          onPress={() => Keyboard.dismiss()}
-        >
-          <KeyboardAvoidingView
-            style={{ flex: 1, justifyContent: "flex-end" }}
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-          >
-            <View className="bg-white rounded-t-3xl p-6" style={{ maxHeight: "85%" }}>
-              <View className="flex-row justify-between items-center mb-4">
-                <Text className="text-lg font-bold text-gray-800">发布帖子</Text>
-                <TouchableOpacity onPress={() => setShowCreate(false)}>
-                  <FontAwesome6 name="xmark" size={20} color="#9CA3AF" />
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                placeholder="标题"
-                value={newTitle}
-                onChangeText={setNewTitle}
-                className="w-full px-4 py-3 rounded-xl text-sm bg-gray-100 text-gray-700 mb-3"
-              />
-              <TextInput
-                placeholder="内容（可选）"
-                value={newContent}
-                onChangeText={setNewContent}
-                multiline
-                numberOfLines={5}
-                className="w-full px-4 py-3 rounded-xl text-sm bg-gray-100 text-gray-700 mb-3 min-h-[120px] textAlignVertical-top"
-              />
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-                <View className="flex-row gap-2">
-                  {["W 写作技巧", "N 素材分享", "Hand 互推互评", "Q 求助提问"].map((t) => (
-                    <TouchableOpacity
-                      key={t}
-                      onPress={() => setNewTag(t)}
-                      className={`px-3 py-1.5 rounded-full ${newTag === t ? "bg-primary-500" : "bg-gray-100"}`}
-                    >
-                      <Text className={`text-xs ${newTag === t ? "text-white" : "text-gray-600"}`}>{t}</Text>
-                    </TouchableOpacity>
-                  ))}
+            {SAMPLE_POSTS.map((post) => (
+              <TouchableOpacity
+                key={post.id}
+                className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 shadow-sm"
+                onPress={handlePostPress}
+              >
+                <View className="flex-row items-center mb-2">
+                  <View className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center">
+                    <Text className="text-indigo-600 dark:text-indigo-300 text-xs font-bold">
+                      {post.userName[0]}
+                    </Text>
+                  </View>
+                  <Text className="text-sm font-medium text-gray-700 dark:text-gray-300 ml-2">{post.userName}</Text>
+                  <View className="ml-auto bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded-full">
+                    <Text className="text-xs text-gray-500 dark:text-gray-400">{post.tag}</Text>
+                  </View>
                 </View>
-              </ScrollView>
-              <TouchableOpacity
-                className="w-full py-3 rounded-xl items-center"
-                style={{ backgroundColor: newTitle.trim() ? "#6366F1" : "#D1D5DB" }}
-                onPress={handleCreatePost}
-                disabled={!newTitle.trim()}
-              >
-                <Text className="text-white font-medium">发布</Text>
+                <Text className="text-base font-semibold text-gray-900 dark:text-white mb-1">{post.title}</Text>
+                <Text className="text-sm text-gray-500 dark:text-gray-400 leading-5" numberOfLines={3}>
+                  {post.content}
+                </Text>
+                <View className="flex-row items-center mt-3 pt-3 border-t border-gray-50 dark:border-gray-700">
+                  <View className="flex-row items-center mr-4">
+                    <FontAwesome6 name="heart" size={12} color="#EF4444" solid />
+                    <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1">{post.likes}</Text>
+                  </View>
+                  <View className="flex-row items-center mr-4">
+                    <FontAwesome6 name="comment" size={12} color="#6B7280" />
+                    <Text className="text-xs text-gray-500 dark:text-gray-400 ml-1">{post.comments}</Text>
+                  </View>
+                  <TouchableOpacity
+                    className="ml-auto bg-amber-50 dark:bg-amber-900/30 px-3 py-1 rounded-full"
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      showComingSoon();
+                    }}
+                  >
+                    <Text className="text-amber-600 dark:text-amber-400 text-xs font-medium">打赏 Token</Text>
+                  </TouchableOpacity>
+                </View>
               </TouchableOpacity>
+            ))}
+            <TouchableOpacity className="py-4 items-center" onPress={showComingSoon}>
+              <Text className="text-gray-400 text-sm">加载更多...</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* 作品展示 Tab */}
+        {activeTab === 2 && (
+          <View className="pt-4">
+            <Text className="text-base font-semibold text-gray-800 dark:text-white mb-3">精选作品</Text>
+            {SHOWCASE_ITEMS.map((item, i) => (
+              <TouchableOpacity
+                key={i}
+                className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 shadow-sm"
+                onPress={handlePostPress}
+              >
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-1">
+                    <Text className="text-base font-bold text-gray-900 dark:text-white">{item.title}</Text>
+                    <Text className="text-sm text-gray-500 mt-1">{item.author} · {item.desc}</Text>
+                    <Text className="text-sm mt-1">{item.stars}</Text>
+                  </View>
+                  <View className="w-16 h-16 rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900 dark:to-purple-900 items-center justify-center">
+                    <FontAwesome6 name="book" size={20} color="#6366F1" />
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* 投稿指南 Tab */}
+        {activeTab === 3 && (
+          <View className="pt-4 pb-8">
+            <View className="bg-white dark:bg-gray-800 rounded-2xl p-5 shadow-sm">
+              <Text className="text-lg font-bold text-gray-900 dark:text-white mb-2">投稿指南</Text>
+              <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">让你的作品被更多人发现</Text>
+
+              <View className="mb-4">
+                <Text className="text-base font-semibold text-gray-800 dark:text-white mb-2">📝 基本要求</Text>
+                <Text className="text-sm text-gray-600 dark:text-gray-400 leading-6">
+                  • 作品须为原创，不得抄袭{'\n'}
+                  • 内容健康向上，符合社区规范{'\n'}
+                  • 建议配图增加吸引力{'\n'}
+                  • 标题简洁明了，15字以内最佳
+                </Text>
+              </View>
+
+              <View className="mb-4">
+                <Text className="text-base font-semibold text-gray-800 dark:text-white mb-2">🏷️ 标签规范</Text>
+                <Text className="text-sm text-gray-600 dark:text-gray-400 leading-6">
+                  • 写作技巧：分享创作经验{'\n'}
+                  • 素材分享：分享写作素材{'\n'}
+                  • 互推互评：交换点评作品{'\n'}
+                  • 求助提问：寻求创作建议
+                </Text>
+              </View>
+
+              <View>
+                <Text className="text-base font-semibold text-gray-800 dark:text-white mb-2">⭐ 推荐机制</Text>
+                <Text className="text-sm text-gray-600 dark:text-gray-400 leading-6">
+                  • 优质内容会推荐到「作品展示」{'\n'}
+                  • 点赞和评论越多，曝光越高{'\n'}
+                  • 活跃用户有机会获得官方推荐
+                </Text>
+              </View>
             </View>
-          </KeyboardAvoidingView>
-        </TouchableOpacity>
-      </Modal>
+          </View>
+        )}
+
+        <View className="h-8" />
+      </ScrollView>
     </Screen>
   );
 }
