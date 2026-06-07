@@ -447,4 +447,79 @@ router.delete("/posts/:id", async (req, res) => {
   }
 });
 
+// ==================== 账单管理 ====================
+
+router.get("/billing", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const offset = (page - 1) * limit;
+    const type = req.query.type as string;
+
+    const conditions = [];
+    if (type) conditions.push(eq(billingRecords.type, type));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [totalResult] = await db.select({ value: count() })
+      .from(billingRecords)
+      .where(whereClause);
+
+    const list = await db.select({
+      id: billingRecords.id,
+      userId: billingRecords.userId,
+      type: billingRecords.type,
+      title: billingRecords.title,
+      amount: billingRecords.amount,
+      balanceAfter: billingRecords.balanceAfter,
+      detail: billingRecords.detail,
+      createdAt: billingRecords.createdAt,
+      userPhone: users.phone,
+      userName: users.nickname,
+    })
+      .from(billingRecords)
+      .leftJoin(users, eq(billingRecords.userId, users.id))
+      .where(whereClause)
+      .orderBy(desc(billingRecords.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    res.json({ total: Number(totalResult.value), page, limit, data: list });
+  } catch (err: any) {
+    console.error("[ADMIN] Billing list error:", err);
+    res.status(500).json({ error: "获取账单失败" });
+  }
+});
+
+// ==================== 系统设置 ====================
+
+router.get("/settings", async (req, res) => {
+  try {
+    const { systemSettings } = await import("../storage/database/shared/schema.js");
+    const list = await db.select().from(systemSettings).orderBy(systemSettings.key);
+    res.json({ data: list });
+  } catch (err: any) {
+    console.error("[ADMIN] Settings list error:", err);
+    res.status(500).json({ error: "获取设置失败" });
+  }
+});
+
+router.patch("/settings/:key", async (req, res) => {
+  try {
+    const { systemSettings } = await import("../storage/database/shared/schema.js");
+    const { value } = req.body;
+    if (value === undefined) {
+      res.status(400).json({ error: "缺少 value 参数" });
+      return;
+    }
+    await db.insert(systemSettings)
+      .values({ key: req.params.key, value: JSON.stringify(value) })
+      .onConflictDoUpdate({ target: systemSettings.key, set: { value: JSON.stringify(value), updatedAt: sql`NOW()` } });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("[ADMIN] Settings update error:", err);
+    res.status(500).json({ error: "更新设置失败" });
+  }
+});
+
 export default router;
