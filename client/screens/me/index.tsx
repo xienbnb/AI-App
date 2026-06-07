@@ -173,6 +173,7 @@ export default function ProfileScreen() {
       title: "社区与内容",
       items: [
         { icon: "users", label: "社区管理", color: "#F59E0B", onPress: () => router.push("/community-manage") },
+        { icon: "comments", label: "社区", color: "#EC4899", onPress: () => router.push("/community") },
         { icon: "book-open", label: "操作教程", color: "#6366F1", onPress: () => router.push("/tutorial") },
       ],
     },

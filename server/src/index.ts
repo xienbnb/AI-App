@@ -11,6 +11,7 @@ import backupRouter from "./routes/backup.js";
 import workflowRouter from "./routes/workflow.js";
 import agentRouter from "./routes/agent.js";
 import billingRouter from "./routes/billing.js";
+import welfareRouter from "./routes/welfare.js";
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.middleware.js";
 import { cleanupGuestUsers } from "./services/cleanup.service.js";
@@ -52,6 +53,7 @@ app.use('/api/v1/backup', authMiddleware, backupRouter);
 app.use('/api/v1/workflow', authMiddleware, quotaMiddleware('ai_generate'), workflowRouter);
 app.use('/api/v1/agent', authMiddleware, quotaMiddleware('ai_generate'), agentRouter);
 app.use('/api/v1/billing', authMiddleware, billingRouter);
+app.use('/api/v1/welfare', authMiddleware, welfareRouter);
 
 // 404 handler
 app.use((req, res) => {

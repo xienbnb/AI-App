@@ -31,6 +31,8 @@ export const users = pgTable("users", {
 	qqNickname: text("qq_nickname").default(''),
 	emailVerified: boolean("email_verified").default(false),
 	customApiKey: text("custom_api_key").default(''),
+		checkInDate: text("check_in_date").default(''),
+		dailyWriteWords: integer("daily_write_words").default(0),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
@@ -242,4 +244,14 @@ export const billingRecords = pgTable("billing_records", {
 	detail: text("detail").default(''),
 	metadata: jsonb("metadata").default('{}'),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const userTasks = pgTable("user_tasks", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+	taskType: text("task_type").notNull(),
+	completed: boolean("completed").default(false).notNull(),
+	completedAt: timestamp("completed_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+	rewardClaimed: boolean("reward_claimed").default(false).notNull(),
+	metadata: jsonb("metadata").default("{}").notNull(),
 });
