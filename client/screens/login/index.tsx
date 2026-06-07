@@ -1,7 +1,7 @@
 /**
  * @file 登录页面
- * @description 支持手机号一键登录、微信/QQ（占位）、账号密码登录，
- *   包含用户协议和隐私政策勾选，以及找回账号/密码功能
+ * @description 支持手机验证码登录和账号密码登录，新用户可通过验证码自动注册，
+ *   包含用户协议和隐私政策勾选，以及找回密码功能
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -44,6 +44,8 @@ export default function LoginScreen() {
   const [resetPhone, setResetPhone] = useState("");
   const [resetOtp, setResetOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [showOtpModal, setShowOtpModal] = useState(false);
+  const [otpModalCode, setOtpModalCode] = useState("");
 
   // Auto-detect stored phone
   useEffect(() => {
@@ -78,8 +80,8 @@ export default function LoginScreen() {
         setOtpCountdown(60);
         if (!targetPhone) setPhone(p);
         await savePhone(p);
-        alert("验证码已发送");
-        setMode("otp");
+        setOtpModalCode(data.code || "");
+        setShowOtpModal(true);
       } else {
         alert(data.error || "发送失败");
       }
@@ -242,42 +244,22 @@ export default function LoginScreen() {
               {/* Divider */}
               <View className="flex-row items-center w-full mb-6">
                 <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-700" />
-                <Text className="mx-4 text-xs text-gray-400">其他方式</Text>
+                <Text className="mx-4 text-xs text-gray-400">或者</Text>
                 <View className="flex-1 h-[1px] bg-gray-200 dark:bg-gray-700" />
               </View>
 
-              {/* Social methods */}
-              <View className="flex-row justify-center gap-8 mb-6">
-                <TouchableOpacity className="items-center" activeOpacity={0.6}
-            disabled={!agreeTerms}
-            style={{ opacity: agreeTerms ? 1 : 0.5 }}>
-                  <View className="w-14 h-14 rounded-full bg-green-500 items-center justify-center mb-2 shadow-sm">
-                    <FontAwesome6 name="weixin" size={24} color="white" />
-                  </View>
-                  <Text className="text-xs text-gray-500">微信</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity className="items-center" activeOpacity={0.6}>
-                  <View className="w-14 h-14 rounded-full bg-blue-500 items-center justify-center mb-2 shadow-sm">
-                    <FontAwesome6 name="qq" size={24} color="white" />
-                  </View>
-                  <Text className="text-xs text-gray-500">QQ</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  className="items-center"
-                  activeOpacity={0.6}
-                  onPress={() => {
-                    setMode("password");
-                    setPassword("");
-                  }}
-                >
-                  <View className="w-14 h-14 rounded-full bg-gray-200 dark:bg-gray-700 items-center justify-center mb-2 shadow-sm">
-                    <FontAwesome6 name="lock" size={20} color="#6B7280" />
-                  </View>
-                  <Text className="text-xs text-gray-500">账号密码</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Password login */}
+              <TouchableOpacity
+                className="w-full flex-row items-center justify-center py-3 rounded-2xl border border-gray-200 dark:border-gray-700 mb-6"
+                activeOpacity={0.6}
+                onPress={() => {
+                  setMode("password");
+                  setPassword("");
+                }}
+              >
+                <FontAwesome6 name="lock" size={16} color="#6B7280" />
+                <Text className="text-sm text-gray-500 ml-2">使用账号密码登录</Text>
+              </TouchableOpacity>
 
               {/* Agreement checkbox */}
               <TouchableOpacity
@@ -405,16 +387,14 @@ export default function LoginScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {/* Links */}
-              <View className="flex-row justify-center gap-4">
-                <TouchableOpacity onPress={() => setShowFindAccount(true)} activeOpacity={0.6}>
-                  <Text className="text-sm text-amber-500">找回账号</Text>
-                </TouchableOpacity>
-                <Text className="text-sm text-gray-300">|</Text>
-                <TouchableOpacity onPress={() => { setMode("password"); setPassword(""); }} activeOpacity={0.6}>
-                  <Text className="text-sm text-amber-500">密码登录</Text>
-                </TouchableOpacity>
-              </View>
+              {/* Back to main */}
+              <TouchableOpacity
+                className="items-center"
+                onPress={() => setMode("main")}
+                activeOpacity={0.6}
+              >
+                <Text className="text-sm text-amber-500">更换手机号</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -507,9 +487,23 @@ export default function LoginScreen() {
                 )}
               </TouchableOpacity>
 
+              {/* Registration */}
+              <View className="flex-row justify-center items-center mt-3">
+                <Text className="text-sm text-gray-400">还没有账号？</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMode("main");
+                    setPassword("");
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <Text className="text-sm text-amber-500 font-medium ml-1">立即注册</Text>
+                </TouchableOpacity>
+              </View>
+
               {/* Forgot password */}
               <TouchableOpacity
-                className="items-center"
+                className="items-center mt-3"
                 onPress={() => setShowResetPassword(true)}
                 activeOpacity={0.6}
               >
@@ -518,6 +512,72 @@ export default function LoginScreen() {
             </View>
           )}
         </ScrollView>
+
+        {/* ====== OTP CODE MODAL ====== */}
+        <Modal visible={showOtpModal} transparent animationType="fade">
+          <View className="flex-1 bg-black/50 items-center justify-center px-8">
+            <View className="w-full bg-white dark:bg-gray-900 rounded-3xl p-8 items-center">
+              {/* Close button */}
+              <TouchableOpacity
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 items-center justify-center z-10"
+                onPress={() => { setShowOtpModal(false); setMode("otp"); }}
+                activeOpacity={0.6}
+              >
+                <MaterialIcons name="close" size={18} color="#6B7280" />
+              </TouchableOpacity>
+
+              {/* Icon */}
+              <View className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-900/30 items-center justify-center mb-4">
+                <MaterialIcons name="email" size={28} color="#F59E0B" />
+              </View>
+
+              <Text className="text-lg font-bold text-gray-900 dark:text-white mb-1">
+                验证码已发送
+              </Text>
+              <Text className="text-sm text-gray-500 mb-6">
+                已发送至 {phone.replace(/(\d{3})\d{4}(\d{4})/, "$1****$2")}
+              </Text>
+
+              {/* Code display */}
+              <View className="flex-row gap-2 mb-6">
+                {otpModalCode.split("").map((digit, i) => (
+                  <View
+                    key={i}
+                    className="w-11 h-14 rounded-xl bg-gray-100 dark:bg-gray-800 items-center justify-center"
+                  >
+                    <Text className="text-2xl font-bold text-gray-900 dark:text-white">{digit}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Text className="text-xs text-gray-400 mb-6">
+                验证码 5 分钟内有效，请勿泄露给他人
+              </Text>
+
+              <TouchableOpacity
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl py-4 items-center shadow-lg shadow-amber-500/30"
+                onPress={() => { setShowOtpModal(false); setMode("otp"); }}
+                activeOpacity={0.7}
+              >
+                <Text className="text-white text-base font-bold">我已记住，去输入</Text>
+              </TouchableOpacity>
+
+              {/* Resend */}
+              <TouchableOpacity
+                className="mt-4"
+                onPress={async () => {
+                  await handleSendOTP();
+                }}
+                disabled={otpCountdown > 0}
+                activeOpacity={0.6}
+              >
+                <Text className={`text-sm ${otpCountdown > 0 ? "text-gray-400" : "text-amber-500"}`}>
+                  {otpCountdown > 0 ? `${otpCountdown}s 后可重新发送` : "没收到？重新发送"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* ====== AGREEMENT MODAL ====== */}
         <Modal visible={showAgreement !== null} transparent animationType="slide">
