@@ -124,21 +124,6 @@ function ModelPickerModal({ visible, selectedId, onSelect, onClose }: {
   );
 }
 
-const INSPIRATION_CHIPS = [
-  "创作一本玄幻修仙小说",
-  "重生回到高中改写人生",
-  "末日废土上的异能觉醒",
-  "在星际时代开了一家美食店",
-  "我养的猫竟然是上古神兽",
-];
-
-const SUGGESTIONS = [
-  { title: "帮我写一部玄幻小说", subtitle: "主角获得签到系统，穿越到修仙世界", icon: "wand-magic-sparkles" },
-  { title: "设计一个复杂反派", subtitle: "让读者又爱又恨的悲剧反派角色", icon: "mask" },
-  { title: "润色这段文字", subtitle: "帮我提升文笔，让描写更生动", icon: "pen-fancy" },
-  { title: "续写都市剧情", subtitle: "豪门千金与草根逆袭的故事走向", icon: "book-open" },
-];
-
 // ===== Helpers =====
 function generateTempId(): string {
   return "tmp_" + Math.random().toString(36).substring(2, 9);
@@ -498,6 +483,53 @@ function InsertModal({ visible, bookId, content, insertTarget, token, onClose }:
   );
 }
 
+// ===== Plus Menu (Coze-style + popup) =====
+function PlusMenuModal({ visible, enabledSkillCount, onUploadFile, onSelectSkill, onClose }: {
+  visible: boolean; enabledSkillCount: number; onUploadFile: () => void; onSelectSkill: () => void; onClose: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View className="flex-1 bg-black/30 justify-start px-3" style={{ paddingTop: 280 }}>
+          <View className="bg-white rounded-2xl overflow-hidden shadow-xl">
+            <TouchableOpacity
+              className="flex-row items-center gap-3 px-4 py-4 active:bg-gray-50 border-b border-gray-100"
+              onPress={() => { onUploadFile(); onClose(); }}
+            >
+              <View className="w-10 h-10 rounded-xl bg-indigo-50 items-center justify-center">
+                <FontAwesome6 name="file-lines" size={18} color="#6366F1" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-gray-900">上传文件</Text>
+                <Text className="text-xs text-gray-400 mt-0.5">支持 TXT / Markdown / PDF</Text>
+              </View>
+              <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              className="flex-row items-center gap-3 px-4 py-4 active:bg-gray-50"
+              onPress={() => { onSelectSkill(); onClose(); }}
+            >
+              <View className="w-10 h-10 rounded-xl bg-purple-50 items-center justify-center">
+                <FontAwesome6 name="bolt" size={18} color="#A855F7" />
+              </View>
+              <View className="flex-1">
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-sm font-semibold text-gray-900">技能</Text>
+                  <View className="bg-purple-100 rounded-full px-2 py-0.5">
+                    <Text className="text-[10px] font-medium text-purple-600">{enabledSkillCount}</Text>
+                  </View>
+                </View>
+                <Text className="text-xs text-gray-400 mt-0.5">选择技能限定 AI 创作范围</Text>
+              </View>
+              <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+}
+
 // ===== Main Home Component =====
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -535,6 +567,9 @@ export default function HomeScreen() {
 
   // Keyboard state
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  // Show plus menu
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
 
   // Selected AI model
   const [selectedModel, setSelectedModel] = useState("doubao-seed-2-0-lite-260215");
@@ -708,12 +743,12 @@ export default function HomeScreen() {
             fullContent += parsed.content || "";
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_start") {
-            setAgentActionStatus(`⏳ ${parsed.content || parsed.tool || "处理中..."}`);
+            setAgentActionStatus(`[处理] ${parsed.content || parsed.tool || "处理中..."}`);
           } else if (parsed.type === "action_result") {
             if (parsed.success) {
-              setAgentActionStatus(`✅ ${parsed.tool || parsed.message?.slice(0, 40) || "完成"}`);
+              setAgentActionStatus(`[完成] ${parsed.tool || parsed.message?.slice(0, 40) || "完成"}`);
             } else {
-              setAgentActionStatus(`❌ ${parsed.tool || "失败"}`);
+              setAgentActionStatus(`[失败] ${parsed.tool || "失败"}`);
             }
           } else if (parsed.type === "error") {
             setAgentActionStatus(`[错误] ${parsed.message}`);
@@ -983,6 +1018,38 @@ export default function HomeScreen() {
     setActiveSkill(skill);
   }, [activeBook, addMessage, token]);
 
+  // ===== Upload file handler (from + menu) =====
+  const handleUploadFile = useCallback(async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["text/plain", "text/markdown", "application/pdf"],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const file = result.assets[0];
+      addMessage("user", `[上传文件] ${file.name}`);
+      setIsAiThinking(true);
+      setStreamContent("正在读取文件...");
+      const formData = new FormData();
+      formData.append("file", { uri: file.uri, name: file.name || "file.txt", type: file.mimeType || "text/plain" } as any);
+      const res = await fetch(`${API_BASE}/api/v1/writing/upload`, { method: "POST", body: formData });
+      const json = await res.json();
+      if (json.success) {
+        const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${json.data.content.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
+        setInputText(text);
+        setIsAiThinking(false);
+        setStreamContent("");
+        setTimeout(() => sendFreeChat(text), 100);
+      } else {
+        setIsAiThinking(false);
+        addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
+      }
+    } catch (e: any) {
+      setIsAiThinking(false);
+      addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
+    }
+  }, [addMessage, sendFreeChat, API_BASE]);
+
   // ===== Insert AI content into book =====
   // ===== Insert content into book (supports outline, chapter, inspiration) =====
   const handleInsertToBook = useCallback(async (content: string, title: string, target: string, chapterId?: string | null) => {
@@ -1168,21 +1235,7 @@ export default function HomeScreen() {
           <TouchableOpacity className="w-9 h-9 rounded-xl bg-gray-100 items-center justify-center" onPress={() => setSidebarOpen(true)}>
             <FontAwesome6 name="bars" size={18} color="#374151" />
           </TouchableOpacity>
-          {/* Mode Toggle */}
-          <View className="flex-row bg-gray-100 rounded-xl p-0.5">
-            <TouchableOpacity
-              className={`px-3 py-1.5 rounded-[10px] ${!isAgentMode ? "bg-white shadow-sm" : ""}`}
-              onPress={() => { setIsAgentMode(false); setIsAiThinking(false); cleanupAgentSSE(); }}
-            >
-              <Text className={`text-xs font-medium ${!isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>技能对话</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              className={`px-3 py-1.5 rounded-[10px] ${isAgentMode ? "bg-white shadow-sm" : ""}`}
-              onPress={() => { setIsAgentMode(true); handleNewAgentConv(); loadAgentConversations(); }}
-            >
-              <Text className={`text-xs font-medium ${isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>写作Agent</Text>
-            </TouchableOpacity>
-          </View>
+          <Text className="text-base font-bold text-gray-900">AI 创作</Text>
         </View>
         <View className="flex-row items-center gap-2">
           <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={isAgentMode ? handleNewAgentConv : resetDialog}>
@@ -1238,27 +1291,7 @@ export default function HomeScreen() {
                     只需说出你的想法，我会一步步完成。
                   </Text>
                 </View>
-                {/* Agent Suggestions */}
-                <View className="mb-4">
-                  <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
-                  {[
-                    { title: "创作一本玄幻修仙小说", desc: "废材逆袭，觉醒上古血脉" },
-                    { title: "我想写一本都市言情小说", desc: "霸道总裁与菜鸟编辑的甜蜜日常" },
-                    { title: "帮我写一个科幻故事", desc: "星际时代，人类发现远古文明遗迹" },
-                    { title: "设计一本悬疑推理小说", desc: "古宅凶案，层层反转的谜题" },
-                  ].map((s, i) => (
-                    <TouchableOpacity key={i} className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-emerald-100 active:bg-emerald-50/30" onPress={() => setInputText(s.title)}>
-                      <View className="w-9 h-9 rounded-xl bg-emerald-50 items-center justify-center mr-3">
-                        <FontAwesome6 name="wand-magic-sparkles" size={15} color="#10B981" />
-                      </View>
-                      <View className="flex-1">
-                        <Text className="text-sm font-semibold text-gray-800">{s.title}</Text>
-                        <Text className="text-xs text-gray-400 mt-0.5">{s.desc}</Text>
-                      </View>
-                      <FontAwesome6 name="chevron-right" size={11} color="#CBD5E1" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                
               </View>
             )}
             {agentMessages.map((msg, i) => (
@@ -1295,8 +1328,8 @@ export default function HomeScreen() {
                           <Text className="text-sm font-medium text-emerald-700">{agentActionStatus}</Text>
                         </View>
                         {agentStreamContent ? (
-                          <View className="mt-2 pt-2 border-t border-emerald-200">
-                            <Text className="text-sm text-emerald-800">{agentStreamContent}</Text>
+                          <View className="mt-2 pt-2 border-t border-emerald-200 max-h-60 overflow-hidden">
+                            <MarkdownContent content={agentStreamContent} isStream />
                           </View>
                         ) : null}
                       </View>
@@ -1416,184 +1449,135 @@ export default function HomeScreen() {
           </View>
         )}
 
-        {/* Suggestions */}
-        {!isAiThinking && messages.length <= 1 && (
-          <View className="mb-4">
-            <Text className="text-xs text-gray-400 mb-3 pl-1">试试这些创作方向</Text>
-            {SUGGESTIONS.map((s, i) => (
-              <TouchableOpacity key={i} className="flex-row items-center bg-white rounded-2xl px-4 py-3.5 mb-2 border border-gray-100 active:bg-gray-50" onPress={() => setInputText(s.title)}>
-                <View className="w-9 h-9 rounded-xl bg-indigo-50 items-center justify-center mr-3">
-                  <FontAwesome6 name={s.icon as any} size={15} color="#6366F1" />
-                </View>
-                <View className="flex-1">
-                  <Text className="text-sm font-semibold text-gray-800">{s.title}</Text>
-                  <Text className="text-xs text-gray-400 mt-0.5">{s.subtitle}</Text>
-                </View>
-                <FontAwesome6 name="arrow-up-right-from-square" size={11} color="#CBD5E1" />
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
         <View className="h-4" />
           </>
         )}
       </ScrollView>
 
-      {/* Input Bar */}
-      <View className="border-t border-gray-100 px-4 pt-2 pb-4 bg-white">
-        {!isAiThinking && (
-          isAgentMode ? (
-            agentMessages.length === 0 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
-                <View className="flex-row gap-2">
-                  {[
-                    "创作一本玄幻修仙小说", "写都市言情故事",
-                    "设计科幻世界观", "悬疑推理小说",
-                  ].map((chip, i) => (
-                    <TouchableOpacity key={i} className="bg-emerald-50 rounded-full px-3.5 py-1.5 border border-emerald-200" onPress={() => setInputText(chip)}>
-                      <Text className="text-xs text-emerald-700">{chip}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            )
-          ) : (
-            messages.length <= 1 && (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2 -mx-4 px-4">
-                <View className="flex-row gap-2">
-                  {INSPIRATION_CHIPS.map((chip, i) => (
-                    <TouchableOpacity key={i} className="bg-gray-50 rounded-full px-3.5 py-1.5 border border-gray-200" onPress={() => setInputText(chip)}>
-                      <Text className="text-xs text-gray-500">{chip}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-            )
-          )
+      {/* Input Bar - Coze Mobile Style */}
+      <View className="border-t border-gray-100 px-3 pt-2 bg-white" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : (insets?.bottom || 8) }}>
+        {/* AI status indicator */}
+        {isAiThinking && (
+          <View className="flex-row items-center justify-center gap-1.5 py-1.5 mb-1">
+            <ActivityIndicator size="small" color={isAgentMode ? "#10B981" : "#6366F1"} />
+            <Text className="text-xs text-gray-400">
+              {isAgentMode
+                ? (agentActionStatus || "Agent 思考中...")
+                : "AI 生成中..."
+              }
+            </Text>
+            {agentTokenUsage && <Text className="text-[10px] text-gray-300">· {agentTokenUsage}</Text>}
+          </View>
         )}
 
-        {/* 底部输入区 */}
-        <View className="border-t border-gray-100 bg-white" style={{ paddingBottom: keyboardHeight > 0 ? keyboardHeight : (insets?.bottom || 8) }}>
-          {/* AI 状态指示 */}
-          {isAiThinking && (
-            <View className="flex-row items-center justify-center gap-1.5 py-2">
-              <View className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-              <Text className="text-xs text-gray-400">AI 生成中...</Text>
-              {agentActionStatus ? <Text className="text-xs text-gray-400">· {agentActionStatus}</Text> : null}
-            </View>
-          )}
+        {/* 挂载书籍芯片 */}
+        {activeBook && (
+          <TouchableOpacity
+            className="mb-1.5 flex-row items-center gap-1.5 self-start bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1"
+            onPress={() => setShowBookPicker(true)}
+          >
+            <FontAwesome6 name="book-open" size={10} color="#D97706" />
+            <Text className="text-[11px] font-medium text-amber-700 max-w-[140px]" numberOfLines={1}>{activeBook.title}</Text>
+            <FontAwesome6 name="chevron-down" size={6} color="#D97706" />
+          </TouchableOpacity>
+        )}
 
-          {/* 挂载书籍芯片 */}
-          {activeBook && (
+        {/* 主输入区域 - Coze style */}
+        <View className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
+          {/* 输入行: [+按钮] [输入框] [模型] [发送] */}
+          <View className="flex-row items-end px-2 pt-2 pb-1">
+            {/* + 按钮 */}
             <TouchableOpacity
-              className="mx-3 mb-1 flex-row items-center gap-1.5 self-start bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1"
-              onPress={() => setShowBookPicker(true)}
+              className="w-8 h-8 rounded-lg bg-gray-200 items-center justify-center mb-0.5 active:opacity-70"
+              onPress={() => {
+                // Show action sheet: 上传文件 / 技能选择
+                Keyboard.dismiss();
+                setShowPlusMenu(true);
+              }}
+              disabled={isAiThinking}
             >
-              <FontAwesome6 name="book-open" size={10} color="#D97706" />
-              <Text className="text-[11px] font-medium text-amber-700 max-w-[130px]" numberOfLines={1}>{activeBook.title}</Text>
-              <FontAwesome6 name="chevron-down" size={6} color="#D97706" />
+              <FontAwesome6 name="plus" size={16} color="#6B7280" />
             </TouchableOpacity>
-          )}
 
-          {/* 主输入容器 */}
-          <View className="mx-3 rounded-xl border border-gray-200 bg-white overflow-hidden">
-            {/* 输入行 */}
-            <View className="flex-row items-end">
+            {/* 输入框 */}
+            <TextInput
+              className="flex-1 px-2 py-1.5 text-gray-900 text-[15px] leading-5 max-h-24 min-h-[36px]"
+              value={inputText}
+              onChangeText={setInputText}
+              placeholder={isAiThinking ? "AI 正在回复..." : isAgentMode ? "告诉Agent你的创作需求..." : "输入创作想法..."}
+              placeholderTextColor="#9CA3AF"
+              multiline
+              editable={!isAiThinking}
+            />
+
+            {/* 模型名称 + 发送/停止 */}
+            <View className="flex-row items-center gap-1 mb-0.5">
               {/* 模型选择 */}
               <TouchableOpacity
-                className="flex-row items-center gap-1 h-6 px-2 mx-2.5 mt-2.5 bg-indigo-50 rounded-md active:opacity-70"
+                className="flex-row items-center gap-1 px-2 h-7 bg-indigo-50 rounded-lg active:opacity-70"
                 onPress={() => setShowModelPicker(true)}
               >
                 <FontAwesome6 name="brain" size={9} color="#6366F1" />
-                <Text className="text-[10px] font-medium text-indigo-600 max-w-[72px]" numberOfLines={1}>
+                <Text className="text-[10px] font-medium text-indigo-600 max-w-[60px]" numberOfLines={1}>
                   {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "模型"}
                 </Text>
-                <FontAwesome6 name="chevron-down" size={5} color="#818CF8" />
               </TouchableOpacity>
-
-              {/* 输入框 */}
-              <TextInput
-                className="flex-1 px-1 py-2.5 text-gray-900 text-[15px] leading-6 max-h-24 min-h-[42px]"
-                value={inputText}
-                onChangeText={setInputText}
-                placeholder={isAgentMode ? "告诉Agent你的创作需求..." : isAiThinking ? "AI 正在回复..." : activeSkill ? `使用[${activeSkill.name}]...` : "输入想法..."}
-                placeholderTextColor="#94A3B8"
-                multiline
-                editable={!isAiThinking}
-              />
-            </View>
-
-            {/* 底部工具栏 */}
-            <View className="flex-row items-center justify-between px-2 pb-1">
-              <View className="flex-row items-center gap-0.5">
-                {/* 挂载书籍按钮 */}
-                {!activeBook && (
-                  <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100" onPress={() => setShowBookPicker(true)}>
-                    <FontAwesome6 name="book-open" size={13} color="#94A3B8" />
-                  </TouchableOpacity>
-                )}
-                {/* 文件上传 */}
-                <TouchableOpacity
-                  className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100"
-                  onPress={async () => {
-                    try {
-                      const result = await DocumentPicker.getDocumentAsync({
-                        type: ["text/plain", "text/markdown", "application/pdf"],
-                        copyToCacheDirectory: true,
-                      });
-                      if (result.canceled || !result.assets?.[0]) return;
-                      const file = result.assets[0];
-                      const formData = new FormData();
-                      formData.append("file", { uri: file.uri, name: file.name || "file.txt", type: file.mimeType || "text/plain" } as any);
-                      addMessage("user", `[上传文件] ${file.name}`);
-                      setIsAiThinking(true);
-                      setStreamContent("正在读取文件...");
-                      const res = await fetch(`${API_BASE}/api/v1/writing/upload`, { method: "POST", body: formData });
-                      const json = await res.json();
-                      if (json.success) {
-                        const text = `我上传了一个文件《${file.name}》，内容是：\n\`\`\`\n${json.data.content.substring(0, 3000)}\n\`\`\`\n请帮我分析这个文件的内容。`;
-                        setInputText(text);
-                        setIsAiThinking(false);
-                        setStreamContent("");
-                        setTimeout(() => sendFreeChat(text), 100);
-                      } else {
-                        setIsAiThinking(false);
-                        addMessage("ai", "文件上传失败：" + (json.error || "未知错误"));
-                      }
-                    } catch (e: any) {
-                      setIsAiThinking(false);
-                      addMessage("ai", "文件上传出错：" + (e.message || "未知错误"));
-                    }
-                  }}
-                  disabled={isAiThinking}
-                >
-                  <FontAwesome6 name="paperclip" size={13} color={isAiThinking ? "#CBD5E1" : "#94A3B8"} />
-                </TouchableOpacity>
-                {/* 技能选择 @ */}
-                {!isAgentMode && (
-                  <TouchableOpacity className="w-7 h-7 rounded-lg items-center justify-center active:bg-gray-100" onPress={() => setShowSkillPicker(true)}>
-                    <FontAwesome6 name="at" size={13} color="#A855F7" />
-                  </TouchableOpacity>
-                )}
-              </View>
 
               {/* 发送/停止按钮 */}
               {isAiThinking ? (
                 <TouchableOpacity
-                  className="w-9 h-9 rounded-full items-center justify-center bg-red-500"
+                  className="w-8 h-7 rounded-lg items-center justify-center bg-red-500"
                   onPress={handleStopAgent}
                 >
-                  <FontAwesome6 name="stop" size={13} color="white" solid />
+                  <FontAwesome6 name="stop" size={12} color="white" solid />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity
-                  className="w-9 h-9 rounded-full items-center justify-center"
+                  className="w-8 h-7 rounded-lg items-center justify-center"
                   style={{ backgroundColor: inputText.trim() ? (isAgentMode ? "#10B981" : "#6366F1") : "#E5E7EB" }}
                   onPress={handleSend}
                   disabled={!inputText.trim()}
                 >
-                  <FontAwesome6 name="arrow-up" size={14} color={inputText.trim() ? "white" : "#CBD5E1"} solid />
+                  <FontAwesome6 name="arrow-up" size={12} color={inputText.trim() ? "white" : "#CBD5E1"} solid />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* 模式切换 + 底部工具栏行 */}
+          <View className="flex-row items-center justify-between px-2 pb-1.5">
+            {/* 模式切换 Tab */}
+            <View className="flex-row bg-gray-200/70 rounded-lg p-0.5">
+              <TouchableOpacity
+                className={`px-3 py-1 rounded-[7px] ${!isAgentMode ? "bg-white shadow-sm" : ""}`}
+                onPress={() => { setIsAgentMode(false); setIsAiThinking(false); cleanupAgentSSE(); }}
+              >
+                <Text className={`text-[11px] font-medium ${!isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>对话</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`px-3 py-1 rounded-[7px] ${isAgentMode ? "bg-white shadow-sm" : ""}`}
+                onPress={() => { setIsAgentMode(true); handleNewAgentConv(); loadAgentConversations(); }}
+              >
+                <Text className={`text-[11px] font-medium ${isAgentMode ? "text-emerald-600" : "text-gray-500"}`}>Agent</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 技能指示器 + 挂载书籍按钮 */}
+            <View className="flex-row items-center gap-1.5">
+              {!isAgentMode && (
+                <TouchableOpacity
+                  className="flex-row items-center gap-1 px-2 py-1 rounded-lg active:bg-gray-200"
+                  onPress={() => setShowSkillPicker(true)}
+                >
+                  <FontAwesome6 name="bolt" size={10} color="#A855F7" />
+                  <Text className="text-[11px] text-gray-500">
+                    {activeSkill?.name || `${skills.filter(s => s.enabled).length}技能`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {!activeBook && !isAgentMode && (
+                <TouchableOpacity className="w-6 h-6 rounded-lg items-center justify-center active:bg-gray-200" onPress={() => setShowBookPicker(true)}>
+                  <FontAwesome6 name="book-open" size={11} color="#9CA3AF" />
                 </TouchableOpacity>
               )}
             </View>
@@ -1602,6 +1586,13 @@ export default function HomeScreen() {
       </View>
 
       {/* Modals */}
+      <PlusMenuModal
+        visible={showPlusMenu}
+        enabledSkillCount={skills.filter(s => s.enabled).length}
+        onUploadFile={handleUploadFile}
+        onSelectSkill={() => setShowSkillPicker(true)}
+        onClose={() => setShowPlusMenu(false)}
+      />
       <ModelPickerModal visible={showModelPicker} selectedId={selectedModel} onSelect={handleModelSelect} onClose={() => setShowModelPicker(false)} />
       <SkillPickerModal visible={showSkillPicker} skills={skills} onSelect={handleSkillSelect} onClose={() => setShowSkillPicker(false)} />
       <BookPickerModal visible={showBookPicker} books={books} selectedId={activeBook?.id || null} onSelect={(book) => {
