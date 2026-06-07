@@ -92,12 +92,6 @@ export default function ProfileScreen() {
       ],
     },
     {
-      title: "个性化",
-      items: [
-        { icon: "palette", label: "主题与显示", color: "#EC4899", onPress: () => router.push("/settings") },
-      ],
-    },
-    {
       title: "系统设置",
       items: [
         { icon: "gear", label: "设置", color: "#6B7280", onPress: () => router.push("/settings") },
