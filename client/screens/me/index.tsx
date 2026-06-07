@@ -38,6 +38,7 @@ export default function ProfileScreen() {
   const [tokensClaimed, setTokensClaimed] = useState(false);
   const [claimingToken, setClaimingToken] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [adminPhone, setAdminPhone] = useState("");
 
   // Modals
   const [showDataStats, setShowDataStats] = useState(false);
@@ -129,6 +130,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
+      AsyncStorage.getItem("last_phone").then((p) => setAdminPhone(p || ""));
       Promise.all([fetchStats(), fetchVipInfo(), fetchClaimStatus()]).finally(() =>
         setLoading(false)
       );
@@ -188,7 +190,7 @@ export default function ProfileScreen() {
         ...((isAuthenticated
           ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]
           : [])),
-      ],
+      ].filter(item => !("label" in item && item.label === "管理后台") || adminPhone === "1325226916"),
     },
   ];
 
