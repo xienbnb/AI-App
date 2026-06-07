@@ -10,6 +10,7 @@ import {
   getUserTasks,
   completeTask,
   getUsageHistory,
+  VIP_PLANS,
   type VipPlanType,
 } from "../services/vip.service.js";
 import {
@@ -53,23 +54,29 @@ router.get("/info", async (req: Request, res: Response) => {
     const endDate = vipInfo.endDate ? new Date(vipInfo.endDate) : null;
     const isExpired = isVip && endDate ? endDate < now : false;
     
+    const effectivePlan = isVip && !isExpired ? (vipInfo.planType === 'monthly' ? 'monthly' : 'yearly') : 'free';
+    const plan = VIP_PLANS[effectivePlan] || VIP_PLANS.free;
+    const dailyLimit = effectivePlan === 'free' ? 100 : -1;
+    const remainCount = dailyLimit === -1 ? -1 : Math.max(0, dailyLimit - (vipInfo.usedDaily || 0));
+    const hasPassword = !!user?.passwordHash;
+
     res.json({
       success: true,
       data: {
         vipLevel,
         vipExpiresAt: vipInfo.endDate || "",
         dailyAiCount: vipInfo.usedDaily || 0,
-        dailyLimit: vipInfo.dailyQuota || 50,
+        dailyLimit,
         isExpired,
         isVip: isVip && !isExpired,
-        remainCount: Math.max(0, (vipInfo.dailyQuota || 50) - (vipInfo.usedDaily || 0)),
-        maxTokens: vipInfo.dailyTokenQuota || 2000,
-        usedDailyTokens: vipInfo.usedDailyTokens || 0,
+        remainCount,
+        // 字数现在走余额制，无每日上限
         tokenBalance: vipInfo.tokenBalance || 0,
         tierName: isAdmin ? '管理员' : (tierMap[vipInfo.planType] || '普通用户'),
         isAdmin,
-        monthlyLimit: vipInfo.monthlyQuota || 500,
+        monthlyLimit: plan.monthlyQuota,
         usedMonthly: vipInfo.usedMonthly || 0,
+        hasPassword,
       },
     });
   } catch (err: any) {

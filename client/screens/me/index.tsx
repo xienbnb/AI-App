@@ -31,11 +31,10 @@ export default function ProfileScreen() {
   const [isVip, setIsVip] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
   const [vipExpiresAt, setVipExpiresAt] = useState("");
-  const [dailyAiLimit, setDailyAiLimit] = useState(10);
+  const [dailyAiLimit, setDailyAiLimit] = useState(100);
   const [usedDailyAi, setUsedDailyAi] = useState(0);
-  const [remainAiCalls, setRemainAiCalls] = useState(10);
-  const [maxTokens, setMaxTokens] = useState(5000);
-  const [usedDailyTokens, setUsedDailyTokens] = useState(0);
+  const [remainAiCalls, setRemainAiCalls] = useState(100);
+  const [tokenBalance, setTokenBalance] = useState(0);
   const [tokensClaimed, setTokensClaimed] = useState(false);
   const [claimingToken, setClaimingToken] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -79,11 +78,10 @@ export default function ProfileScreen() {
         setIsExpired(d.isExpired ?? false);
         setVipPlanName(d.tierName || "");
         setVipExpiresAt(d.vipExpiresAt || "");
-        setDailyAiLimit(d.dailyLimit ?? 10);
+        setDailyAiLimit(d.dailyLimit ?? 100);
         setUsedDailyAi(d.dailyAiCount ?? 0);
         setRemainAiCalls(d.remainCount ?? 0);
-        setMaxTokens(d.maxTokens ?? 5000);
-        setUsedDailyTokens(d.usedDailyTokens ?? 0);
+        setTokenBalance(d.tokenBalance ?? 0);
       }
     } catch (e) {
       console.error("获取VIP信息失败", e);
@@ -137,10 +135,8 @@ export default function ProfileScreen() {
     }, [fetchStats, fetchVipInfo, fetchClaimStatus])
   );
 
-  const remainTokens = Math.max(0, maxTokens - usedDailyTokens);
-  const tokenPercent = maxTokens > 0 ? Math.min(usedDailyTokens / maxTokens, 1) : 0;
   const aiPercent = dailyAiLimit > 0 ? Math.min(usedDailyAi / dailyAiLimit, 1) : 0;
-  const isUnlimited = dailyAiLimit === -1 || maxTokens === -1;
+  const isUnlimited = dailyAiLimit === -1;
 
   const getVipBadge = () => {
     if (vipLevel >= 1 && isVip) return { label: vipPlanName, bg: "bg-yellow-500", text: "text-white" };
@@ -280,25 +276,15 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Token余额 */}
+          {/* Token余额 - 余额制 */}
           <View className="mb-4">
             <View className="flex-row items-center justify-between mb-1.5">
-              <Text className="text-sm font-medium text-gray-700">每日字数</Text>
+              <Text className="text-sm font-medium text-gray-700">字数额度</Text>
               <Text className="text-sm font-bold text-gray-900">
-                {isUnlimited ? "∞" : `${remainTokens.toLocaleString()} / ${maxTokens.toLocaleString()}`}
+                {tokenBalance.toLocaleString()} 字
               </Text>
             </View>
-            {!isUnlimited && (
-              <View className="h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                <View
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${tokenPercent * 100}%`,
-                    backgroundColor: tokenPercent > 0.8 ? "#EF4444" : tokenPercent > 0.5 ? "#F59E0B" : "#4F46E5",
-                  }}
-                />
-              </View>
-            )}
+            <View className="h-1 w-full bg-gray-100 rounded-full" />
           </View>
 
           {/* AI调用余额 */}
@@ -467,8 +453,8 @@ export default function ProfileScreen() {
                     { label: "总字数", value: formatWordCount(totalWords), color: "#3B82F6", icon: "pen" },
                     { label: "连续天数", value: `${consecutiveDays}天`, color: "#10B981", icon: "fire" },
                     { label: "今日写作", value: `${todayWords}字`, color: "#F59E0B", icon: "clock" },
-                    { label: "剩余次数", value: `${remainAiCalls}次`, color: "#8B5CF6", icon: "brain" },
-                    { label: "剩余字数", value: `${remainTokens.toLocaleString()}字`, color: "#EC4899", icon: "coins" },
+                    { label: "剩余次数", value: `${isUnlimited ? "∞" : `${remainAiCalls}次`}`, color: "#8B5CF6", icon: "brain" },
+                    { label: "剩余字数", value: `${tokenBalance.toLocaleString()}字`, color: "#EC4899", icon: "coins" },
                   ].map((stat) => (
                     <View key={stat.label} className="w-[47%] bg-gray-50 rounded-2xl p-4">
                       <View className="w-9 h-9 rounded-xl items-center justify-center mb-3" style={{ backgroundColor: `${stat.color}15` }}>

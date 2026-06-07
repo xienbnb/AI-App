@@ -18,33 +18,33 @@ export const VIP_PLANS: Record<VipPlanType, VipPlan> = {
   free: {
     type: 'free',
     name: '免费用户',
-    monthlyQuota: 50,
-    dailyQuota: 10,
-    dailyTokenQuota: 5000,
-    features: ['基础AI写作功能', '每日10次调用', '每日5000字免费额度'],
+    monthlyQuota: -1,
+    dailyQuota: 100,              // 每日100次AI调用
+    dailyTokenQuota: -1,          // 字数不设日限，从余额扣除
+    features: ['基础AI写作功能', '每日100次AI调用', '字数用完需购买'],
   },
   monthly: {
     type: 'monthly',
     name: '月卡会员',
-    monthlyQuota: 500,
-    dailyQuota: 50,
-    dailyTokenQuota: 50000,
+    monthlyQuota: -1,
+    dailyQuota: -1,
+    dailyTokenQuota: -1,
     price: '29.9元/月',
-    features: ['全部AI写作功能', '每日50次调用', '每日5万字额度', '优先客服支持'],
+    features: ['全部AI写作功能', 'AI调用不限次数', '字数使用不限量', '优先客服支持'],
   },
   yearly: {
     type: 'yearly',
     name: '年卡会员',
-    monthlyQuota: 500,
-    dailyQuota: 50,
-    dailyTokenQuota: 50000,
+    monthlyQuota: -1,
+    dailyQuota: -1,
+    dailyTokenQuota: -1,
     price: '299元/年',
-    features: ['全部AI写作功能', '每日50次调用', '每日5万字额度', '优先客服支持', '专属会员标识'],
+    features: ['全部AI写作功能', 'AI调用不限次数', '字数使用不限量', '优先客服支持', '专属会员标识'],
   },
   super_admin: {
     type: 'super_admin',
     name: '超级管理员',
-    monthlyQuota: -1, // -1 表示无限
+    monthlyQuota: -1,
     dailyQuota: -1,
     dailyTokenQuota: -1,
     features: ['无限调用', '全部功能', '最高优先级'],
@@ -72,21 +72,14 @@ export async function getOrCreateUserVip(userId: string) {
   if (existing.length > 0) {
     let vip = existing[0];
     
-    // 检查是否需要重置日额度
+    // 检查是否需要重置日调用次数
     const today = getTodayStr();
     if (vip.lastResetDate !== today) {
-      // 重置日额度
+      // 重置日调用次数
       const updateData: any = {
         usedDaily: 0,
-        usedDailyTokens: 0,
         lastResetDate: today,
       };
-      
-      // 检查是否需要重置月额度（每月1号）
-      const todayDate = new Date(today);
-      if (todayDate.getDate() === 1) {
-        updateData.usedMonthly = 0;
-      }
       
       const [updated] = await db.update(userVips)
         .set(updateData)
@@ -119,9 +112,9 @@ export async function getOrCreateUserVip(userId: string) {
 }
 
 /**
- * 检查用户是否有足够的额度
+ * 检查用户是否有足够的调用次数（AI调用前检查）
  */
-export async function checkQuota(userId: string, tokensNeeded: number = 0): Promise<{
+export async function checkQuota(userId: string, _tokensNeeded: number = 0): Promise<{
   ok: boolean;
   reason?: string;
   remaining?: {
@@ -138,43 +131,31 @@ export async function checkQuota(userId: string, tokensNeeded: number = 0): Prom
   
   const plan = VIP_PLANS[vip.planType as VipPlanType] || VIP_PLANS.free;
   
-  // 无限额度
-  if (plan.dailyQuota === -1 && plan.monthlyQuota === -1 && plan.dailyTokenQuota === -1) {
+  // VIP/管理员无限调用
+  if (plan.dailyQuota === -1) {
     return { 
       ok: true, 
       remaining: { daily: -1, monthly: -1, dailyTokens: -1 } 
     };
   }
   
-  // 检查日次数
-  if (plan.dailyQuota >= 0 && vip.usedDaily >= plan.dailyQuota) {
-    return { ok: false, reason: '今日调用次数已用完，请明天再来或升级VIP' };
-  }
-  
-  // 检查月次数
-  if (plan.monthlyQuota >= 0 && vip.usedMonthly >= plan.monthlyQuota) {
-    return { ok: false, reason: '本月调用次数已用完，请下月再来或升级VIP' };
-  }
-  
-  // 检查token额度（如果传入了）
-  if (tokensNeeded > 0 && plan.dailyTokenQuota >= 0) {
-    if (vip.usedDailyTokens + tokensNeeded > plan.dailyTokenQuota) {
-      return { ok: false, reason: '今日字数额度不足，请明天再来或升级VIP' };
-    }
+  // 检查日调用次数（免费用户每日100次）
+  if (vip.usedDaily >= plan.dailyQuota) {
+    return { ok: false, reason: '今日AI调用次数已用完（每日100次），升级VIP可享无限调用' };
   }
   
   return {
     ok: true,
     remaining: {
       daily: Math.max(0, plan.dailyQuota - vip.usedDaily),
-      monthly: Math.max(0, plan.monthlyQuota - vip.usedMonthly),
-      dailyTokens: Math.max(0, plan.dailyTokenQuota - vip.usedDailyTokens),
+      monthly: -1,
+      dailyTokens: vip.tokenBalance || 0,
     },
   };
 }
 
 /**
- * 扣减用户额度
+ * 扣减调用次数 + 扣除字数（从余额扣除，非日限）
  */
 export async function consumeQuota(
   userId: string, 
@@ -186,29 +167,45 @@ export async function consumeQuota(
   const vip = await getOrCreateUserVip(userId);
   const plan = VIP_PLANS[vip.planType as VipPlanType] || VIP_PLANS.free;
   
-  // 无限额度不扣减，但记录使用
-  const isUnlimited = plan.dailyQuota === -1 && plan.monthlyQuota === -1;
+  // VIP/管理员不扣调用次数，但需要扣字数
+  const isUnlimited = plan.dailyQuota === -1;
   
   if (!isUnlimited && success) {
-    // 扣减额度
+    // 免费用户：扣调用次数
     await db.update(userVips)
       .set({
         usedDaily: vip.usedDaily + 1,
-        usedMonthly: vip.usedMonthly + 1,
-        usedDailyTokens: vip.usedDailyTokens + tokensUsed,
       })
       .where(eq(userVips.id, vip.id));
   }
   
-  // 记录使用日志
-  await db.insert(usageRecords).values({
-    userId,
-    operationType,
-    quotaUsed: 1,
-    tokensUsed,
-    success,
-    errorMessage,
-  });
+  // 扣除字数（从tokenBalance扣，所有用户包括VIP都要扣）
+  if (success && tokensUsed > 0 && (vip.tokenBalance || 0) > 0) {
+    const newBalance = Math.max(0, (vip.tokenBalance || 0) - tokensUsed);
+    await db.update(userVips)
+      .set({ tokenBalance: newBalance })
+      .where(eq(userVips.id, vip.id));
+    
+    // 记录扣费明细
+    await db.insert(usageRecords).values({
+      userId,
+      operationType,
+      quotaUsed: 1,
+      tokensUsed,
+      success,
+      errorMessage,
+    });
+  } else {
+    // 记录使用日志（不扣字数）
+    await db.insert(usageRecords).values({
+      userId,
+      operationType,
+      quotaUsed: isUnlimited ? 0 : 1,
+      tokensUsed,
+      success,
+      errorMessage,
+    });
+  }
 }
 
 /**
@@ -240,17 +237,18 @@ export async function claimDailyTokens(userId: string): Promise<{
   await db.insert(dailyTokenClaims).values({
     userId,
     claimDate: today,
-    tokensClaimed: plan.dailyTokenQuota,
+    tokensClaimed: 5000,
   });
   
-  // 更新用户的日token额度（这里简化处理，直接增加额度）
-  // 实际上我们已经在 getOrCreateUserVip 中设置了每日额度，领取只是确认使用
-  // 所以这里不需要额外增加，只是标记已领取
+  // 给用户余额增加5000字数
+  await db.update(userVips)
+    .set({ tokenBalance: (vip.tokenBalance || 0) + 5000 })
+    .where(eq(userVips.id, vip.id));
   
   return {
     success: true,
-    message: `成功领取 ${plan.dailyTokenQuota} 字免费额度`,
-    tokens: plan.dailyTokenQuota,
+    message: `成功领取 5000 字到余额`,
+    tokens: 5000,
   };
 }
 
@@ -286,18 +284,14 @@ export async function getUserQuota(userId: string) {
       used: vip.usedDaily,
       remaining: plan.dailyQuota === -1 ? -1 : Math.max(0, plan.dailyQuota - vip.usedDaily),
     },
-    monthly: {
-      total: plan.monthlyQuota,
-      used: vip.usedMonthly,
-      remaining: plan.monthlyQuota === -1 ? -1 : Math.max(0, plan.monthlyQuota - vip.usedMonthly),
-    },
     dailyTokens: {
-      total: plan.dailyTokenQuota,
-      used: vip.usedDailyTokens,
-      remaining: plan.dailyTokenQuota === -1 ? -1 : Math.max(0, plan.dailyTokenQuota - vip.usedDailyTokens),
+      total: -1,          // 不设日限
+      used: 0,
+      remaining: vip.tokenBalance || 0,
       claimed: hasClaimed,
     },
-    isUnlimited: plan.dailyQuota === -1 && plan.monthlyQuota === -1,
+    isUnlimited: plan.dailyQuota === -1,
+    isVip: plan.type === 'monthly' || plan.type === 'yearly',
   };
 }
 

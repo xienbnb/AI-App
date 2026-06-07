@@ -50,7 +50,7 @@ app.use('/api/v1/users', authMiddleware, usersRouter);
 app.use('/api/v1/vip', authMiddleware, vipRouter);
 app.use('/api/v1/backup', authMiddleware, backupRouter);
 app.use('/api/v1/workflow', authMiddleware, quotaMiddleware('ai_generate'), workflowRouter);
-app.use('/api/v1/agent', authMiddleware, agentRouter);
+app.use('/api/v1/agent', authMiddleware, quotaMiddleware('ai_generate'), agentRouter);
 app.use('/api/v1/billing', authMiddleware, billingRouter);
 
 // 404 handler

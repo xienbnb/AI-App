@@ -110,10 +110,11 @@ function QuotaCard() {
   }
 
   const dailyTokens = quota.dailyTokens || { total: 1, used: 0 };
-  const dailyUsed = dailyTokens.used || 0;
-  const dailyLimit = dailyTokens.total || 1;
-  const tokenPercent = Math.min((dailyUsed / dailyLimit) * 100, 100);
-  const apiCalls = quota.daily?.used || 0;
+  const isUnlimited = quota.isUnlimited || false;
+  const isVip = quota.isVip || false;
+  const dailyRemaining = quota.daily?.remaining ?? 0;
+  const dailyTotal = quota.daily?.total ?? 100;
+  const callPercent = dailyTotal > 0 ? Math.min((1 - dailyRemaining / dailyTotal) * 100, 100) : 0;
 
   return (
     <View className="mx-4 mt-3">
@@ -122,8 +123,9 @@ function QuotaCard() {
         onPress={() => router.push("/recharge")}
         activeOpacity={0.7}
       >
-        <View className="flex-row items-center justify-between mb-4">
-          <Text className="text-sm font-semibold text-gray-900">字数额度</Text>
+        {/* 字数额度（余额制） */}
+        <View className="flex-row items-center justify-between mb-3">
+          <Text className="text-sm font-semibold text-gray-900">字数额度（余额）</Text>
           <View className="flex-row items-center">
             <Text className="text-lg font-bold text-indigo-600">
               {quota.tokenBalance?.toLocaleString() || 0}
@@ -132,26 +134,37 @@ function QuotaCard() {
             <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" style={{ marginLeft: 8 }} />
           </View>
         </View>
+        <Text className="text-xs text-gray-400 mb-3">字数用完需购买，会员不限量</Text>
 
-        {/* 今日已用 */}
-        <View className="mb-1">
-          <View className="flex-row items-center justify-between mb-1.5">
-            <Text className="text-xs text-gray-400">今日已用</Text>
-            <Text className="text-xs text-gray-500">{dailyUsed.toLocaleString()}/{dailyLimit.toLocaleString()} 字</Text>
+        {/* AI调用次数 */}
+        <View className="flex-row items-center justify-between pt-3 border-t border-gray-50">
+          <View className="flex-row items-center">
+            <FontAwesome6 name="microchip" size={12} color="#9CA3AF" />
+            <Text className="text-xs text-gray-400 ml-2">AI调用次数</Text>
           </View>
-          <View className="h-2 rounded-full bg-gray-100 overflow-hidden">
-            <View className="h-full rounded-full bg-indigo-400" style={{ width: `${Math.max(0, tokenPercent)}%` }} />
-          </View>
-        </View>
-
-        {/* 调用次数 */}
-        <View className="flex-row items-center mt-3 pt-3 border-t border-gray-50">
-          <FontAwesome6 name="microchip" size={12} color="#9CA3AF" />
-          <Text className="text-xs text-gray-400 ml-2">今日调用次数</Text>
-          <Text className="text-xs font-medium text-gray-600 ml-auto">
-            {apiCalls.toLocaleString()} 次
+          <Text className="text-xs font-medium text-gray-600">
+            {isUnlimited ? (
+              <Text className="text-green-500 font-bold">不限次数</Text>
+            ) : (
+              `${dailyRemaining}/${dailyTotal} 次`
+            )}
           </Text>
         </View>
+        {!isUnlimited && (
+          <View className="h-2 rounded-full bg-gray-100 overflow-hidden mt-2">
+            <View className="h-full rounded-full bg-green-400" style={{ width: `${Math.max(0, 100 - callPercent)}%` }} />
+          </View>
+        )}
+
+        {/* 会员标识 */}
+        {isVip && (
+          <View className="mt-3 pt-3 border-t border-gray-50 flex-row items-center">
+            <FontAwesome6 name="crown" size={12} color="#F59E0B" />
+            <Text className="text-xs text-amber-500 font-medium ml-1.5">
+              {quota.planName} · 无限字数 · 无限调用
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     </View>
   );
