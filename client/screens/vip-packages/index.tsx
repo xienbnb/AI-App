@@ -16,31 +16,29 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
 // -----------------------------------------------------------------------
-// Types
+// Types (匹配真实API返回结构)
 // -----------------------------------------------------------------------
 interface VipPackage {
-  id: string;
+  type: string;        // "free" | "monthly" | "yearly"
   name: string;
-  level: string;
-  price: number;
-  duration_days: number;
+  price?: string;      // 例如 "29.9元/月"
+  monthlyQuota?: number;
+  dailyQuota?: number;
+  dailyTokenQuota?: number;
   features: string[];
 }
 
 interface VipInfo {
-  vipLevel: string;
-  vipExpiresAt: string | null;
-  dailyAiCount: number;
-  isVip: boolean;
-  remainCount: number;
-}
-
-interface SubscribeResponse {
-  success: boolean;
-  data: {
-    message: string;
-    [key: string]: unknown;
-  };
+  vipLevel?: string;
+  vipExpiresAt?: string | null;
+  dailyAiCount?: number;
+  dailyLimit?: number;
+  remainCount?: number;
+  isVip?: boolean;
+  isExpired?: boolean;
+  maxTokens?: number;
+  tierName?: string;
+  isAdmin?: boolean;
 }
 
 // -----------------------------------------------------------------------
@@ -85,12 +83,6 @@ const FEATURE_COMPARE: { label: string; free: boolean; monthly: boolean; yearly:
   { label: "优先客服支持", free: false, monthly: false, yearly: true },
 ];
 
-const LEVEL_ORDER: Record<string, number> = {
-  free: 0,
-  monthly: 1,
-  yearly: 2,
-};
-
 // -----------------------------------------------------------------------
 // Helper: get auth headers
 // -----------------------------------------------------------------------
@@ -131,10 +123,11 @@ export default function VipPackagesScreen() {
       const packagesJson = await packagesRes.json();
       const infoJson = await infoRes.json();
 
+      // 按 type 排序: free -> monthly -> yearly
+      const typeOrder: Record<string, number> = { free: 0, monthly: 1, yearly: 2 };
       if (packagesJson.data && Array.isArray(packagesJson.data)) {
-        // Sort by level priority: free -> monthly -> yearly
         const sorted = [...packagesJson.data].sort(
-          (a, b) => (LEVEL_ORDER[a.level] ?? 99) - (LEVEL_ORDER[b.level] ?? 99)
+          (a, b) => (typeOrder[a.type] ?? 99) - (typeOrder[b.type] ?? 99)
         );
         setPackages(sorted);
       }
@@ -154,26 +147,25 @@ export default function VipPackagesScreen() {
   }, [fetchData]);
 
   // -----------------------------------------------------------------------
-  // Subscribe
+  // Subscribe / Upgrade
   // -----------------------------------------------------------------------
-  const handleSubscribe = async (packageId: string) => {
+  const handleSubscribe = async (planType: string) => {
     try {
-      setSubscribing(packageId);
+      setSubscribing(planType);
       const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/vip/subscribe`, {
+      const res = await fetch(`${API_BASE}/api/v1/vip/upgrade`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ packageId }),
+        body: JSON.stringify({ planType }),
       });
-      const json: SubscribeResponse = await res.json();
+      const json = await res.json();
 
       if (json.success) {
         setSuccessMessage(json.data?.message || "订阅成功！");
         setShowSuccessModal(true);
-        // Refresh VIP info
         fetchData();
       } else {
-        Alert.alert("订阅失败", json.data?.message || "请稍后重试");
+        Alert.alert("订阅失败", json.data?.error || json.error || "请稍后重试");
       }
     } catch (e) {
       console.error("订阅失败", e);
@@ -184,9 +176,9 @@ export default function VipPackagesScreen() {
   };
 
   // -----------------------------------------------------------------------
-  // Determine current package level
+  // Determine current plan type
   // -----------------------------------------------------------------------
-  const currentLevel = vipInfo?.vipLevel || "free";
+  const currentType = vipInfo?.vipLevel || "free";
 
   // -----------------------------------------------------------------------
   // Get remaining days if VIP
@@ -204,10 +196,9 @@ export default function VipPackagesScreen() {
   // -----------------------------------------------------------------------
   // Format price display
   // -----------------------------------------------------------------------
-  const formatPrice = (price: number): string => {
-    if (price === 0) return "免费";
-    if (Number.isInteger(price)) return `¥${price}`;
-    return `¥${price.toFixed(1)}`;
+  const formatPrice = (pkg: VipPackage): string => {
+    if (!pkg.price) return "免费";
+    return pkg.price;
   };
 
   // -----------------------------------------------------------------------
@@ -254,11 +245,11 @@ export default function VipPackagesScreen() {
               </View>
               <View className="flex-1">
                 <Text className="text-white font-semibold text-base">
-                  {vipInfo?.isVip ? `VIP · ${vipInfo.vipLevel.toUpperCase()}` : "免费用户"}
+                  {vipInfo?.isVip ? `VIP · ${(vipInfo.tierName || currentType).toUpperCase()}` : "免费用户"}
                 </Text>
                 <Text className="text-white/70 text-sm mt-0.5">
                   {vipInfo?.isVip
-                    ? `剩余 ${remainingDays} 天 · 今日可用 ${vipInfo.remainCount} 次`
+                    ? `剩余 ${remainingDays} 天 · 今日可用 ${vipInfo.remainCount ?? 0} 次`
                     : `今日可用 ${vipInfo?.remainCount ?? 0} 次`}
                 </Text>
               </View>
@@ -271,14 +262,14 @@ export default function VipPackagesScreen() {
           <Text className="text-base font-bold text-gray-900 mb-4">选择套餐</Text>
 
           {packages.map((pkg) => {
-            const theme = PACKAGE_THEME[pkg.level] || PACKAGE_THEME.free;
-            const isYearly = pkg.level === "yearly";
-            const isCurrent = currentLevel === pkg.level;
-            const isSubscribing = subscribing === pkg.id;
+            const theme = PACKAGE_THEME[pkg.type] || PACKAGE_THEME.free;
+            const isYearly = pkg.type === "yearly";
+            const isCurrent = currentType === pkg.type;
+            const isSubscribing = subscribing === pkg.type;
 
             return (
               <View
-                key={pkg.id}
+                key={pkg.type}
                 className="rounded-3xl p-5 mb-4 border-2"
                 style={{
                   backgroundColor: theme.cardBg,
@@ -326,13 +317,8 @@ export default function VipPackagesScreen() {
                     className="text-4xl font-extrabold"
                     style={{ color: isYearly ? theme.accentColor : "#1F2937" }}
                   >
-                    {formatPrice(pkg.price)}
+                    {formatPrice(pkg)}
                   </Text>
-                  {pkg.price > 0 && (
-                    <Text className="text-sm text-gray-500 ml-1">
-                      / {pkg.duration_days >= 365 ? "年" : pkg.duration_days >= 30 ? "月" : `${pkg.duration_days}天`}
-                    </Text>
-                  )}
                 </View>
 
                 {/* Features */}
@@ -353,8 +339,8 @@ export default function VipPackagesScreen() {
                   style={{
                     backgroundColor: isCurrent ? "#E5E7EB" : isYearly ? theme.accentColor : "#4F46E5",
                   }}
-                  disabled={isCurrent || isSubscribing}
-                  onPress={() => handleSubscribe(pkg.id)}
+                  disabled={isCurrent || isSubscribing || pkg.type === "free"}
+                  onPress={() => handleSubscribe(pkg.type)}
                 >
                   {isSubscribing ? (
                     <ActivityIndicator size="small" color="white" />
@@ -363,7 +349,7 @@ export default function VipPackagesScreen() {
                       className="text-sm font-bold"
                       style={{ color: isCurrent ? "#9CA3AF" : "white" }}
                     >
-                      {isCurrent ? "当前方案" : "立即订阅"}
+                      {pkg.type === "free" ? "免费使用" : isCurrent ? "当前方案" : "立即订阅"}
                     </Text>
                   )}
                 </TouchableOpacity>
