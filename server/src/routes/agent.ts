@@ -3,7 +3,7 @@ import { LLMClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import { db } from "../storage/database/client.js";
 import { users, books, outlines, userSettings, agentConversations } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
-import { findTool, getToolsSystemPrompt, type ToolResult } from "../utils/agent-tools.js";
+import { findTool, getToolsSystemPrompt, getBookInfo, type ToolResult } from "../utils/agent-tools.js";
 
 const router = Router();
 
@@ -254,6 +254,13 @@ router.post("/execute", async (req: Request, res: Response) => {
 - 读取到数据后，基于实际数据（大纲、角色、卷结构等）来创作`;
 
           llmMessages.push({ role: "system", content: bookContext });
+
+          // 自动调用 get_book_info 获取真实数据
+          const bookData = await getBookInfo(bookId);
+          llmMessages.push({
+            role: "system",
+            content: `## get_book_info 执行结果（真实书籍数据）\n\`\`\`json\n${JSON.stringify(bookData, null, 2)}\n\`\`\`\n\n⚠️ 以上是数据库中该书的真实数据。基于这些真实数据来回答用户和进行创作。如果用户要求读取/查看/分析此书，直接基于上述数据回答即可。`,
+          });
         }
       } catch (e) {
         console.error("加载挂载书籍失败:", e);
