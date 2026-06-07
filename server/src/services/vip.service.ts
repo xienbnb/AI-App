@@ -131,11 +131,11 @@ export async function checkQuota(userId: string, _tokensNeeded: number = 0): Pro
   
   const plan = VIP_PLANS[vip.planType as VipPlanType] || VIP_PLANS.free;
   
-  // VIP/管理员无限调用
+  // VIP/管理员: 不限调用次数，但字数（Token）仍从余额扣除
   if (plan.dailyQuota === -1) {
     return { 
       ok: true, 
-      remaining: { daily: -1, monthly: -1, dailyTokens: -1 } 
+      remaining: { daily: -1, monthly: -1, dailyTokens: vip.tokenBalance || 0 } 
     };
   }
   
