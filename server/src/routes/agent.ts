@@ -100,7 +100,7 @@ router.post("/execute", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "未登录" });
     }
     const userId = req.user.id;
-    const { message, conversationId, model, bookId } = req.body;
+    const { message, conversationId, model, bookId, skillPrompt, skillName } = req.body;
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "message 是必填参数" });
@@ -146,6 +146,11 @@ router.post("/execute", async (req: Request, res: Response) => {
     const llmMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: AGENT_SYSTEM_PROMPT },
     ];
+
+    // 技能约束注入
+    if (skillPrompt) {
+      llmMessages.push({ role: "system", content: `## 当前技能约束\n你当前处于「${skillName || "自定义"}」技能模式。请严格遵守以下职责范围：\n${skillPrompt}\n\n【技能规则】在此模式下，你只能执行与上述职责相关的操作。超出职责范围的请求应礼貌拒绝。` });
+    }
 
     // 添加上下文（最多保留最近20条）
     const recentMessages = messages.slice(-20);

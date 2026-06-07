@@ -677,6 +677,8 @@ export default function HomeScreen() {
           conversationId: activeConvId,
           model: selectedModel,
           bookId: activeBook?.id || null,
+          skillPrompt: activeSkill?.prompt || "",
+          skillName: activeSkill?.name || "",
         }),
       });
       agentSseRef.current = sse;
