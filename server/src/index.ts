@@ -12,6 +12,7 @@ import workflowRouter from "./routes/workflow.js";
 import agentRouter from "./routes/agent.js";
 import billingRouter from "./routes/billing.js";
 import welfareRouter from "./routes/welfare.js";
+import adminRouter from "./routes/admin.js";
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.middleware.js";
 import { cleanupGuestUsers } from "./services/cleanup.service.js";
@@ -30,6 +31,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Static files
 app.use('/api/v1/static', express.static('public'));
+app.use('/admin', express.static('public/admin'));
 
 // 请求日志中间件
 app.use((req, _res, next) => {
@@ -54,6 +56,7 @@ app.use('/api/v1/workflow', authMiddleware, quotaMiddleware('ai_generate'), work
 app.use('/api/v1/agent', authMiddleware, quotaMiddleware('ai_generate'), agentRouter);
 app.use('/api/v1/billing', authMiddleware, billingRouter);
 app.use('/api/v1/welfare', authMiddleware, welfareRouter);
+app.use('/api/v1/admin', adminRouter);
 
 // 404 handler
 app.use((req, res) => {

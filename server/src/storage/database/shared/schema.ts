@@ -255,3 +255,39 @@ export const userTasks = pgTable("user_tasks", {
 	rewardClaimed: boolean("reward_claimed").default(false).notNull(),
 	metadata: jsonb("metadata").default("{}").notNull(),
 });
+
+// ==================== 管理员系统 ====================
+
+export const adminUsers = pgTable("admin_users", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	userId: uuid("user_id").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+	role: text("role").notNull().default('operator'),   // super_admin / operator / support
+	level: integer("level").notNull().default(1),         // 3=超级, 2=运营, 1=客服
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const redeemCodes = pgTable("redeem_codes", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	code: text("code").notNull().unique(),
+	type: text("type").notNull(),                         // token / call / vip
+	value: integer("value").notNull(),                    // 字数 / 次数 / 天数
+	usesTotal: integer("uses_total").notNull().default(1),
+	usesLeft: integer("uses_left").notNull().default(1),
+	expiresAt: timestamp("expires_at", { withTimezone: true, mode: 'string' }),
+	createdBy: uuid("created_by").notNull().references(() => adminUsers.id),
+	isActive: boolean("is_active").notNull().default(true),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const redeemLogs = pgTable("redeem_logs", {
+	id: uuid("id").defaultRandom().primaryKey().notNull(),
+	codeId: uuid("code_id").notNull().references(() => redeemCodes.id),
+	userId: uuid("user_id").notNull().references(() => users.id),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+export const systemSettings = pgTable("system_settings", {
+	key: text("key").primaryKey().notNull(),
+	value: jsonb("value").notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});

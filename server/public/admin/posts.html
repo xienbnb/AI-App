@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>内容审核 - 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="flex h-screen">
+    <aside class="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <div class="p-5 border-b border-gray-100">
+        <h1 class="font-bold text-lg text-gray-900"><i class="fas fa-feather text-indigo-600 mr-2"></i>管理后台</h1>
+        <p class="text-xs text-gray-400 mt-0.5">AI 网文创作</p>
+      </div>
+      <nav class="flex-1 p-3 space-y-1">
+        <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-chart-pie w-5 text-center"></i>仪表盘</a>
+        <a href="users.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-users w-5 text-center"></i>用户管理</a>
+        <a href="redeem.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-ticket w-5 text-center"></i>兑换码</a>
+        <a href="posts.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-newspaper w-5 text-center"></i>内容审核</a>
+        <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-gear w-5 text-center"></i>系统设置</a>
+      </nav>
+      <div class="p-3 border-t border-gray-100">
+        <button onclick="handleLogout()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:bg-gray-50 w-full"><i class="fas fa-right-from-bracket w-5 text-center"></i>退出登录</button>
+      </div>
+    </aside>
+    <main class="flex-1 overflow-auto">
+      <div class="p-6 max-w-7xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">内容审核</h2>
+            <p class="text-sm text-gray-500 mt-1">社区帖子管理</p>
+          </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500">
+                <th class="text-left px-4 py-3 font-medium">标题</th>
+                <th class="text-left px-4 py-3 font-medium">作者</th>
+                <th class="text-left px-4 py-3 font-medium">标签</th>
+                <th class="text-left px-4 py-3 font-medium">点赞</th>
+                <th class="text-left px-4 py-3 font-medium">评论</th>
+                <th class="text-left px-4 py-3 font-medium">发布时间</th>
+                <th class="text-left px-4 py-3 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody id="postsTableBody">
+              <tr><td colspan="7" class="text-center py-10 text-gray-400">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const API_BASE = location.origin + '/api/v1';
+
+    function getToken() {
+      const t = localStorage.getItem('admin_token');
+      if (!t) window.location.href = '/admin/';
+      return t;
+    }
+
+    async function fetchAPI(url, opts = {}) {
+      const res = await fetch(url, { ...opts, headers: { ...opts.headers, 'x-session': getToken(), 'Content-Type': 'application/json' } });
+      if (res.status === 401) { localStorage.removeItem('admin_token'); window.location.href = '/admin/'; }
+      return res.json();
+    }
+
+    document.querySelectorAll('.nav-link').forEach(a => {
+      if (a.href.endsWith(window.location.pathname)) a.classList.add('bg-indigo-50', 'text-indigo-600');
+    });
+
+    async function loadPosts() {
+      const data = await fetchAPI(`${API_BASE}/admin/posts?page=1&limit=50`);
+      if (!data) return;
+      const tbody = document.getElementById('postsTableBody');
+      if (!data.data || data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-gray-400">暂无帖子</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(p => `<tr class="border-t border-gray-50 hover:bg-gray-50">
+        <td class="px-4 py-3 max-w-[200px] truncate">${p.title || '无标题'}</td>
+        <td class="px-4 py-3">${p.userName || '匿名'}</td>
+        <td class="px-4 py-3"><span class="px-2 py-0.5 bg-gray-100 rounded text-xs">${p.tag || '全部'}</span></td>
+        <td class="px-4 py-3">${p.likes || 0}</td>
+        <td class="px-4 py-3">${p.comments || 0}</td>
+        <td class="px-4 py-3 text-gray-500">${p.createdAt ? new Date(p.createdAt).toLocaleString() : '-'}</td>
+        <td class="px-4 py-3">
+          <button onclick="deletePost('${p.id}')" class="text-red-600 hover:text-red-800 text-xs"><i class="fas fa-trash mr-0.5"></i>删除</button>
+        </td>
+      </tr>`).join('');
+    }
+
+    async function deletePost(id) {
+      if (!confirm('确定删除此帖子？')) return;
+      const data = await fetchAPI(`${API_BASE}/admin/posts/${id}`, { method: 'DELETE' });
+      if (data.success) loadPosts();
+    }
+
+    function handleLogout() { localStorage.removeItem('admin_token'); window.location.href = '/admin/'; }
+    loadPosts();
+  </script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>用户管理 - 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="flex h-screen">
+    <aside class="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <div class="p-5 border-b border-gray-100">
+        <h1 class="font-bold text-lg text-gray-900">
+          <i class="fas fa-feather text-indigo-600 mr-2"></i>管理后台
+        </h1>
+        <p class="text-xs text-gray-400 mt-0.5">AI 网文创作</p>
+      </div>
+      <nav class="flex-1 p-3 space-y-1">
+        <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-chart-pie w-5 text-center"></i>仪表盘</a>
+        <a href="users.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-users w-5 text-center"></i>用户管理</a>
+        <a href="redeem.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-ticket w-5 text-center"></i>兑换码</a>
+        <a href="posts.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-newspaper w-5 text-center"></i>内容审核</a>
+        <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-gear w-5 text-center"></i>系统设置</a>
+      </nav>
+      <div class="p-3 border-t border-gray-100">
+        <button onclick="handleLogout()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:bg-gray-50 w-full">
+          <i class="fas fa-right-from-bracket w-5 text-center"></i>退出登录
+        </button>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-auto">
+      <div class="p-6 max-w-7xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">用户管理</h2>
+            <p class="text-sm text-gray-500 mt-1" id="totalInfo">共 0 位用户</p>
+          </div>
+          <div class="flex gap-2">
+            <input type="text" id="searchInput" placeholder="搜索手机号/昵称..." class="px-4 py-2 border border-gray-300 rounded-lg text-sm w-64 outline-none focus:ring-2 focus:ring-indigo-500">
+            <button onclick="loadUsers(1)" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"><i class="fas fa-search mr-1"></i>搜索</button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500">
+                <th class="text-left px-4 py-3 font-medium">手机号</th>
+                <th class="text-left px-4 py-3 font-medium">昵称</th>
+                <th class="text-left px-4 py-3 font-medium">等级</th>
+                <th class="text-left px-4 py-3 font-medium">字数余额</th>
+                <th class="text-left px-4 py-3 font-medium">状态</th>
+                <th class="text-left px-4 py-3 font-medium">注册时间</th>
+                <th class="text-left px-4 py-3 font-medium">操作</th>
+              </tr>
+            </thead>
+            <tbody id="userTableBody">
+              <tr><td colspan="7" class="text-center py-10 text-gray-400">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-4">
+          <div class="text-sm text-gray-500" id="pageInfo">第 1 页</div>
+          <div class="flex gap-2">
+            <button id="prevBtn" onclick="loadUsers(currentPage - 1)" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">上一页</button>
+            <button id="nextBtn" onclick="loadUsers(currentPage + 1)" class="px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50">下一页</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div id="detailModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-auto">
+      <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">用户详情</h3>
+        <button onclick="closeModal('detailModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6" id="detailContent"></div>
+    </div>
+  </div>
+
+  <!-- VIP Modal -->
+  <div id="vipModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-4">
+      <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">设置VIP</h3>
+        <button onclick="closeModal('vipModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6">
+        <input type="hidden" id="vipUserId">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">套餐类型</label>
+          <select id="vipPlanType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="monthly">月卡 (30天)</option>
+            <option value="yearly">年卡 (365天)</option>
+          </select>
+        </div>
+        <button onclick="handleSetVip()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium">确认设置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quota Modal -->
+  <div id="quotaModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-4">
+      <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">调整额度</h3>
+        <button onclick="closeModal('quotaModal')" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6">
+        <input type="hidden" id="quotaUserId">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">字数余额</label>
+          <input type="number" id="quotaTokens" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="输入字数">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">月调用次数</label>
+          <input type="number" id="quotaCalls" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="输入次数">
+        </div>
+        <button onclick="handleSetQuota()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium">确认调整</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = location.origin + '/api/v1';
+    let currentPage = 1;
+    let totalPages = 1;
+
+    function getToken() {
+      const t = localStorage.getItem('admin_token');
+      if (!t) window.location.href = '/admin/';
+      return t;
+    }
+
+    async function fetchAPI(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: { ...opts.headers, 'x-session': getToken(), 'Content-Type': 'application/json' }
+      });
+      if (res.status === 401) { localStorage.removeItem('admin_token'); window.location.href = '/admin/'; }
+      return res.json();
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    // Highlight nav
+    document.querySelectorAll('.nav-link').forEach(a => {
+      if (a.href.endsWith(window.location.pathname)) a.classList.add('bg-indigo-50', 'text-indigo-600');
+    });
+
+    async function loadUsers(page) {
+      currentPage = page;
+      const keyword = document.getElementById('searchInput').value;
+      let url = `${API_BASE}/admin/users?page=${page}&limit=20`;
+      if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
+      const data = await fetchAPI(url);
+      if (!data) return;
+
+      document.getElementById('totalInfo').textContent = `共 ${data.total || 0} 位用户`;
+      totalPages = Math.ceil((data.total || 0) / 20);
+      document.getElementById('pageInfo').textContent = `第 ${page} 页 / 共 ${totalPages} 页`;
+      document.getElementById('prevBtn').disabled = page <= 1;
+      document.getElementById('nextBtn').disabled = page >= totalPages;
+
+      const tbody = document.getElementById('userTableBody');
+      if (!data.data || data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-gray-400">暂无用户</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = data.data.map(u => {
+        const planLabel = u.planType === 'yearly' ? '年卡VIP' : u.planType === 'monthly' ? '月卡VIP' : '免费';
+        const planColor = u.planType === 'yearly' ? 'text-amber-600 bg-amber-50' : u.planType === 'monthly' ? 'text-purple-600 bg-purple-50' : 'text-gray-500 bg-gray-50';
+        const status = u.role === 'banned' ? '封禁' : '正常';
+        const statusColor = u.role === 'banned' ? 'text-red-600 bg-red-50' : 'text-green-600 bg-green-50';
+        const date = u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-';
+
+        return `<tr class="border-t border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3">${u.phone || '-'}</td>
+          <td class="px-4 py-3">${u.nickname || '-'}</td>
+          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${planColor}">${planLabel}</span></td>
+          <td class="px-4 py-3">${u.tokenBalance || 0}</td>
+          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${status}</span></td>
+          <td class="px-4 py-3 text-gray-500">${date}</td>
+          <td class="px-4 py-3">
+            <button onclick="viewUser('${u.id}')" class="text-indigo-600 hover:text-indigo-800 text-xs mr-2"><i class="fas fa-eye mr-0.5"></i>查看</button>
+            <button onclick="openVip('${u.id}')" class="text-amber-600 hover:text-amber-800 text-xs mr-2"><i class="fas fa-crown mr-0.5"></i>VIP</button>
+            <button onclick="openQuota('${u.id}')" class="text-purple-600 hover:text-purple-800 text-xs"><i class="fas fa-coins mr-0.5"></i>额度</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function viewUser(id) {
+      const data = await fetchAPI(`${API_BASE}/admin/users/${id}`);
+      if (!data) return;
+      const modal = document.getElementById('detailModal');
+      document.getElementById('detailContent').innerHTML = `
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div><span class="text-gray-400 text-xs">手机号</span><div class="font-medium">${data.phone || '-'}</div></div>
+          <div><span class="text-gray-400 text-xs">昵称</span><div class="font-medium">${data.nickname || '-'}</div></div>
+          <div><span class="text-gray-400 text-xs">字数余额</span><div class="font-medium">${data.tokenBalance || 0}</div></div>
+          <div><span class="text-gray-400 text-xs">月调用次数</span><div class="font-medium">${data.monthlyAiCount || 0}</div></div>
+          <div><span class="text-gray-400 text-xs">VIP等级</span><div class="font-medium">${data.vipLevel === 2 ? '年卡VIP' : data.vipLevel === 1 ? '月卡VIP' : '普通用户'}</div></div>
+          <div><span class="text-gray-400 text-xs">注册时间</span><div class="font-medium">${data.createdAt ? new Date(data.createdAt).toLocaleString() : '-'}</div></div>
+        </div>
+        <div class="border-t pt-4">
+          <h4 class="font-medium text-sm text-gray-900 mb-3">最近扣费记录</h4>
+          ${(data.billingRecords || []).length === 0 ? '<p class="text-gray-400 text-sm">暂无记录</p>' :
+            data.billingRecords.map(b => `<div class="flex items-center justify-between py-2 border-b border-gray-50 text-sm">
+              <span>${b.title || '-'}</span>
+              <span class="${b.type === 'deduction' ? 'text-red-500' : 'text-green-500'}">${b.type === 'deduction' ? '-' : '+'}${b.amount || 0}</span>
+            </div>`).join('')}
+        </div>
+      `;
+      modal.classList.remove('hidden');
+    }
+
+    function openVip(userId) {
+      document.getElementById('vipUserId').value = userId;
+      document.getElementById('vipModal').classList.remove('hidden');
+    }
+
+    async function handleSetVip() {
+      const userId = document.getElementById('vipUserId').value;
+      const planType = document.getElementById('vipPlanType').value;
+      const days = planType === 'yearly' ? 365 : 30;
+      await fetchAPI(`${API_BASE}/admin/users/${userId}/vip`, {
+        method: 'PATCH',
+        body: JSON.stringify({ planType, days })
+      });
+      closeModal('vipModal');
+      loadUsers(currentPage);
+    }
+
+    function openQuota(userId) {
+      document.getElementById('quotaUserId').value = userId;
+      document.getElementById('quotaModal').classList.remove('hidden');
+    }
+
+    async function handleSetQuota() {
+      const userId = document.getElementById('quotaUserId').value;
+      const body = {};
+      const tokens = document.getElementById('quotaTokens').value;
+      const calls = document.getElementById('quotaCalls').value;
+      if (tokens) body.tokenBalance = parseInt(tokens);
+      if (calls) body.monthlyAiCount = parseInt(calls);
+      await fetchAPI(`${API_BASE}/admin/users/${userId}/quota`, {
+        method: 'PATCH',
+        body: JSON.stringify(body)
+      });
+      closeModal('quotaModal');
+      loadUsers(currentPage);
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('admin_token');
+      window.location.href = '/admin/';
+    }
+
+    // Enter key search
+    document.getElementById('searchInput').addEventListener('keyup', e => {
+      if (e.key === 'Enter') loadUsers(1);
+    });
+
+    loadUsers(1);
+  </script>
+</body>
+</html>

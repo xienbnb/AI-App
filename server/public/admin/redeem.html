@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>兑换码管理 - 管理后台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div class="flex h-screen">
+    <aside class="w-60 bg-white border-r border-gray-200 flex flex-col shrink-0">
+      <div class="p-5 border-b border-gray-100">
+        <h1 class="font-bold text-lg text-gray-900">
+          <i class="fas fa-feather text-indigo-600 mr-2"></i>管理后台
+        </h1>
+        <p class="text-xs text-gray-400 mt-0.5">AI 网文创作</p>
+      </div>
+      <nav class="flex-1 p-3 space-y-1">
+        <a href="dashboard.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-chart-pie w-5 text-center"></i>仪表盘</a>
+        <a href="users.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-users w-5 text-center"></i>用户管理</a>
+        <a href="redeem.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-ticket w-5 text-center"></i>兑换码</a>
+        <a href="posts.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-newspaper w-5 text-center"></i>内容审核</a>
+        <a href="settings.html" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm nav-link"><i class="fas fa-gear w-5 text-center"></i>系统设置</a>
+      </nav>
+      <div class="p-3 border-t border-gray-100">
+        <button onclick="handleLogout()" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-500 hover:bg-gray-50 w-full">
+          <i class="fas fa-right-from-bracket w-5 text-center"></i>退出登录
+        </button>
+      </div>
+    </aside>
+
+    <main class="flex-1 overflow-auto">
+      <div class="p-6 max-w-7xl mx-auto">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">兑换码管理</h2>
+            <p class="text-sm text-gray-500 mt-1">生成和管理兑换码</p>
+          </div>
+          <button onclick="document.getElementById('generateModal').classList.remove('hidden')" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700">
+            <i class="fas fa-plus mr-1"></i>生成兑换码
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="flex gap-4 mb-4">
+          <button onclick="switchTab('list')" id="tabList" class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white">兑换码列表</button>
+          <button onclick="switchTab('logs')" id="tabLogs" class="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600">兑换记录</button>
+        </div>
+
+        <!-- Codes list -->
+        <div id="panelList" class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500">
+                <th class="text-left px-4 py-3 font-medium">兑换码</th>
+                <th class="text-left px-4 py-3 font-medium">类型</th>
+                <th class="text-left px-4 py-3 font-medium">面值</th>
+                <th class="text-left px-4 py-3 font-medium">剩余次数</th>
+                <th class="text-left px-4 py-3 font-medium">过期时间</th>
+                <th class="text-left px-4 py-3 font-medium">状态</th>
+                <th class="text-left px-4 py-3 font-medium">创建时间</th>
+              </tr>
+            </thead>
+            <tbody id="codesTableBody">
+              <tr><td colspan="7" class="text-center py-10 text-gray-400">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Redeem logs -->
+        <div id="panelLogs" class="hidden bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 text-gray-500">
+                <th class="text-left px-4 py-3 font-medium">兑换码</th>
+                <th class="text-left px-4 py-3 font-medium">类型</th>
+                <th class="text-left px-4 py-3 font-medium">面值</th>
+                <th class="text-left px-4 py-3 font-medium">用户</th>
+                <th class="text-left px-4 py-3 font-medium">手机号</th>
+                <th class="text-left px-4 py-3 font-medium">兑换时间</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr><td colspan="6" class="text-center py-10 text-gray-400">暂无数据</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Generate Modal -->
+  <div id="generateModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-4">
+      <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">生成兑换码</h3>
+        <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">类型</label>
+          <select id="genType" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+            <option value="token">字数包 (token)</option>
+            <option value="call">调用次数 (call)</option>
+            <option value="vip">VIP天数 (vip)</option>
+          </select>
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">数值</label>
+          <input type="number" id="genValue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="字数/次数/天数" value="5000">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">生成数量</label>
+          <input type="number" id="genCount" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="生成几个" value="1" min="1" max="100">
+        </div>
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-700 mb-1">使用次数（每个码可兑换几次）</label>
+          <input type="number" id="genUses" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" value="1" min="1">
+        </div>
+        <button onclick="handleGenerate()" class="w-full bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium">立即生成</button>
+        <div id="genResult" class="mt-4 hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual redeem modal -->
+  <div id="manualModal" class="hidden fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+    <div class="bg-white rounded-2xl w-full max-w-md mx-4">
+      <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">手动发放</h3>
+        <button onclick="closeManualModal()" class="text-gray-400 hover:text-gray-600"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="p-6" id="manualContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = location.origin + '/api/v1';
+    let currentTab = 'list';
+
+    function getToken() {
+      const t = localStorage.getItem('admin_token');
+      if (!t) window.location.href = '/admin/';
+      return t;
+    }
+
+    async function fetchAPI(url, opts = {}) {
+      const res = await fetch(url, {
+        ...opts,
+        headers: { ...opts.headers, 'x-session': getToken(), 'Content-Type': 'application/json' }
+      });
+      if (res.status === 401) { localStorage.removeItem('admin_token'); window.location.href = '/admin/'; }
+      return res.json();
+    }
+
+    document.querySelectorAll('.nav-link').forEach(a => {
+      if (a.href.endsWith(window.location.pathname)) a.classList.add('bg-indigo-50', 'text-indigo-600');
+    });
+
+    function closeModal() { document.getElementById('generateModal').classList.add('hidden'); }
+    function closeManualModal() { document.getElementById('manualModal').classList.add('hidden'); }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tabList').className = tab === 'list' ? 'px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white' : 'px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600';
+      document.getElementById('tabLogs').className = tab === 'logs' ? 'px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white' : 'px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-600';
+      document.getElementById('panelList').classList.toggle('hidden', tab !== 'list');
+      document.getElementById('panelLogs').classList.toggle('hidden', tab !== 'logs');
+      if (tab === 'list') loadCodes();
+      else loadLogs();
+    }
+
+    async function loadCodes() {
+      const data = await fetchAPI(`${API_BASE}/admin/redeem/list?page=1&limit=50`);
+      if (!data) return;
+      const tbody = document.getElementById('codesTableBody');
+      if (!data.data || data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center py-10 text-gray-400">暂无兑换码</td></tr>';
+        return;
+      }
+      tbody.innerHTML = data.data.map(c => {
+        const typeLabel = c.type === 'token' ? '字数' : c.type === 'call' ? '次数' : 'VIP';
+        const status = c.isActive && c.usesLeft > 0 && (!c.expiresAt || new Date(c.expiresAt) > new Date()) ? '有效' : '已失效';
+        const statusColor = status === '有效' ? 'text-green-600 bg-green-50' : 'text-gray-400 bg-gray-50';
+        return `<tr class="border-t border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3 font-mono text-xs">${c.code}</td>
+          <td class="px-4 py-3">${typeLabel}</td>
+          <td class="px-4 py-3">${c.value}</td>
+          <td class="px-4 py-3">${c.usesLeft}/${c.usesTotal}</td>
+          <td class="px-4 py-3 text-gray-500">${c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '永久'}</td>
+          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded-full text-xs font-medium ${statusColor}">${status}</span></td>
+          <td class="px-4 py-3 text-gray-500">${new Date(c.createdAt).toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function loadLogs() {
+      const data = await fetchAPI(`${API_BASE}/admin/redeem/logs?page=1&limit=50`);
+      if (!data) return;
+      const tbody = document.getElementById('logsTableBody');
+      if (!data.data || data.data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-10 text-gray-400">暂无兑换记录</td></tr>';
+        return;
+      }
+      const typeLabel = { token: '字数', call: '次数', vip: 'VIP' };
+      tbody.innerHTML = data.data.map(r => `<tr class="border-t border-gray-50 hover:bg-gray-50">
+        <td class="px-4 py-3 font-mono text-xs">${r.code || '-'}</td>
+        <td class="px-4 py-3">${typeLabel[r.type] || r.type}</td>
+        <td class="px-4 py-3">${r.value}</td>
+        <td class="px-4 py-3">${r.userName || '-'}</td>
+        <td class="px-4 py-3">${r.userPhone || '-'}</td>
+        <td class="px-4 py-3 text-gray-500">${new Date(r.createdAt).toLocaleString()}</td>
+      </tr>`).join('');
+    }
+
+    async function handleGenerate() {
+      const type = document.getElementById('genType').value;
+      const value = parseInt(document.getElementById('genValue').value);
+      const count = parseInt(document.getElementById('genCount').value);
+      const usesTotal = parseInt(document.getElementById('genUses').value);
+      const resultEl = document.getElementById('genResult');
+
+      if (!value || !count) { alert('请填写完整'); return; }
+
+      const data = await fetchAPI(`${API_BASE}/admin/redeem/generate`, {
+        method: 'POST',
+        body: JSON.stringify({ type, value, count, usesTotal })
+      });
+
+      if (data.success) {
+        resultEl.innerHTML = `<div class="bg-green-50 text-green-700 p-3 rounded-lg text-sm">
+          <p class="font-medium mb-2"><i class="fas fa-check-circle mr-1"></i>生成成功！共 ${data.count} 个兑换码：</p>
+          ${(data.codes || []).map(c => `<code class="block bg-white px-2 py-1 rounded font-mono text-xs mt-1">${c}</code>`).join('')}
+        </div>`;
+        resultEl.classList.remove('hidden');
+        setTimeout(() => closeModal(), 3000);
+        loadCodes();
+      } else {
+        resultEl.innerHTML = `<div class="bg-red-50 text-red-600 p-3 rounded-lg text-sm">${data.error || '生成失败'}</div>`;
+        resultEl.classList.remove('hidden');
+      }
+    }
+
+    function handleLogout() {
+      localStorage.removeItem('admin_token');
+      window.location.href = '/admin/';
+    }
+
+    loadCodes();
+  </script>
+</body>
+</html>
