@@ -63,6 +63,7 @@ router.get("/info", async (req: Request, res: Response) => {
         isVip: isVip && !isExpired,
         remainCount: Math.max(0, (vipInfo.dailyQuota || 50) - (vipInfo.usedDaily || 0)),
         maxTokens: vipInfo.dailyTokenQuota || 2000,
+        usedDailyTokens: vipInfo.usedDailyTokens || 0,
         tierName: isAdmin ? '管理员' : (tierMap[vipInfo.planType] || '普通用户'),
         isAdmin,
         monthlyLimit: vipInfo.monthlyQuota || 500,
