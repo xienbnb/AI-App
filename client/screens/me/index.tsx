@@ -190,7 +190,7 @@ export default function ProfileScreen() {
         ...((isAuthenticated
           ? [{ icon: "right-from-bracket", label: "退出登录", color: "#EF4444", isLogout: true } as const]
           : [])),
-      ].filter(item => !("label" in item && item.label === "管理后台") || adminPhone === "1325226916"),
+      ].filter(item => !("label" in item && item.label === "管理后台") || adminPhone === "13252269161"),
     },
   ];
 
