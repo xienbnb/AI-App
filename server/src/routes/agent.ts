@@ -74,57 +74,21 @@ async function getUserPreferredModel(userId: string): Promise<string> {
 // Agent 系统提示
 // ============================================================
 
-const AGENT_SYSTEM_PROMPT = `你是"创作大师"——一个专业的小说创作 AI 助手。
+const AGENT_SYSTEM_PROMPT = `你是"创作大师"——小说创作 AI 助手。
 
-## 你的角色
-你是一位资深编辑兼作家，擅长帮助作者从零开始构建完整的小说世界。
-你可以帮助用户：
-1. 根据创意自动创建书籍、构建大纲、设定角色、编写章节
-2. 分析已有书籍，提供续写、修改建议
-3. 保持连贯的世界观和人物性格
-
-## 工作流程（严格按以下顺序执行）
-1. 首先充分理解用户的创作意图和上下文
-2. 【强制】如果系统注入了「当前挂载书籍」信息（会包含书籍ID），你**没有**该书的详细数据。**必须先调用 get_book_info 读取书籍的完整信息**（包括大纲、角色设定、卷结构），然后基于**真实数据**进行创作
-3. 【强制】挂载书籍时，严禁调用 create_book。用户的所有操作都针对已挂载的书籍
-4. 如果用户未挂载书籍，且用户明确要创作新作品，则用 create_book 创建书籍（必须同时提供 title/category/description）
-5. 【规划卷结构】→ 用 create_volume 创建多个卷（一般3-5卷）
-6. 【构建世界观】→ 用 save_world_setting 一次性保存所有设定
-7. 【创作大纲】→ 用 save_outline 保存结构化大纲
-8. 【编写章节】→ 用 create_chapter 在每个卷下创建章节（每章正文要完整充实）
-9. 每一步完成后告知用户进展，根据反馈调整
-
-## 重要规则
-- 一次只调用一个工具，等待结果后再做下一步
-- 工具调用必须使用指定 JSON 格式
-- **【强制】挂载书籍时，第一步必须是 get_book_info，否则就是严重错误**
-- **挂载书籍时，严禁调用 create_book**
-- **不要凭自己的知识编写章节内容！必须先读取真实数据，再基于真实数据创作**
-- 创作内容要丰富具体，避免空洞的套话
-- 对修仙/玄幻小说，角色设定必须包含：境界修为、修炼功法、武器法宝
-- 对金手指必须描述：功能效果、获取方式、成长限制
-- 第一章节字数建议控制在1500-3000字，包含: 引入主角、交代背景、触发主线、设置悬念
-- 尊重用户的创作意愿，给出专业建议但不强加
-- 调用工具后，工具返回的结果会以 【工具结果】 的形式呈现，请根据结果继续
-
-## 禁止操作 ⚠️
-- 严禁修改用户VIP等级、会员状态
-- 严禁删除书籍、注销账号、修改密码
-- 严禁增加或修改用户Token/次数余额
-- 严禁执行任何财务相关操作
-- 严禁修改系统设置或安全配置
-- 只能在用户明确要求下执行修改操作
+## 核心规则
+1. 如果系统注入了「当前挂载书籍」，则用户操作针对该书，先调 get_book_info 读取数据后再创作
+2. 挂载书籍时严禁 create_book（系统已拦截）
+3. 无挂载书籍且用户要新作品 → create_book(title/category/description)
+4. 创作基于大纲和设定，不凭空编造
+5. 一次只调用一个工具，等待结果后再做下一步
+6. 敏感操作（删书、改VIP、增减字数等）已被系统强制拦截
+7. 第一章节1500-3000字，含主角引入→背景交代→主线触发→悬念
 
 ${getToolsSystemPrompt()}
 
-## 响应格式
-- 正常对话回复：直接回复文本
-- 需要调用工具时：在回复的最后附加工具调用 JSON 块
-  例如：
-  \`\`\`json
-  {"tool": "create_book", "args": {"title": "我的第一本书", "category": "玄幻"}}
-  \`\`\`
-`;
+## 工作流程
+规划卷结构(create_volume) → 构建世界观(save_world_setting) → 大纲(save_outline) → 编写章节(create_chapter)，每步完成后告知用户。`;
 
 // ============================================================
 // POST /api/v1/agent/execute — SSE 流式 Agent 执行
@@ -245,29 +209,41 @@ router.post("/execute", async (req: Request, res: Response) => {
 
           const bookContext = `## 当前挂载书籍
 用户已挂载书籍《${book.title}》（ID: ${bookId}）。
-用户的所有操作（修改/续写/查看/分析）都应针对这本书。
+该书籍共 ${volumesList.length} 卷、${outlineItems.length} 条大纲、${worldSettings.length} 项设定。
 
-【强制规则 - 必须遵守】
-- 你当前的系统上下文中没有书籍的详细数据
-- **必须先调用 get_book_info 工具读取书籍信息**，然后才能进行任何操作
-- 不调用 get_book_info 直接生成内容 = 严重错误
-- 读取到数据后，基于实际数据（大纲、角色、卷结构等）来创作`;
+如需详情请调 get_book_info。`;
 
           llmMessages.push({ role: "system", content: bookContext });
-
-          // 自动调用 get_book_info 获取真实数据
-          const bookData = await getBookInfo(bookId);
-          llmMessages.push({
-            role: "system",
-            content: `## get_book_info 执行结果（真实书籍数据）\n\`\`\`json\n${JSON.stringify(bookData, null, 2)}\n\`\`\`\n\n⚠️ 以上是数据库中该书的真实数据。基于这些真实数据来回答用户和进行创作。如果用户要求读取/查看/分析此书，直接基于上述数据回答即可。`,
-          });
         }
       } catch (e) {
         console.error("加载挂载书籍失败:", e);
       }
     }
 
-    // ---- 5. Agent 主循环 ----
+    // ---- 5. 缓存 + 意图预判 ----
+    const bookInfoCache: Record<string, string> = {}; // 缓存 bookId → get_book_info 结果
+    let preToolResult: string | null = null;
+
+    // 意图预判：根据用户消息内容，直接命中目标工具
+    const userMsg = message || "";
+    if (bookId) {
+      const lower = userMsg.toLowerCase();
+      // "读取/查看/查询/有什么" → 立即调用 get_book_info
+      if (/读[取取]?|查看|查询|有什么|信息|设定|角色|大纲/.test(userMsg)) {
+        const bookData = await getBookInfo(bookId);
+        bookInfoCache[bookId] = JSON.stringify(bookData, null, 2);
+        preToolResult = `## 书籍信息（自动加载）\n\`\`\`json\n${bookInfoCache[bookId]}\n\`\`\``;
+        llmMessages.push({ role: "system", content: preToolResult });
+        res.write(`data: ${JSON.stringify({ type: "action_start", content: "正在为你读取书籍信息..." })}\n\n`);
+      }
+      // "创建/新建" → 禁止（已挂载书籍）
+      else if (/创建|新建/.test(userMsg)) {
+        preToolResult = "用户已挂载书籍，请使用已有书籍，不要创建新书。";
+        llmMessages.push({ role: "system", content: preToolResult });
+      }
+    }
+
+    // ---- 6. Agent 主循环 ----
     const selectedModel = model || (await getUserPreferredModel(userId));
     const llmClient = getUserLLMClient(userId);
     let toolRound = 0;
@@ -322,22 +298,45 @@ router.post("/execute", async (req: Request, res: Response) => {
         continue;
       }
 
-      // 通知前端开始执行工具
-      res.write(`data: ${JSON.stringify({ type: "action_start", tool: toolCall.tool, args: toolCall.args })}\n\n`);
+      // 工具中文名映射
+      const TOOL_NAMES: Record<string, string> = {
+        get_book_info: "读取书籍信息", create_book: "创建书籍", save_outline: "保存大纲",
+        create_volume: "创建卷", create_chapter: "创建章节", save_world_setting: "保存设定",
+        get_characters: "读取角色", get_volumes: "读取卷信息", continue_chapter: "续写章节",
+      };
+      const toolLabel = TOOL_NAMES[toolCall.tool] || toolCall.tool;
 
-      // 执行工具
-      const result: ToolResult = await toolDef.handler(userId, toolCall.args);
+      // 通知前端开始执行工具（中文名+关键参数）
+      const toolArgs = toolCall.args || {};
+      const shortArgs = typeof toolArgs === "object" ? Object.entries(toolArgs).slice(0, 2).map(([k, v]) => `${k}=${String(v).slice(0, 20)}`).join(", ") : "";
+      res.write(`data: ${JSON.stringify({ type: "action_start", content: toolLabel + (shortArgs ? ` (${shortArgs})` : "") })}\n\n`);
 
-      // 通知前端工具执行结果
-      res.write(`data: ${JSON.stringify({ type: "action_result", tool: toolCall.tool, success: result.success, message: result.message, data: result.data })}\n\n`);
+      // 执行工具（get_book_info 走缓存）
+      let result: ToolResult;
+      if (toolCall.tool === "get_book_info" && bookInfoCache[toolCall.args?.bookId || bookId]) {
+        const cached = bookInfoCache[toolCall.args?.bookId || bookId];
+        const parsed = JSON.parse(cached);
+        result = { success: true, message: "书籍信息已加载（缓存）", data: parsed };
+      } else {
+        result = await toolDef.handler(userId, toolCall.args);
+        // 缓存 get_book_info 结果
+        if (toolCall.tool === "get_book_info" && result.data) {
+          bookInfoCache[toolCall.args?.bookId || bookId] = JSON.stringify(result.data);
+        }
+      }
 
-      // 把工具调用和结果加入对话上下文
+      // 通知前端工具执行结果（摘要版）
+      const summaryMsg = result.message.length > 200 ? result.message.slice(0, 200) + "..." : result.message;
+      res.write(`data: ${JSON.stringify({ type: "action_result", tool: toolCall.tool, success: result.success, message: summaryMsg })}\n\n`);
+
+      // 工具结果摘要（裁剪长数据，只给LLM关键信息）
+      const trimmedMsg = result.message.length > 500 ? result.message.slice(0, 500) + `\n...（内容较长，共${result.message.length}字符，如需完整数据请调用相应工具）` : result.message;
       llmMessages.push({ role: "assistant", content: currentResponse });
-      llmMessages.push({ role: "user", content: `【工具结果】\n${result.message}` });
+      llmMessages.push({ role: "user", content: `【${toolLabel}】\n${trimmedMsg}` });
 
       // 保存到内存消息
       messages.push({ role: "assistant", content: currentResponse, isToolCall: true, tool: toolCall.tool });
-      messages.push({ role: "user", content: result.message, isToolResult: true, tool: toolCall.tool });
+      messages.push({ role: "user", content: summaryMsg, isToolResult: true, tool: toolCall.tool });
     }
 
     if (toolRound >= MAX_TOOL_ROUNDS) {

@@ -706,12 +706,12 @@ export default function HomeScreen() {
             fullContent += parsed.content || "";
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_start") {
-            setAgentActionStatus(`[执行] ${parsed.tool}...`);
+            setAgentActionStatus(`⏳ ${parsed.content || parsed.tool || "处理中..."}`);
           } else if (parsed.type === "action_result") {
             if (parsed.success) {
-              setAgentActionStatus(`[完成] ${parsed.tool}`);
+              setAgentActionStatus(`✅ ${parsed.tool || parsed.message?.slice(0, 40) || "完成"}`);
             } else {
-              setAgentActionStatus(`[失败] ${parsed.tool}`);
+              setAgentActionStatus(`❌ ${parsed.tool || "失败"}`);
             }
           } else if (parsed.type === "error") {
             setAgentActionStatus(`[错误] ${parsed.message}`);

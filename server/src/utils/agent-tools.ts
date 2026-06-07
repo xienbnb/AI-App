@@ -469,7 +469,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "get_book_info",
-    description: "【必读】获取书籍详细信息（含大纲、设定、卷结构、角色信息）。挂载书籍后，第一步必须调用此工具读取数据，否则无法继续！",
+    description: "获取当前书籍完整信息（卷/大纲/角色/设定），挂载时第一步必须调用。",
     parameters: {
       type: "object",
       properties: { bookId: { type: "string", description: "书籍ID" } },
@@ -541,7 +541,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "read_chapter",
-    description: "读取章节完整内容，用于续写/修改时了解已写内容。",
+    description: "读取章节完整内容，参数：chapterId",
     parameters: {
       type: "object",
       properties: { chapterId: { type: "string", description: "章节ID" } },
@@ -551,7 +551,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "continue_chapter",
-    description: "续写章节内容。读取已有章节，在其末尾追加新内容。用于章节未完成或用户要求续写时。",
+    description: "续写章节(在末尾追加内容)，参数：chapterId, newContent",
     parameters: {
       type: "object",
       properties: {
@@ -564,7 +564,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "save_world_setting",
-    description: "保存世界设定（角色/物品/世界背景/金手指等）。items 数组每项包含 type, name, description。\n修仙玄幻小说必须包含: 角色(主角/配角/反派等需包含境界、武器、功法、法宝)、物品(丹药/法器/材料等)、金手指(系统/传承/宝物等)、世界背景(势力分布/修炼体系/地理)",
+    description: "保存世界设定(角色/物品/世界背景/金手指)，参数：bookId, items[{type, name, description}]",
     parameters: {
       type: "object",
       properties: {
@@ -588,7 +588,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "update_book",
-    description: "更新书籍信息（状态、描述等）。",
+    description: "更新书籍信息，参数：bookId, updates(对象)",
     parameters: {
       type: "object",
       properties: {
