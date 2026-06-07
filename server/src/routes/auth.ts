@@ -435,17 +435,19 @@ router.post("/guest", async (_req: Request, res: Response) => {
 
 /**
  * POST /api/v1/auth/send-otp
- * 发送手机验证码（占位）
+ * 发送验证码（手机号或邮箱）
+ * Body: { phone?: string, email?: string }
  */
 router.post("/send-otp", async (req: Request, res: Response) => {
   try {
-    const { phone } = req.body;
-    if (!phone) {
-      res.status(400).json({ error: "手机号不能为空" });
+    const { phone, email } = req.body;
+    const target = phone || email;
+    if (!target) {
+      res.status(400).json({ error: "手机号或邮箱不能为空" });
       return;
     }
     // 限流检查
-    const lastSent = otpStore.get(phone);
+    const lastSent = otpStore.get(target);
     if (lastSent && (Date.now() - lastSent.lastSentAt) < OTP_RATE_LIMIT) {
       res.status(429).json({ error: "发送太频繁，请稍后重试" });
       return;
@@ -453,12 +455,12 @@ router.post("/send-otp", async (req: Request, res: Response) => {
 
     // 生成6位随机验证码
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    otpStore.set(phone, {
+    otpStore.set(target, {
       code,
       expiresAt: Date.now() + OTP_EXPIRES_IN,
       lastSentAt: Date.now(),
     });
-    console.log(`[AUTH] Send OTP to ${phone}: ${code}`);
+    console.log(`[AUTH] Send OTP to ${target}: ${code}`);
     res.json({ success: true, message: "验证码已发送", code });
   } catch (err: any) {
     console.error("[AUTH] Send OTP error:", err);
@@ -546,6 +548,386 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error("[AUTH] Verify OTP error:", err);
     res.status(500).json({ error: err.message || "验证失败" });
+  }
+});
+
+/**
+ * GET /api/v1/auth/bindings
+ * 获取当前用户的账号绑定信息
+ * Header: x-session <token>
+ */
+router.get("/bindings", async (req: Request, res: Response) => {
+  try {
+    const token = req.headers["x-session"] as string;
+    if (!token) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    // 解析用户 ID
+    let userId: string | null = null;
+    if (token.startsWith("phone_")) {
+      userId = token.split("_")[1];
+    } else if (token.startsWith("guest_")) {
+      res.json({
+        phone: "",
+        email: "",
+        emailVerified: false,
+        hasPassword: false,
+        wechat: { bound: false, nickname: "" },
+        qq: { bound: false, nickname: "" },
+      });
+      return;
+    } else {
+      // Supabase token
+      const { url, anonKey } = getSupabaseCredentials();
+      const anonClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData } = await anonClient.auth.getUser(token);
+      if (userData?.user) userId = userData.user.id;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "令牌无效" });
+      return;
+    }
+
+    const [user] = await db.select({
+      phone: users.phone,
+      email: users.email,
+      emailVerified: users.emailVerified,
+      passwordHash: users.passwordHash,
+      wechatOpenid: users.wechatOpenid,
+      qqOpenid: users.qqOpenid,
+      wechatNickname: users.wechatNickname,
+      qqNickname: users.qqNickname,
+    }).from(users).where(eq(users.id, userId)).limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "用户不存在" });
+      return;
+    }
+
+    res.json({
+      phone: user.phone || "",
+      email: user.email,
+      emailVerified: user.emailVerified || false,
+      hasPassword: !!user.passwordHash,
+      wechat: {
+        bound: !!user.wechatOpenid,
+        nickname: user.wechatNickname || "",
+      },
+      qq: {
+        bound: !!user.qqOpenid,
+        nickname: user.qqNickname || "",
+      },
+    });
+  } catch (err: any) {
+    console.error("[AUTH] Bindings error:", err);
+    res.status(500).json({ error: err.message || "获取绑定信息失败" });
+  }
+});
+
+/**
+ * PUT /api/v1/auth/change-password
+ * 修改密码（需要当前密码验证）
+ * Header: x-session <token>
+ * Body: { oldPassword: string, newPassword: string }
+ */
+router.put("/change-password", async (req: Request, res: Response) => {
+  try {
+    const token = req.headers["x-session"] as string;
+    if (!token) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    // 解析用户 ID
+    let userId: string | null = null;
+    if (token.startsWith("phone_")) {
+      userId = token.split("_")[1];
+    } else if (token.startsWith("guest_")) {
+      res.status(403).json({ error: "游客不能修改密码" });
+      return;
+    } else {
+      const { url, anonKey } = getSupabaseCredentials();
+      const anonClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData } = await anonClient.auth.getUser(token);
+      if (userData?.user) userId = userData.user.id;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "令牌无效" });
+      return;
+    }
+
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      res.status(400).json({ error: "旧密码和新密码不能为空" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "新密码长度不能少于6位" });
+      return;
+    }
+
+    // 查询当前用户
+    const [user] = await db.select({
+      passwordHash: users.passwordHash,
+    }).from(users).where(eq(users.id, userId)).limit(1);
+
+    if (!user) {
+      res.status(404).json({ error: "用户不存在" });
+      return;
+    }
+
+    // 验证旧密码
+    if (!user.passwordHash) {
+      res.status(400).json({ error: "尚未设置密码，请使用验证码登录后设置" });
+      return;
+    }
+
+    const valid = await bcrypt.compare(oldPassword, user.passwordHash);
+    if (!valid) {
+      res.status(400).json({ error: "旧密码错误" });
+      return;
+    }
+
+    // 更新为新密码
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await db.update(users)
+      .set({ passwordHash: newHash, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, userId));
+
+    res.json({ success: true, message: "密码修改成功" });
+  } catch (err: any) {
+    console.error("[AUTH] Change password error:", err);
+    res.status(500).json({ error: err.message || "修改密码失败" });
+  }
+});
+
+/**
+ * PUT /api/v1/auth/change-phone
+ * 修改手机号（需要旧手机号验证码 + 新手机号验证码）
+ * Header: x-session <token>
+ * Body: { oldPhone: string, oldCode: string, newPhone: string, newCode: string }
+ */
+router.put("/change-phone", async (req: Request, res: Response) => {
+  try {
+    const token = req.headers["x-session"] as string;
+    if (!token) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    let userId: string | null = null;
+    if (token.startsWith("phone_")) {
+      userId = token.split("_")[1];
+    } else if (token.startsWith("guest_")) {
+      res.status(403).json({ error: "游客不能修改手机号" });
+      return;
+    } else {
+      const { url, anonKey } = getSupabaseCredentials();
+      const anonClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData } = await anonClient.auth.getUser(token);
+      if (userData?.user) userId = userData.user.id;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "令牌无效" });
+      return;
+    }
+
+    const { oldPhone, oldCode, newPhone, newCode } = req.body;
+    if (!oldPhone || !oldCode || !newPhone || !newCode) {
+      res.status(400).json({ error: "参数不完整" });
+      return;
+    }
+
+    // 验证旧手机号验证码
+    const storedOldOtp = otpStore.get(oldPhone);
+    if (!storedOldOtp || storedOldOtp.code !== oldCode) {
+      res.status(400).json({ error: "旧手机号验证码错误" });
+      return;
+    }
+    if (Date.now() > storedOldOtp.expiresAt) {
+      otpStore.delete(oldPhone);
+      res.status(400).json({ error: "旧手机号验证码已过期" });
+      return;
+    }
+    otpStore.delete(oldPhone);
+
+    // 验证新手机号验证码
+    const storedNewOtp = otpStore.get(newPhone);
+    if (!storedNewOtp || storedNewOtp.code !== newCode) {
+      res.status(400).json({ error: "新手机号验证码错误" });
+      return;
+    }
+    if (Date.now() > storedNewOtp.expiresAt) {
+      otpStore.delete(newPhone);
+      res.status(400).json({ error: "新手机号验证码已过期" });
+      return;
+    }
+    otpStore.delete(newPhone);
+
+    // 更新手机号
+    await db.update(users)
+      .set({ phone: newPhone, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, userId));
+
+    res.json({ success: true, message: "手机号修改成功", phone: newPhone });
+  } catch (err: any) {
+    console.error("[AUTH] Change phone error:", err);
+    res.status(500).json({ error: err.message || "修改手机号失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/bind-email
+ * 绑定邮箱（需要邮箱验证码）
+ * Header: x-session <token>
+ * Body: { email: string, code: string }
+ */
+router.post("/bind-email", async (req: Request, res: Response) => {
+  try {
+    const token = req.headers["x-session"] as string;
+    if (!token) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    let userId: string | null = null;
+    if (token.startsWith("phone_")) {
+      userId = token.split("_")[1];
+    } else if (token.startsWith("guest_")) {
+      res.status(403).json({ error: "游客不能绑定邮箱" });
+      return;
+    } else {
+      const { url, anonKey } = getSupabaseCredentials();
+      const anonClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData } = await anonClient.auth.getUser(token);
+      if (userData?.user) userId = userData.user.id;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "令牌无效" });
+      return;
+    }
+
+    const { email, code } = req.body;
+    if (!email || !code) {
+      res.status(400).json({ error: "邮箱和验证码不能为空" });
+      return;
+    }
+
+    // 验证邮箱验证码
+    const storedOtp = otpStore.get(email);
+    if (!storedOtp || storedOtp.code !== code) {
+      res.status(400).json({ error: "邮箱验证码错误" });
+      return;
+    }
+    if (Date.now() > storedOtp.expiresAt) {
+      otpStore.delete(email);
+      res.status(400).json({ error: "邮箱验证码已过期" });
+      return;
+    }
+    otpStore.delete(email);
+
+    // 绑定邮箱
+    await db.update(users)
+      .set({ email, emailVerified: true, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, userId));
+
+    res.json({ success: true, message: "邮箱绑定成功", email });
+  } catch (err: any) {
+    console.error("[AUTH] Bind email error:", err);
+    res.status(500).json({ error: err.message || "绑定邮箱失败" });
+  }
+});
+
+/**
+ * POST /api/v1/auth/bind-social
+ * 绑定社交账号（微信/QQ） — 简化版
+ * Header: x-session <token>
+ * Body: { platform: "wechat" | "qq", openid: string, nickname?: string }
+ */
+router.post("/bind-social", async (req: Request, res: Response) => {
+  try {
+    const token = req.headers["x-session"] as string;
+    if (!token) {
+      res.status(401).json({ error: "未登录" });
+      return;
+    }
+
+    let userId: string | null = null;
+    if (token.startsWith("phone_")) {
+      userId = token.split("_")[1];
+    } else if (token.startsWith("guest_")) {
+      res.status(403).json({ error: "游客不能绑定社交账号" });
+      return;
+    } else {
+      const { url, anonKey } = getSupabaseCredentials();
+      const anonClient = createClient(url, anonKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+        global: { headers: { Authorization: `Bearer ${token}` } },
+      });
+      const { data: userData } = await anonClient.auth.getUser(token);
+      if (userData?.user) userId = userData.user.id;
+    }
+
+    if (!userId) {
+      res.status(401).json({ error: "令牌无效" });
+      return;
+    }
+
+    const { platform, openid, nickname } = req.body;
+    if (!platform || !openid) {
+      res.status(400).json({ error: "平台和 openid 不能为空" });
+      return;
+    }
+
+    if (platform !== "wechat" && platform !== "qq") {
+      res.status(400).json({ error: "仅支持 wechat 和 qq 平台" });
+      return;
+    }
+
+    // 检查该 openid 是否已被其他用户绑定
+    const field = platform === "wechat" ? users.wechatOpenid : users.qqOpenid;
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(field, openid)).limit(1);
+    if (existing && existing.id !== userId) {
+      res.status(400).json({ error: "该社交账号已被其他用户绑定" });
+      return;
+    }
+
+    // 更新绑定信息
+    const updates: Record<string, any> = { updatedAt: new Date().toISOString() };
+    if (platform === "wechat") {
+      updates.wechatOpenid = openid;
+      if (nickname) updates.wechatNickname = nickname;
+    } else {
+      updates.qqOpenid = openid;
+      if (nickname) updates.qqNickname = nickname;
+    }
+
+    await db.update(users).set(updates).where(eq(users.id, userId));
+
+    res.json({ success: true, message: `${platform === "wechat" ? "微信" : "QQ"}绑定成功` });
+  } catch (err: any) {
+    console.error("[AUTH] Bind social error:", err);
+    res.status(500).json({ error: err.message || "绑定失败" });
   }
 });
 

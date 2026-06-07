@@ -24,6 +24,12 @@ export const users = pgTable("users", {
 	lastResetDate: text("last_reset_date").default(''),
 	monthlyAiCount: integer("monthly_ai_count").default(0),
 	lastMonthlyReset: text("last_monthly_reset").default(''),
+	// 社交绑定字段
+	wechatOpenid: text("wechat_openid").default(''),
+	qqOpenid: text("qq_openid").default(''),
+	wechatNickname: text("wechat_nickname").default(''),
+	qqNickname: text("qq_nickname").default(''),
+	emailVerified: boolean("email_verified").default(false),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });

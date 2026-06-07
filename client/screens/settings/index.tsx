@@ -221,12 +221,9 @@ export default function SettingsScreen() {
             <SettingsItem
               icon="lock"
               label="账号与安全"
-              description="密码、登录方式管理"
+              description="密码、手机号、邮箱、社交账号绑定"
               onPress={() => {
-                Alert.alert(
-                  "账号与安全",
-                  "密码修改、登录方式等功能开发中，敬请期待"
-                );
+                router.push("/account-security");
               }}
             />
           </View>
