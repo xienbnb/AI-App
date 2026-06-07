@@ -469,7 +469,7 @@ export const agentTools: ToolDefinition[] = [
   },
   {
     name: "get_book_info",
-    description: "获取书籍详细信息（含大纲、设定、卷列表）。了解已创建的内容后，再决定下一步操作。",
+    description: "【必读】获取书籍详细信息（含大纲、设定、卷结构、角色信息）。挂载书籍后，第一步必须调用此工具读取数据，否则无法继续！",
     parameters: {
       type: "object",
       properties: { bookId: { type: "string", description: "书籍ID" } },
