@@ -22,7 +22,8 @@ import * as DocumentPicker from "expo-document-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
 
-import Markdown from "react-native-markdown-display";
+import { MarkdownRenderer } from "@/components/MarkdownRenderer";
+import { TypewriterText } from "@/components/TypewriterText";
 
 const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
@@ -162,33 +163,25 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
   );
 }
 
-// ===== Markdown Renderer =====
-const mdStyles = {
-  body: { color: "#374151", fontSize: 14, lineHeight: 22 },
-  heading1: { fontSize: 20, fontWeight: "700" as const, color: "#111827", marginVertical: 8, lineHeight: 28 },
-  heading2: { fontSize: 17, fontWeight: "700" as const, color: "#1F2937", marginVertical: 6, lineHeight: 24 },
-  heading3: { fontSize: 15, fontWeight: "600" as const, color: "#374151", marginVertical: 4, lineHeight: 22 },
-  paragraph: { marginVertical: 4, lineHeight: 22 },
-  code_inline: { backgroundColor: "#F3F4F6", color: "#BE185D", paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, fontSize: 13 },
-  code_block: { backgroundColor: "#1F2937", color: "#D1D5DB", padding: 12, borderRadius: 8, fontSize: 13, lineHeight: 20, marginVertical: 6 },
-  fence: { backgroundColor: "#1F2937", color: "#D1D5DB", padding: 12, borderRadius: 8, fontSize: 13, lineHeight: 20, marginVertical: 6 },
-  blockquote: { borderLeftWidth: 3, borderLeftColor: "#6366F1", paddingLeft: 12, marginVertical: 6, opacity: 0.8 },
-  bullet_list: { marginVertical: 2 },
-  ordered_list: { marginVertical: 2 },
-  list_item: { marginVertical: 1, lineHeight: 22 },
-  strong: { fontWeight: "700" as const },
-  em: { fontStyle: "italic" as const },
-  link: { color: "#6366F1", textDecorationLine: "underline" as const },
-};
+// ===== Markdown Renderer (已迁移至 @/components/MarkdownRenderer) =====
 
-function MarkdownContent({ content, isStream }: { content: string; isStream?: boolean }) {
+function MarkdownContent({ content, typewriter = false, variant = "default" as const, isStream }: { content: string; typewriter?: boolean; variant?: "default" | "agent"; isStream?: boolean }) {
   if (!content) return null;
-  if (isStream) {
-    return <Text className="text-sm text-indigo-800 leading-6 flex-shrink flex-wrap">{content}</Text>;
+
+  // 流式渲染中或包含代码块时，不使用打字机效果（直接 Markdown 渲染）
+  if (typewriter && !isStream && !content.includes("```") && !content.includes("`")) {
+    return (
+      <TypewriterText
+        text={content}
+        speed={15}
+        enabled={content.length > 50 && content.length < 2000}
+        className="text-sm leading-6"
+        style={{ color: variant === "agent" ? "#065F46" : "#374151" }}
+      />
+    );
   }
-  return (
-    <Markdown style={mdStyles}>{content}</Markdown>
-  );
+
+  return <MarkdownRenderer content={content} variant={variant} />;
 }
 
 // ===== Skill Picker Modal (flat list from settings) =====
@@ -1302,7 +1295,7 @@ export default function HomeScreen() {
                       <FontAwesome6 name="wand-magic-sparkles" size={13} color="#10B981" />
                     </View>
                     <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink border border-emerald-100/50">
-                      <MarkdownContent content={msg.content} />
+                      <MarkdownContent content={msg.content} variant="agent" typewriter />
                     </View>
                   </View>
                 )}
@@ -1323,13 +1316,13 @@ export default function HomeScreen() {
                   <View className="flex-1">
                     {agentActionStatus ? (
                       <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-emerald-100">
-                        <View className="flex-row items-center gap-2 mb-1">
+                        <View className="flex-row items-center gap-2 mb-2">
                           <ActivityIndicator size="small" color="#10B981" />
                           <Text className="text-sm font-medium text-emerald-700">{agentActionStatus}</Text>
                         </View>
                         {agentStreamContent ? (
                           <View className="mt-2 pt-2 border-t border-emerald-200 max-h-60 overflow-hidden">
-                            <MarkdownContent content={agentStreamContent} isStream />
+                            <MarkdownRenderer content={agentStreamContent} variant="agent" />
                           </View>
                         ) : null}
                       </View>
@@ -1337,7 +1330,7 @@ export default function HomeScreen() {
                       <>
                         {agentStreamContent ? (
                           <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 border border-emerald-100 flex-shrink">
-                            <MarkdownContent content={agentStreamContent} isStream />
+                            <MarkdownRenderer content={agentStreamContent} variant="agent" />
                           </View>
                         ) : (
                           <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3">
@@ -1367,11 +1360,11 @@ export default function HomeScreen() {
                   </View>
                   {msg.step === "welcome" ? (
                     <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
-                      <MarkdownContent content={msg.content} />
+                      <MarkdownContent content={msg.content} variant="default" />
                     </View>
                   ) : (
                     <View className="bg-gray-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink">
-                      <MarkdownContent content={msg.content} />
+                      <MarkdownContent content={msg.content} variant="default" typewriter />
                     </View>
                   )}
                 </View>
