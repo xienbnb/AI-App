@@ -23,7 +23,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
 
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
-import { TypewriterText } from "@/components/TypewriterText";
 
 const API_BASE =
   process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
@@ -168,19 +167,8 @@ function ConfirmModal({ visible, title, message, confirmText = "确认", confirm
 function MarkdownContent({ content, typewriter = false, variant = "default" as const, isStream }: { content: string; typewriter?: boolean; variant?: "default" | "agent"; isStream?: boolean }) {
   if (!content) return null;
 
-  // 流式渲染中或包含代码块时，不使用打字机效果（直接 Markdown 渲染）
-  if (typewriter && !isStream && !content.includes("```") && !content.includes("`")) {
-    return (
-      <TypewriterText
-        text={content}
-        speed={15}
-        enabled={content.length > 50 && content.length < 2000}
-        className="text-sm leading-6"
-        style={{ color: variant === "agent" ? "#065F46" : "#374151" }}
-      />
-    );
-  }
-
+  // 统一使用 MarkdownRenderer 渲染，确保代码块/粗体/列表等格式正确解析
+  // 流式渲染时 Markdown 组件也能实时展示增量内容
   return <MarkdownRenderer content={content} variant={variant} />;
 }
 

@@ -292,3 +292,16 @@ export const systemSettings = pgTable("system_settings", {
 	value: jsonb("value").notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
+
+export const chapters = pgTable("chapters", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	bookId: uuid("book_id").notNull().references(() => books.id, { onDelete: "cascade" }),
+	volumeId: uuid("volume_id"),
+	title: text().notNull().default(''),
+	content: text().notNull().default(''),
+	chapterNumber: integer("chapter_number").notNull().default(1),
+	status: text().notNull().default('草稿'),
+	wordCount: integer("word_count").notNull().default(0),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
