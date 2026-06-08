@@ -1,9 +1,9 @@
 import { Router, type Request, type Response } from "express";
-import { LLMClient, Config, HeaderUtils } from "coze-coding-dev-sdk";
 import { db } from "../storage/database/client.js";
 import { users, books, outlines, userSettings, agentConversations } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
 import { findTool, getToolsSystemPrompt, getBookInfo, type ToolResult } from "../utils/agent-tools.js";
+import { createProvider } from "../utils/ai-provider.js";
 
 const router = Router();
 
@@ -78,32 +78,6 @@ function detectToolCall(text: string): { tool: string; args: Record<string, any>
   }
 
   return null;
-}
-
-/**
- * 获取用户的 LLM 客户端（含自定义模型配置）
- */
-function getUserLLMClient(userId: string): LLMClient {
-  const config = new Config();
-  return new LLMClient(config);
-}
-
-/**
- * 获取用户的首选模型
- */
-async function getUserPreferredModel(userId: string): Promise<string> {
-  try {
-    const [userRow] = await db
-      .select({ aiSettings: users.aiSettings })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    if (userRow?.aiSettings && typeof userRow.aiSettings === "object") {
-      const settings = userRow.aiSettings as Record<string, any>;
-      if (settings.aiModel) return settings.aiModel;
-    }
-  } catch {}
-  return "doubao-seed-2-0-pro-260215";
 }
 
 // ============================================================
@@ -285,8 +259,7 @@ router.post("/execute", async (req: Request, res: Response) => {
     }
 
     // ---- 6. Agent 主循环 ----
-    const selectedModel = model || (await getUserPreferredModel(userId));
-    const llmClient = getUserLLMClient(userId);
+    const provider = await createProvider(userId);
     let toolRound = 0;
     let fullResponse = "";
 
@@ -295,8 +268,8 @@ router.post("/execute", async (req: Request, res: Response) => {
       let currentResponse = "";
 
       // 流式调用 LLM
-      const stream = llmClient.stream(llmMessages, {
-        model: selectedModel,
+      const stream = provider.generateStream(llmMessages, {
+        model: model || provider.defaultModel,
         temperature: 0.8,
       });
 

@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { getLLMClient, getUserLLMClient } from "../utils/ai-client.js";
+import { createProvider } from "../utils/ai-provider.js";
 import type { LLMConfig } from "coze-coding-dev-sdk";
 import multer from "multer";
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
@@ -179,7 +179,7 @@ router.post("/ai-generate", quotaMiddleware('book_generate'), async (req: Reques
     const { topic } = req.body;
     if (!topic) return res.status(400).json({ success: false, error: "请输入创作主题" });
 
-    const client = await getUserLLMClient(userId);
+    const provider = await createProvider(userId);
     const prompt = `你是一位资深网文作家。根据用户提供的主题"${topic}"，创作一部完整的小说方案。
 
 请严格按照以下JSON格式返回，不要包含任何其他文字：
@@ -200,7 +200,7 @@ router.post("/ai-generate", quotaMiddleware('book_generate'), async (req: Reques
   "outline": "全书大纲（Markdown格式，包含故事背景、主要角色、剧情主线）"
 }`;
 
-    const stream = client.stream(
+    const stream = provider.generateStream(
       [{ role: "user", content: prompt }],
       { model: await getUserAiModel(userId), temperature: 0.9 }
     );
@@ -792,7 +792,7 @@ router.post("/ai-dialogue", quotaMiddleware('ai_chat'), async (req: Request, res
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = await getUserLLMClient(userId);
+  const provider = await createProvider(userId);
   let fullContent = "";
 
   try {
@@ -915,7 +915,7 @@ router.post("/ai-dialogue", quotaMiddleware('ai_chat'), async (req: Request, res
       // 静默回退到默认模型
     }
 
-    const stream = client.stream(
+    const stream = provider.generateStream(
       msgs,
       { model: aiModel, temperature: 0.8 }
     );
@@ -1030,7 +1030,7 @@ router.post("/generate-outline", quotaMiddleware('outline_generate'), async (req
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = await getUserLLMClient(userId);
+  const provider = await createProvider(userId);
 
   try {
     const prompt = `你是一位资深网文创作顾问。用户计划创作一部小说，基本信息如下：
@@ -1072,7 +1072,7 @@ xxx
 第1章：章名 - 内容概要
 ...`;
 
-    const stream = client.stream(
+    const stream = provider.generateStream(
       [{ role: "system", content: "你是一个专业的网文大纲生成专家，擅长根据用户需求生成结构化的小说大纲。" },
        { role: "user", content: prompt }],
       { model: await getUserAiModel(userId), temperature: 0.8 }
@@ -1186,7 +1186,7 @@ router.post("/generate", quotaMiddleware('content_generate'), async (req: Reques
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = await getUserLLMClient(userId);
+  const provider = await createProvider(userId);
 
   try {
     let systemPrompt = "你是一个专业的网络小说写作助手，擅长创作精彩的小说内容。";
@@ -1219,7 +1219,7 @@ router.post("/generate", quotaMiddleware('content_generate'), async (req: Reques
       return;
     }
 
-    const stream = client.stream(
+    const stream = provider.generateStream(
       [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
       { model: await getUserAiModel(userId), temperature: 0.9 }
     );
@@ -1252,7 +1252,7 @@ router.post("/generate-details", quotaMiddleware('details_generate'), async (req
   res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
   res.setHeader("Connection", "keep-alive");
 
-  const client = await getUserLLMClient(userId);
+  const provider = await createProvider(userId);
 
   try {
     const chapterList = volumes?.map((v: any) =>
@@ -1278,7 +1278,7 @@ ${chapterList || outline || ""}
 【简介】xxx（不要用markdown格式，纯文字）
 【封面描述】xxx（英文）`;
 
-    const stream = client.stream(
+    const stream = provider.generateStream(
       [{ role: "system", content: "你是一个专业的小说出版顾问，擅长为小说起名、写简介和设计封面。" },
        { role: "user", content: prompt }],
       { model: await getUserAiModel(userId), temperature: 0.8 }

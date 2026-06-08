@@ -1,6 +1,6 @@
 import { db } from "../storage/database/client.js";
-import { books, outlines, userSettings } from "../storage/database/shared/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { books, outlines, userSettings, chapters } from "../storage/database/shared/schema.js";
+import { eq, desc, asc, sql } from "drizzle-orm";
 
 // ============================================================
 // Agent 工具函数
@@ -10,12 +10,6 @@ export interface ToolResult {
   success: boolean;
   data: any;
   message: string;
-}
-
-/** 统一获取 supabase client（避免动态 import 报错） */
-async function getSupabase() {
-  const mod = await import("../storage/database/supabase-client.js");
-  return mod.getSupabaseClient();
 }
 
 // ============================================================
@@ -213,15 +207,21 @@ export async function createVolume(bookId: string, title: string): Promise<ToolR
 // ============================================================
 export async function getChapters(bookId: string): Promise<ToolResult> {
   try {
-    const sb = await getSupabase();
-    const { data, error } = await sb
-      .from("chapters")
-      .select("id, title, chapter_number, volume_id, word_count, status, created_at")
-      .eq("book_id", bookId)
-      .order("chapter_number", { ascending: true });
+    const data = await db
+      .select({
+        id: chapters.id,
+        title: chapters.title,
+        chapterNumber: chapters.chapterNumber,
+        volumeId: chapters.volumeId,
+        wordCount: chapters.wordCount,
+        status: chapters.status,
+        createdAt: chapters.createdAt,
+      })
+      .from(chapters)
+      .where(eq(chapters.bookId, bookId as any))
+      .orderBy(asc(chapters.chapterNumber));
 
-    if (error) throw error;
-    if (!data || data.length === 0) {
+    if (data.length === 0) {
       return { success: true, data: [], message: "该书籍还没有章节" };
     }
 
@@ -241,41 +241,42 @@ export async function createChapter(
   content: string,
 ): Promise<ToolResult> {
   try {
-    const sb = await getSupabase();
-    const { data: maxChapter } = await sb
-      .from("chapters")
-      .select("chapter_number")
-      .eq("book_id", bookId)
-      .order("chapter_number", { ascending: false })
+    // 获取最大章节号
+    const [maxRow] = await db
+      .select({ maxNum: sql<number>`MAX(${chapters.chapterNumber})` })
+      .from(chapters)
+      .where(eq(chapters.bookId, bookId as any))
       .limit(1);
 
-    const chapterNumber = (maxChapter && maxChapter[0]?.chapter_number) ? maxChapter[0].chapter_number + 1 : 1;
+    const chapterNumber = (maxRow?.maxNum || 0) + 1;
     const now = new Date().toISOString();
 
-    const { data, error } = await sb
-      .from("chapters")
-      .insert({
-        book_id: bookId,
-        volume_id: volumeId,
+    const [data] = await db
+      .insert(chapters)
+      .values({
+        bookId: bookId as any,
+        volumeId: volumeId as any,
         title,
         content,
-        chapter_number: chapterNumber,
+        chapterNumber,
         status: "草稿",
-        word_count: content.length,
-        created_at: now,
-        updated_at: now,
+        wordCount: content.length,
+        createdAt: now,
+        updatedAt: now,
       })
-      .select()
-      .single();
+      .returning({
+        id: chapters.id,
+        title: chapters.title,
+        chapterNumber: chapters.chapterNumber,
+        wordCount: chapters.wordCount,
+      });
 
-    if (error) throw error;
-
-    // 更新书籍字数
+    // 更新书籍字数 & 章节数
     await db
       .update(books)
       .set({
-        chapterCount: (await import("drizzle-orm")).sql`chapter_count + 1`,
-        wordCount: (await import("drizzle-orm")).sql`word_count + ${content.length}`,
+        chapterCount: sql`chapter_count + 1`,
+        wordCount: sql`word_count + ${content.length}`,
         updatedAt: now,
       })
       .where(eq(books.id, bookId as any));
@@ -295,20 +296,26 @@ export async function createChapter(
 // ============================================================
 export async function readChapter(chapterId: string): Promise<ToolResult> {
   try {
-    const sb = await getSupabase();
-    const { data, error } = await sb
-      .from("chapters")
-      .select("id, title, content, chapter_number, book_id, status, word_count")
-      .eq("id", chapterId)
-      .single();
+    const [chapter] = await db
+      .select({
+        id: chapters.id,
+        title: chapters.title,
+        content: chapters.content,
+        chapterNumber: chapters.chapterNumber,
+        bookId: chapters.bookId,
+        status: chapters.status,
+        wordCount: chapters.wordCount,
+      })
+      .from(chapters)
+      .where(eq(chapters.id, chapterId))
+      .limit(1);
 
-    if (error) throw error;
-    if (!data) return { success: false, data: null, message: "章节不存在" };
+    if (!chapter) return { success: false, data: null, message: "章节不存在" };
 
     return {
       success: true,
-      data,
-      message: `第${data.chapter_number}章《${data.title}》(${data.word_count}字)`,
+      data: chapter,
+      message: `第${chapter.chapterNumber}章《${chapter.title}》(${chapter.wordCount}字)`,
     };
   } catch (err: any) {
     return { success: false, data: null, message: `读取章节失败: ${err.message}` };
@@ -323,32 +330,39 @@ export async function continueChapter(
   newContent: string,
 ): Promise<ToolResult> {
   try {
-    // 读取当前章节内容
-    const supabase = getSupabaseClient();
-    const { data: chapter, error: readError } = await supabase
-      .from("chapters")
-      .select("id, title, content, book_id, word_count")
-      .eq("id", chapterId)
-      .single();
+    // 读取当前章节
+    const [chapter] = await db
+      .select({
+        id: chapters.id,
+        title: chapters.title,
+        content: chapters.content,
+        bookId: chapters.bookId,
+        wordCount: chapters.wordCount,
+      })
+      .from(chapters)
+      .where(eq(chapters.id, chapterId as any))
+      .limit(1);
 
-    if (readError || !chapter) {
+    if (!chapter) {
       return { success: false, data: null, message: "章节不存在" };
     }
 
-    // 拼接新内容
     const updatedContent = (chapter.content || "") + "\n\n" + newContent;
     const newWordCount = updatedContent.length;
+    const now = new Date().toISOString();
 
-    const { error: updateError } = await supabase
-      .from("chapters")
-      .update({ content: updatedContent, word_count: newWordCount, updated_at: new Date().toISOString() })
-      .eq("id", chapterId);
-
-    if (updateError) throw updateError;
+    await db
+      .update(chapters)
+      .set({
+        content: updatedContent,
+        wordCount: newWordCount,
+        updatedAt: now,
+      })
+      .where(eq(chapters.id, chapterId as any));
 
     return {
       success: true,
-      data: { id: chapterId, word_count: newWordCount },
+      data: { id: chapterId, wordCount: newWordCount },
       message: `续写完成，章节总字数 ${newWordCount} 字`,
     };
   } catch (err: any) {
