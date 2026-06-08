@@ -278,6 +278,17 @@ router.post("/execute", async (req: Request, res: Response) => {
       // 检测是否有工具调用
       const toolCall = detectToolCall(currentResponse);
 
+      // 如果检测到工具调用，从已 stream 的文本中去除工具调用 JSON
+      if (toolCall) {
+        const cleanText = currentResponse
+          .replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```\s*/g, '')
+          .replace(/\s*\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[\s\S]*?\}\s*\}\s*/g, '')
+          .trim();
+        if (cleanText) {
+          res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
+        }
+      }
+
       if (!toolCall) {
         // 没有工具调用 = LLM 回复完毕
         break;

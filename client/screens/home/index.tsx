@@ -725,6 +725,9 @@ export default function HomeScreen() {
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_start") {
             setAgentActionStatus(`[处理] ${parsed.content || parsed.tool || "处理中..."}`);
+          } else if (parsed.type === "text_replace") {
+            fullContent = parsed.content || "";
+            setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_result") {
             if (parsed.success) {
               setAgentActionStatus(`[完成] ${parsed.tool || parsed.message?.slice(0, 40) || "完成"}`);
