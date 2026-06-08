@@ -302,26 +302,25 @@ router.post("/execute", async (req: Request, res: Response) => {
 
       for await (const chunk of stream) {
         if (chunk.content) {
-          const text = chunk.content.toString();
-          currentResponse += text;
-          // SSE 发送文本块
-          res.write(`data: ${JSON.stringify({ type: "text", content: text })}\n\n`);
+          currentResponse += chunk.content.toString();
         }
       }
 
       fullResponse += currentResponse;
 
-      // 检测是否有工具调用
+      // 检测是否有工具调用，有则切除 JSON 后再发送
       const toolCall = detectToolCall(currentResponse);
+      let displayText = currentResponse;
 
-      // 如果检测到工具调用，从已 stream 的文本中精确去除工具调用 JSON
       if (toolCall) {
         const before = currentResponse.slice(0, toolCall.startIndex);
         const after = currentResponse.slice(toolCall.endIndex);
-        const cleanText = (before + after).trim();
-        if (cleanText) {
-          res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
-        }
+        displayText = (before + after).trim();
+      }
+
+      // 发送干净文本（一次性发送，用户不会看到 JSON）
+      if (displayText) {
+        res.write(`data: ${JSON.stringify({ type: "text", content: displayText })}\n\n`);
       }
 
       if (!toolCall) {
