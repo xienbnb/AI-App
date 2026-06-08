@@ -22,6 +22,7 @@ import * as DocumentPicker from "expo-document-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@/contexts/AuthContext";
 
+import * as Clipboard from "expo-clipboard";
 import { MarkdownRenderer } from "@/components/MarkdownRenderer";
 
 const API_BASE =
@@ -1281,12 +1282,54 @@ export default function HomeScreen() {
             {agentMessages.map((msg, i) => (
               <View key={i} className={`mb-4 ${msg.role === "user" ? "items-end" : "items-start"}`}>
                 {msg.role === "ai" && (
-                  <View className="flex-row gap-2 max-w-[90%]">
-                    <View className="w-8 h-8 rounded-full bg-emerald-100 items-center justify-center mt-1 shrink-0">
-                      <FontAwesome6 name="wand-magic-sparkles" size={13} color="#10B981" />
+                  <View className="max-w-[90%]">
+                    <View className="flex-row gap-2">
+                      <View className="w-8 h-8 rounded-full bg-emerald-100 items-center justify-center mt-1 shrink-0">
+                        <FontAwesome6 name="wand-magic-sparkles" size={13} color="#10B981" />
+                      </View>
+                      <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink border border-emerald-100/50">
+                        <MarkdownContent content={msg.content} variant="agent" typewriter />
+                      </View>
                     </View>
-                    <View className="bg-emerald-50 rounded-2xl rounded-tl-sm px-4 py-3 flex-shrink border border-emerald-100/50">
-                      <MarkdownContent content={msg.content} variant="agent" typewriter />
+                    {/* Action Buttons */}
+                    <View className="flex-row gap-2 ml-10 mt-1.5">
+                      <TouchableOpacity
+                        className="flex-row items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-50 active:bg-gray-100"
+                        onPress={async () => {
+                          try {
+                            await Clipboard.setStringAsync(msg.content);
+                            // brief visual feedback handled by the button press
+                          } catch {}
+                        }}
+                      >
+                        <FontAwesome6 name="copy" size={11} color="#9CA3AF" />
+                        <Text className="text-xs text-gray-400">复制</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-row items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-50 active:bg-gray-100"
+                        onPress={() => {
+                          setInputText("请继续");
+                          // auto-focus handled by the send button
+                        }}
+                      >
+                        <FontAwesome6 name="arrow-rotate-right" size={11} color="#9CA3AF" />
+                        <Text className="text-xs text-gray-400">追问</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        className="flex-row items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-50 active:bg-gray-100"
+                        onPress={() => {
+                          // Remove this message and the user message before it, then resend
+                          const userMsg = agentMessages[i - 1];
+                          if (userMsg && userMsg.role === "user") {
+                            const newMsgs = agentMessages.slice(0, i - 1);
+                            setAgentMessages(newMsgs);
+                            setInputText(userMsg.content);
+                          }
+                        }}
+                      >
+                        <FontAwesome6 name="rotate" size={11} color="#9CA3AF" />
+                        <Text className="text-xs text-gray-400">重新生成</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 )}
