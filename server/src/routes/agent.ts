@@ -18,27 +18,63 @@ const MAX_TOOL_ROUNDS = 15;
  * 从 LLM 输出中检测工具调用指令
  * 工具调用格式: ```json\n{"tool": "工具名", "args": {...}}\n```
  */
-function detectToolCall(text: string): { tool: string; args: Record<string, any> } | null {
-  // 匹配 ```json ... ``` 中的工具调用
-  const jsonBlockRegex = /```(?:json)?\s*(\{[\s\S]*?"tool"[\s\S]*?\})\s*```/;
-  const match = text.match(jsonBlockRegex);
-  if (match) {
-    try {
-      const parsed = JSON.parse(match[1]);
-      if (parsed.tool && typeof parsed.tool === "string") {
-        return { tool: parsed.tool, args: parsed.args || {} };
+/**
+ * 通过大括号计数从文本中提取完整的 JSON 对象（支持嵌套）
+ */
+function extractJsonObject(text: string, startIndex: number): { json: string; endIndex: number } | null {
+  let braceCount = 0;
+  let inString = false;
+  let escapeNext = false;
+  for (let i = startIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (ch === '\\') { escapeNext = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') { braceCount++; }
+    else if (ch === '}') {
+      braceCount--;
+      if (braceCount === 0) {
+        return { json: text.slice(startIndex, i + 1), endIndex: i + 1 };
       }
-    } catch {}
+    }
+  }
+  return null;
+}
+
+function detectToolCall(text: string): { tool: string; args: Record<string, any>; rawJson: string; startIndex: number; endIndex: number } | null {
+  // 先找 ```json 代码块
+  const jsonBlockStart = text.indexOf('```json');
+  if (jsonBlockStart !== -1) {
+    const contentStart = text.indexOf('{', jsonBlockStart);
+    if (contentStart !== -1) {
+      const extracted = extractJsonObject(text, contentStart);
+      if (extracted) {
+        try {
+          const parsed = JSON.parse(extracted.json);
+          if (parsed.tool && typeof parsed.tool === 'string') {
+            // 找到代码块结束位置
+            const blockEnd = text.indexOf('```', extracted.endIndex);
+            const realEnd = blockEnd !== -1 ? blockEnd + 3 : extracted.endIndex;
+            return { tool: parsed.tool, args: parsed.args || {}, rawJson: text.slice(jsonBlockStart, realEnd), startIndex: jsonBlockStart, endIndex: realEnd };
+          }
+        } catch {}
+      }
+    }
   }
 
-  // 也尝试直接匹配裸 JSON
-  const bareRegex = /\{\s*"tool"\s*:\s*"([^"]+)"\s*,\s*"args"\s*:\s*(\{[\s\S]*?\})\s*\}/;
-  const bareMatch = text.match(bareRegex);
-  if (bareMatch) {
-    try {
-      const args = JSON.parse(bareMatch[2]);
-      return { tool: bareMatch[1], args };
-    } catch {}
+  // 再找裸 JSON（以 {"tool": 开头）
+  const toolIdx = text.indexOf('{"tool"');
+  if (toolIdx !== -1) {
+    const extracted = extractJsonObject(text, toolIdx);
+    if (extracted) {
+      try {
+        const parsed = JSON.parse(extracted.json);
+        if (parsed.tool && typeof parsed.tool === 'string') {
+          return { tool: parsed.tool, args: parsed.args || {}, rawJson: extracted.json, startIndex: toolIdx, endIndex: extracted.endIndex };
+        }
+      } catch {}
+    }
   }
 
   return null;
@@ -278,12 +314,11 @@ router.post("/execute", async (req: Request, res: Response) => {
       // 检测是否有工具调用
       const toolCall = detectToolCall(currentResponse);
 
-      // 如果检测到工具调用，从已 stream 的文本中去除工具调用 JSON
+      // 如果检测到工具调用，从已 stream 的文本中精确去除工具调用 JSON
       if (toolCall) {
-        const cleanText = currentResponse
-          .replace(/```(?:json)?\s*\{[\s\S]*?\}\s*```\s*/g, '')
-          .replace(/\s*\{\s*"tool"\s*:\s*"[^"]+"\s*,\s*"args"\s*:\s*\{[\s\S]*?\}\s*\}\s*/g, '')
-          .trim();
+        const before = currentResponse.slice(0, toolCall.startIndex);
+        const after = currentResponse.slice(toolCall.endIndex);
+        const cleanText = (before + after).trim();
         if (cleanText) {
           res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
         }
