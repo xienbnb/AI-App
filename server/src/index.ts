@@ -44,6 +44,11 @@ app.get('/api/v1/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// 数据库导出文件下载
+app.get('/api/v1/migration/download', (req, res) => {
+  res.download('/workspace/projects/server/database-full-export.sql', 'database-export.sql');
+});
+
 // Routes
 app.use('/api/v1/writing', authMiddleware, writingRouter);
 app.use('/api/v1/ai', optionalAuthMiddleware, quotaMiddleware('ai_generate'), aiRouter);
