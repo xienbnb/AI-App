@@ -74,10 +74,12 @@ router.post("/register", async (req: Request, res: Response) => {
     const authUserId = authData.user.id;
 
     // 在 users 表中创建记录
+    const userIp = req.ip || req.socket.remoteAddress || "";
     const [newUser] = await db.insert(users).values({
       id: authUserId,
       email,
       nickname: nickname || email.split("@")[0],
+      ipAddress: userIp,
     }).returning();
 
     res.json({
@@ -126,6 +128,10 @@ router.post("/password-login", async (req: Request, res: Response) => {
       res.status(401).json({ error: "密码错误" });
       return;
     }
+
+    // 更新登录IP
+    const userIp = req.ip || req.socket.remoteAddress || "";
+    db.update(users).set({ ipAddress: userIp }).where(eq(users.id, user.id)).catch(() => {});
 
     // 生成 token
     const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
@@ -241,10 +247,12 @@ router.post("/login", async (req: Request, res: Response) => {
 
     if (!user) {
       // 如果 users 表中没有记录，自动创建
+      const userIp = req.ip || req.socket.remoteAddress || "";
       const [newUser] = await db.insert(users).values({
         id: data.user.id,
         email: data.user.email || email,
         nickname: data.user.email?.split("@")[0] || email.split("@")[0],
+        ipAddress: userIp,
       }).returning();
 
       res.json({
@@ -260,6 +268,10 @@ router.post("/login", async (req: Request, res: Response) => {
       });
       return;
     }
+
+    // 更新登录用户的IP地址（不阻塞响应）
+    const userIp = req.ip || req.socket.remoteAddress || "";
+    db.update(users).set({ ipAddress: userIp }).where(eq(users.id, user.id)).catch(() => {});
 
     res.json({
       token: data.session.access_token,
@@ -411,7 +423,6 @@ router.post("/guest", async (_req: Request, res: Response) => {
       avatar: "",
       bio: "游客用户",
       role: "guest",
-      lastActiveAt: new Date().toISOString(),
     }).returning();
 
     // 生成带过期时间的 guest token（格式：guest_<uuid>_<expiresAt>）
@@ -510,6 +521,10 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
     const [existingUser] = await db.select().from(users).where(eq(users.email, phone));
 
     if (existingUser) {
+      // 更新登录IP
+      const userIp = req.ip || req.socket.remoteAddress || "";
+      db.update(users).set({ ipAddress: userIp }).where(eq(users.id, existingUser.id)).catch(() => {});
+
       // 生成带过期时间的 phone token（格式：phone_<userId>_<expiresAt>）
       const phoneToken = `phone_${existingUser.id}_${expiresAt}`;
       res.json({
@@ -529,10 +544,12 @@ router.post("/verify-otp", async (req: Request, res: Response) => {
 
     // 创建新用户
     const userId = crypto.randomUUID();
+    const userIp = req.ip || req.socket.remoteAddress || "";
     const [newUser] = await db.insert(users).values({
       id: userId,
       email: phone,
       nickname: `用户${phone.slice(-4)}`,
+      ipAddress: userIp,
     }).returning();
 
     const phoneToken = `phone_${userId}_${expiresAt}`;

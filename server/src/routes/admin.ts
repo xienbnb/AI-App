@@ -93,6 +93,7 @@ router.get("/users", async (req, res) => {
       vipLevel: users.vipLevel,
       createdAt: users.createdAt,
       lastActiveDate: users.lastActiveDate,
+      ipAddress: users.ipAddress,
     })
       .from(users)
       .leftJoin(userVips, eq(users.id, userVips.userId))

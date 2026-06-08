@@ -282,13 +282,14 @@ export default function AdminScreen() {
     } catch { Alert.alert("错误", "请求失败"); }
   };
 
-  const handleSetVip = async (userId: string, months: number) => {
+  const handleSetVip = async (userId: string, plan: 'monthly' | 'yearly') => {
     try {
+      const days = plan === 'yearly' ? 365 : 30;
       const res = await fetch(`${API_BASE}/api/v1/admin/users/${userId}/vip`, {
         method: "PATCH", headers: headers(),
-        body: JSON.stringify({ months }),
+        body: JSON.stringify({ planType: plan, days }),
       });
-      if (res.ok) { Alert.alert("成功", `已设置VIP ${months} 个月`); fetchUsers(userPage, userSearch); }
+      if (res.ok) { Alert.alert("成功", `已设置${plan === 'yearly' ? '年卡' : '月卡'}`); fetchUsers(userPage, userSearch); }
       else { const d = await res.json(); Alert.alert("错误", d.error || "操作失败"); }
     } catch { Alert.alert("错误", "请求失败"); }
   };
@@ -488,8 +489,9 @@ export default function AdminScreen() {
 
               <View className="flex-row justify-between mt-2">
                 <View><Text className="text-xs text-gray-400">字数</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{user.tokenBalance ?? 0}</Text></View>
-                <View><Text className="text-xs text-gray-400">今日调用</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{user.dailyCalls ?? 0}</Text></View>
-                <View><Text className="text-xs text-gray-400">注册时间</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.createdAt)}</Text></View>
+                <View><Text className="text-xs text-gray-400">调用</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{user.dailyCalls ?? 0}次</Text></View>
+                <View><Text className="text-xs text-gray-400">注册</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.createdAt)}</Text></View>
+                <View><Text className="text-xs text-gray-400">IP</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white" numberOfLines={1}>{user.ipAddress ? user.ipAddress.substring(0, 8) + '...' : '-'}</Text></View>
               </View>
 
               <View className="flex-row gap-2 mt-2">
@@ -501,10 +503,10 @@ export default function AdminScreen() {
                 </TouchableOpacity>
                 {!user.isVip && (
                   <>
-                    <TouchableOpacity className="flex-1 py-2 rounded-xl bg-indigo-500" onPress={() => handleSetVip(user.id, 1)}>
+                    <TouchableOpacity className="flex-1 py-2 rounded-xl bg-indigo-500" onPress={() => handleSetVip(user.id, 'monthly')}>
                       <Text className="text-white text-center text-xs font-medium">月VIP</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity className="flex-1 py-2 rounded-xl bg-purple-500" onPress={() => handleSetVip(user.id, 12)}>
+                    <TouchableOpacity className="flex-1 py-2 rounded-xl bg-purple-500" onPress={() => handleSetVip(user.id, 'yearly')}>
                       <Text className="text-white text-center text-xs font-medium">年VIP</Text>
                     </TouchableOpacity>
                   </>
@@ -914,6 +916,7 @@ export default function AdminScreen() {
                     <InfoRow label="邮箱" value={detailUser.email || '-'} />
                     <InfoRow label="昵称" value={detailUser.nickname || '-'} />
                     <InfoRow label="角色" value={detailUser.role || 'user'} />
+                    <InfoRow label="IP地址" value={detailUser.ipAddress || '-'} />
                   </View>
                 </View>
 
