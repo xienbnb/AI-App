@@ -97,3 +97,6 @@ expo-env.d.ts
 *.tsbuildinfo
 node-compile-cache/
 .preview
+# 数据库导出文件（已导入不需要提交）
+database-full-export.sql
+database-export.sql

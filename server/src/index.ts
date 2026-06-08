@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import { ZodError } from "zod";
@@ -42,11 +43,6 @@ app.use((req, _res, next) => {
 app.get('/api/v1/health', (req, res) => {
   console.log('Health check success');
   res.status(200).json({ status: 'ok' });
-});
-
-// 数据库导出文件下载
-app.get('/api/v1/migration/download', (req, res) => {
-  res.download('/workspace/projects/server/database-full-export.sql', 'database-export.sql');
 });
 
 // Routes

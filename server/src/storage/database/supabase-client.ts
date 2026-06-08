@@ -71,14 +71,22 @@ except Exception as e:
 function getSupabaseCredentials(): SupabaseCredentials {
   loadEnv();
 
+  // 优先使用自定义 Supabase 配置（用户自有项目）
+  const customUrl = process.env.SUPABASE_URL;
+  const customAnonKey = process.env.SUPABASE_ANON_KEY;
+  if (customUrl && customAnonKey) {
+    return { url: customUrl, anonKey: customAnonKey };
+  }
+
+  // 回退到 Coze 托管的 Supabase
   const url = process.env.COZE_SUPABASE_URL;
   const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
 
   if (!url) {
-    throw new Error('COZE_SUPABASE_URL is not set');
+    throw new Error('SUPABASE_URL or COZE_SUPABASE_URL is not set');
   }
   if (!anonKey) {
-    throw new Error('COZE_SUPABASE_ANON_KEY is not set');
+    throw new Error('SUPABASE_ANON_KEY or COZE_SUPABASE_ANON_KEY is not set');
   }
 
   return { url, anonKey };
@@ -86,7 +94,7 @@ function getSupabaseCredentials(): SupabaseCredentials {
 
 function getSupabaseServiceRoleKey(): string | undefined {
   loadEnv();
-  return process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
 }
 
 function getSupabaseClient(token?: string): SupabaseClient {
