@@ -21,9 +21,8 @@ interface DashboardData {
 
 interface User {
   id: string; phone: string; nickname: string | null;
-  tokenBalance: number; isVip: boolean; vipExpiresAt: string | null;
-  role: string | null; bannedAt: string | null; createdAt: string;
-  dailyCalls: number; email?: string;
+  tokenBalance: number; isVip: boolean; dailyCalls: number;
+  createdAt: string; email?: string; role: string;
 }
 
 interface RedeemCode {
@@ -218,12 +217,27 @@ export default function AdminScreen() {
 
   // ==================== Lifecycle ====================
 
+  // token 加载完成后自动拉取数据
+  useEffect(() => {
+    if (!token) return;
+    (async () => {
+      setLoading(true);
+      await Promise.all([fetchDashboard(), fetchUsers(1), fetchCodes(1), fetchPosts(1), fetchBills(1), fetchSettings()]);
+      setLoading(false);
+    })();
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 页面聚焦时刷新（token 就绪后）
   useFocusEffect(
     useCallback(() => {
-      if (!token) return; // 等待 token 加载完成
-      setLoading(true);
-      Promise.all([fetchDashboard(), fetchUsers(1), fetchCodes(1), fetchPosts(1), fetchBills(1), fetchSettings()])
-        .finally(() => setLoading(false));
+      if (token) {
+        fetchDashboard();
+        fetchUsers(userPage, userSearch);
+        fetchCodes(codePage);
+        fetchPosts(postPage);
+        fetchBills(billPage, billType);
+        fetchSettings();
+      }
     }, [token, fetchDashboard, fetchUsers, fetchCodes, fetchPosts, fetchBills, fetchSettings])
   );
 
@@ -441,7 +455,7 @@ export default function AdminScreen() {
                       <Text className="text-xs text-purple-600 dark:text-purple-300 font-medium">VIP</Text>
                     </View>
                   )}
-                  {user.bannedAt && (
+                  {user.role === 'banned' && (
                     <View className="bg-red-100 dark:bg-red-900 px-2 py-0.5 rounded-full">
                       <Text className="text-xs text-red-600 dark:text-red-300 font-medium">封禁</Text>
                     </View>
@@ -457,10 +471,10 @@ export default function AdminScreen() {
 
               <View className="flex-row gap-2 mt-2">
                 <TouchableOpacity
-                  className={`flex-1 py-2 rounded-xl ${user.bannedAt ? "bg-emerald-500" : "bg-red-500"}`}
-                  onPress={() => handleBanUser(user.id, !!user.bannedAt)}
+                  className={`flex-1 py-2 rounded-xl ${user.role === 'banned' ? "bg-emerald-500" : "bg-red-500"}`}
+                  onPress={() => handleBanUser(user.id, user.role === 'banned')}
                 >
-                  <Text className="text-white text-center text-xs font-medium">{user.bannedAt ? "解封" : "封禁"}</Text>
+                  <Text className="text-white text-center text-xs font-medium">{user.role === 'banned' ? "解封" : "封禁"}</Text>
                 </TouchableOpacity>
                 {!user.isVip && (
                   <>

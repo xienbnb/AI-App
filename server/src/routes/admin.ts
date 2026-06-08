@@ -3,7 +3,7 @@ import { db } from "../storage/database/client.js";
 import { users, adminUsers, redeemCodes, redeemLogs, usageRecords, billingRecords, userVips, posts, comments } from "../storage/database/shared/schema.js";
 import { requireAdmin } from "../middleware/admin.js";
 import { authMiddleware } from "../middleware/auth.js";
-import { eq, desc, count, sql, and, gte, lte } from "drizzle-orm";
+import { eq, desc, count, sql, and, gte, lte, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -32,12 +32,24 @@ router.get("/dashboard", async (req, res) => {
       .from(userVips)
       .where(sql`${userVips.planType} != 'free'`);
 
+    const [totalPosts] = await db.select({ value: count() }).from(posts);
+
+    const [activeCodes] = await db.select({ value: count() })
+      .from(redeemCodes)
+      .where(and(eq(redeemCodes.isActive, true), sql`${redeemCodes.usesLeft} > 0`));
+
+    const [usedCodes] = await db.select({ value: count() })
+      .from(redeemLogs);
+
     res.json({
       totalUsers: Number(totalUsers.value),
       todayNewUsers: Number(todayUsers.value),
+      totalPosts: Number(totalPosts.value),
       totalCalls: Number(totalCalls.value),
       todayCalls: Number(todayCalls.value),
       vipUsers: Number(vipUsers.value),
+      activeCodes: Number(activeCodes.value),
+      usedCodes: Number(usedCodes.value),
     });
   } catch (err: any) {
     console.error("[ADMIN] Dashboard error:", err);
@@ -54,6 +66,7 @@ router.get("/users", async (req, res) => {
     const keyword = req.query.keyword as string;
     const vipStatus = req.query.vip as string;
     const offset = (page - 1) * limit;
+    const today = new Date().toISOString().split('T')[0];
 
     const conditions = [];
     if (keyword) {
@@ -88,14 +101,45 @@ router.get("/users", async (req, res) => {
       .limit(limit)
       .offset(offset);
 
+    // 获取每条用户使用记录统计（每日调用次数）
+    const userIds = userList.map(u => u.id);
+    let dailyCallsMap: Record<string, number> = {};
+    if (userIds.length > 0) {
+      const dailyCalls = await db.select({
+        userId: usageRecords.userId,
+        value: count(),
+      })
+        .from(usageRecords)
+        .where(and(
+          inArray(usageRecords.userId, userIds),
+          gte(usageRecords.createdAt, today),
+        ))
+        .groupBy(usageRecords.userId);
+      dailyCallsMap = Object.fromEntries(dailyCalls.map(r => [r.userId, Number(r.value)]));
+    }
+
+    const data = userList.map(u => ({
+      id: u.id,
+      phone: u.phone,
+      email: u.email,
+      nickname: u.nickname,
+      avatar: u.avatar,
+      role: u.role,
+      isVip: u.planType !== null && u.planType !== 'free',
+      vipExpiresAt: null,
+      tokenBalance: u.tokenBalance ?? 0,
+      dailyCalls: dailyCallsMap[u.id] || 0,
+      createdAt: u.createdAt,
+    }));
+
     res.json({
       total: Number(totalResult.value),
       page,
       limit,
-      data: userList,
+      data,
     });
   } catch (err: any) {
-    console.error("[ADMIN] Users list error:", err);
+    console.error("[ADMIN] Users list error:", err?.message, err?.stack, JSON.stringify(err));
     res.status(500).json({ error: "获取用户列表失败" });
   }
 });
