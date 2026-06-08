@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity, Modal,
+  View, Text, Image, ScrollView, TouchableOpacity, Modal,
   TextInput, Alert, RefreshControl, ActivityIndicator, Platform,
 } from "react-native";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
@@ -23,6 +23,7 @@ interface User {
   id: string; phone: string; nickname: string | null;
   tokenBalance: number; isVip: boolean; dailyCalls: number;
   createdAt: string; email?: string; role: string;
+  vipExpiresAt?: string | null; avatar?: string;
 }
 
 interface RedeemCode {
@@ -65,6 +66,21 @@ function formatDateTime(dateStr: string | null) {
   if (!dateStr) return "-";
   const d = new Date(dateStr);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatToken(v: number | undefined | null) {
+  if (v == null) return "0";
+  if (v >= 10000) return (v / 10000).toFixed(1) + "万";
+  return v.toLocaleString();
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View className="flex-row justify-between items-center py-2.5 border-b border-gray-100 dark:border-gray-700">
+      <Text className="text-sm text-gray-500 dark:text-gray-400">{label}</Text>
+      <Text className="text-sm font-medium text-gray-900 dark:text-white text-right flex-1 ml-4">{value}</Text>
+    </View>
+  );
 }
 
 // ==================== Components ====================
@@ -128,6 +144,8 @@ export default function AdminScreen() {
   const [userPage, setUserPage] = useState(1);
   const [userTotal, setUserTotal] = useState(0);
   const [userSearch, setUserSearch] = useState("");
+  const [detailUser, setDetailUser] = useState<User | null>(null);
+  const [showUserDetail, setShowUserDetail] = useState(false);
 
   // Redeem
   const [codes, setCodes] = useState<RedeemCode[]>([]);
@@ -433,40 +451,45 @@ export default function AdminScreen() {
       ) : (
         <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
           {users.map((user) => (
-            <View key={user.id}
+            <TouchableOpacity key={user.id}
               className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3"
               style={{ shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 }}
+              activeOpacity={0.7} onPress={() => { setDetailUser(user); setShowUserDetail(true); }}
             >
               <View className="flex-row items-center justify-between mb-2">
-                <View className="flex-row items-center">
+                <View className="flex-row items-center flex-1">
                   <View className="w-9 h-9 rounded-full bg-indigo-100 dark:bg-indigo-900 items-center justify-center">
                     <FontAwesome6 name="user" size={14} color="#4F46E5" />
                   </View>
-                  <View className="ml-3">
-                    <Text className="text-sm font-semibold text-gray-900 dark:text-white">
+                  <View className="ml-3 flex-1">
+                    <Text className="text-sm font-semibold text-gray-900 dark:text-white" numberOfLines={1}>
                       {user.nickname || "未设置昵称"}
                     </Text>
-                    <Text className="text-xs text-gray-500">{user.phone || "-"}</Text>
+                    <Text className="text-xs text-gray-500">{user.phone || user.email || "-"}</Text>
                   </View>
                 </View>
                 <View className="flex-row items-center gap-1">
-                  {user.isVip && (
-                    <View className="bg-purple-100 dark:bg-purple-900 px-2 py-0.5 rounded-full">
-                      <Text className="text-xs text-purple-600 dark:text-purple-300 font-medium">VIP</Text>
-                    </View>
-                  )}
-                  {user.role === 'banned' && (
-                    <View className="bg-red-100 dark:bg-red-900 px-2 py-0.5 rounded-full">
-                      <Text className="text-xs text-red-600 dark:text-red-300 font-medium">封禁</Text>
-                    </View>
-                  )}
+                  <FontAwesome6 name="chevron-right" size={12} color="#D1D5DB" />
                 </View>
               </View>
 
-              <View className="flex-row justify-between mb-2">
+              <View className="flex-row gap-2 mt-2">
+                {user.isVip && (
+                  <View className="bg-purple-100 dark:bg-purple-900 px-2 py-0.5 rounded-full">
+                    <Text className="text-xs text-purple-600 dark:text-purple-300 font-medium">VIP</Text>
+                  </View>
+                )}
+                {user.role === 'banned' && (
+                  <View className="bg-red-100 dark:bg-red-900 px-2 py-0.5 rounded-full">
+                    <Text className="text-xs text-red-600 dark:text-red-300 font-medium">封禁</Text>
+                  </View>
+                )}
+              </View>
+
+              <View className="flex-row justify-between mt-2">
                 <View><Text className="text-xs text-gray-400">字数</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{user.tokenBalance ?? 0}</Text></View>
                 <View><Text className="text-xs text-gray-400">今日调用</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{user.dailyCalls ?? 0}</Text></View>
-                <View><Text className="text-xs text-gray-400">注册</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.createdAt)}</Text></View>
+                <View><Text className="text-xs text-gray-400">注册时间</Text><Text className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(user.createdAt)}</Text></View>
               </View>
 
               <View className="flex-row gap-2 mt-2">
@@ -487,7 +510,7 @@ export default function AdminScreen() {
                   </>
                 )}
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
           <Pagination page={userPage} hasMore={users.length >= 20} onPrev={() => { const p = userPage - 1; setUserPage(p); fetchUsers(p, userSearch); }} onNext={() => { const p = userPage + 1; setUserPage(p); fetchUsers(p, userSearch); }} />
         </ScrollView>
@@ -847,6 +870,74 @@ export default function AdminScreen() {
           </ScrollView>
         )}
       </View>
+
+      {/* 用户详情弹窗 */}
+      <Modal visible={showUserDetail} transparent animationType="slide" onRequestClose={() => setShowUserDetail(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '80%' }}>
+            {detailUser && (
+              <ScrollView>
+                {/* 头部 */}
+                <View className="flex-row justify-between items-center mb-6">
+                  <Text className="text-xl font-bold text-gray-900">用户详情</Text>
+                  <TouchableOpacity onPress={() => setShowUserDetail(false)}>
+                    <FontAwesome6 name="xmark" size={20} color="#9CA3AF" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* 基本信息 */}
+                <View className="bg-indigo-50 rounded-2xl p-5 mb-4">
+                  <View className="flex-row items-center mb-3">
+                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: detailUser.avatar ? 'transparent' : '#4F46E5', alignItems: 'center', justifyContent: 'center' }}>
+                      {detailUser.avatar ? (
+                        <Image source={{ uri: detailUser.avatar }} style={{ width: 48, height: 48, borderRadius: 24 }} />
+                      ) : (
+                        <Text className="text-white text-lg font-bold">{detailUser.nickname?.[0] || '?'}</Text>
+                      )}
+                    </View>
+                    <View className="ml-4 flex-1">
+                      <Text className="text-lg font-bold text-gray-900">{detailUser.nickname || '未设置'}</Text>
+                      <View className="flex-row items-center mt-1">
+                        {detailUser.isVip && <View className="bg-amber-100 px-2 py-0.5 rounded-full mr-2"><Text className="text-amber-600 text-xs font-medium">VIP</Text></View>}
+                        {detailUser.role === 'banned' && <View className="bg-red-100 px-2 py-0.5 rounded-full"><Text className="text-red-600 text-xs font-medium">已封禁</Text></View>}
+                      </View>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 详细数据 */}
+                <View className="bg-gray-50 rounded-2xl p-5 mb-4">
+                  <Text className="text-sm font-semibold text-gray-500 mb-3">账号信息</Text>
+                  <View className="space-y-3">
+                    <InfoRow label="用户ID" value={detailUser.id?.substring(0, 12) + '...'} />
+                    <InfoRow label="手机号" value={detailUser.phone || '-'} />
+                    <InfoRow label="邮箱" value={detailUser.email || '-'} />
+                    <InfoRow label="昵称" value={detailUser.nickname || '-'} />
+                    <InfoRow label="角色" value={detailUser.role || 'user'} />
+                  </View>
+                </View>
+
+                <View className="bg-gray-50 rounded-2xl p-5 mb-4">
+                  <Text className="text-sm font-semibold text-gray-500 mb-3">资源与权限</Text>
+                  <View className="space-y-3">
+                    <InfoRow label="字数余额" value={formatToken(detailUser.tokenBalance || 0)} />
+                    <InfoRow label="今日调用" value={`${detailUser.dailyCalls || 0} 次`} />
+                    <InfoRow label="VIP状态" value={detailUser.isVip ? '已开通' : '未开通'} />
+                    <InfoRow label="VIP到期" value={detailUser.vipExpiresAt ? formatDateTime(detailUser.vipExpiresAt) : '-'} />
+                  </View>
+                </View>
+
+                <View className="bg-gray-50 rounded-2xl p-5 mb-6">
+                  <Text className="text-sm font-semibold text-gray-500 mb-3">时间信息</Text>
+                  <View className="space-y-3">
+                    <InfoRow label="注册时间" value={formatDateTime(detailUser.createdAt)} />
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
