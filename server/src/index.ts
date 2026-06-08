@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { ZodError } from "zod";
 import writingRouter from "./routes/writing.js";
 import aiRouter from "./routes/ai.js";
 import communityRouter from "./routes/community.js";
@@ -17,6 +16,7 @@ import adminRouter from "./routes/admin.js";
 import { authMiddleware, optionalAuthMiddleware } from "./middleware/auth.js";
 import { quotaMiddleware } from "./middleware/quota.middleware.js";
 import { cleanupGuestUsers } from "./services/cleanup.service.js";
+import { notFoundHandler, errorHandler } from "./middleware/error-handler.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -59,38 +59,11 @@ app.use('/api/v1/billing', authMiddleware, billingRouter);
 app.use('/api/v1/welfare', authMiddleware, welfareRouter);
 app.use('/api/v1/admin', adminRouter);
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: `接口不存在: ${req.method} ${req.path}` });
-});
+// ===== 404 处理器 =====
+app.use(notFoundHandler);
 
-// ===== Global Error Handler =====
-app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error(`[ERROR] ${req.method} ${req.path}:`, err?.message || err);
-
-  // Zod validation errors
-  if (err instanceof ZodError) {
-    return res.status(400).json({
-      error: "参数校验失败",
-      details: err.issues.map((e: any) => ({
-        path: e.path?.join(".") || "",
-        message: e.message,
-      })),
-    });
-  }
-
-  // Known HTTP errors
-  if (err.statusCode) {
-    return res.status(err.statusCode).json({
-      error: err.message || "请求处理失败",
-    });
-  }
-
-  // Default 500
-  res.status(500).json({
-    error: "服务器内部错误",
-  });
-});
+// ===== 全局错误处理器 =====
+app.use(errorHandler);
 
 // ===== 定时任务：清理7天未活动的游客账号 =====
 setInterval(async () => {
