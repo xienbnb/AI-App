@@ -98,7 +98,10 @@ const AGENT_SYSTEM_PROMPT = `你是"创作大师"——小说创作 AI 助手。
 ${getToolsSystemPrompt()}
 
 ## 工作流程
-规划卷结构(create_volume) → 构建世界观(save_world_setting) → 大纲(save_outline) → 编写章节(create_chapter)，每步完成后告知用户。`;
+规划卷结构(create_volume) → 构建世界观(save_world_setting) → 大纲(save_outline) → 编写章节(create_chapter)，每步完成后告知用户。
+
+## 语言要求
+你只能用中文文字回复。所有输出必须为中文，禁止输出英文单词或JSON字段名之类的技术内容。与用户交流使用自然的中文书面语。`;
 
 // ============================================================
 // POST /api/v1/agent/execute — SSE 流式 Agent 执行
@@ -188,9 +191,9 @@ router.post("/execute", async (req: Request, res: Response) => {
 
     // 模式处理
     if (agentMode === "chat") {
-      llmMessages.push({ role: "system", content: "【对话模式】你处于纯对话模式。请直接回答用户的问题，不要输出任何工具调用 JSON。保持自然对话风格。" });
+      llmMessages.push({ role: "system", content: "【对话模式】你处于纯对话模式。请直接回答用户的问题，不要输出任何工具调用 JSON。保持自然对话风格。你只能用中文文字回复，禁止输出英文或技术字段名。" });
     } else if (agentMode === "plan") {
-      llmMessages.push({ role: "system", content: "【计划模式】在回答之前，请先输出一个结构化计划（包含编号步骤），然后在每个步骤完成时标注执行状态。格式：\n\n## 计划\n1. 步骤一...\n2. 步骤二...\n...\n\n然后逐步执行。每完成一步在末尾标注 ✅ 或 ❌。" });
+      llmMessages.push({ role: "system", content: "【计划模式】在回答之前，请先输出一个结构化计划（包含编号步骤），然后在每个步骤完成时标注执行状态。格式：\n\n## 计划\n1. 步骤一...\n2. 步骤二...\n...\n\n然后逐步执行。每完成一步在末尾标注 ✅ 或 ❌。你只能用中文文字回复，禁止输出英文或技术字段名。" });
     }
 
     // 添加上下文（最多保留最近20条）
@@ -326,10 +329,9 @@ router.post("/execute", async (req: Request, res: Response) => {
         const before = currentResponse.slice(0, toolCall.startIndex);
         const after = currentResponse.slice(toolCall.endIndex);
         const cleanText = (before + after).trim();
-        if (cleanText) {
-          // text_replace 会用干净文本替换掉之前流式发送的内容（包括其中的 JSON）
-          res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
-        }
+        // text_replace 会用干净文本替换掉之前流式发送的内容（包括其中的 JSON）
+        // 即使 cleanText 为空也要发送，以清除纯工具调用场景下的 JSON 残留
+        res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
       }
 
       if (!toolCall) {
