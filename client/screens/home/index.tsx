@@ -72,9 +72,9 @@ const PRESET_MODELS = [
   { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", provider: "Anthropic", desc: "安全可控，创意出色" },
   { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", desc: "全能模型，综合表现优秀" },
   // ---- 公益 AI (SiliconFlow) ----
-  { id: "Pro/deepseek-ai/DeepSeek-V3", name: "DeepSeek-V3", provider: "免费", desc: "通用对话，免费使用" },
+  { id: "deepseek-ai/DeepSeek-OCR", name: "DeepSeek-OCR", provider: "免费", desc: "OCR专业，免费使用" },
   { id: "Pro/zai-org/GLM-4.7", name: "GLM-4.9B", provider: "免费", desc: "中文友好，免费使用" },
-  { id: "Pro/Qwen/Qwen2.5-7B-Instruct", name: "Qwen2.5-7B", provider: "免费", desc: "轻量快速，免费使用" },
+  { id: "tencent/Hunyuan-MT-7B", name: "混元MT-7B", provider: "免费", desc: "腾讯混元，免费使用" },
   { id: "nex-agi/Nex-N2-Pro", name: "NexN2-Pro", provider: "免费", desc: "综合性能，免费使用" },
 ];
 

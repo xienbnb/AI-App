@@ -102,8 +102,9 @@ const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1";
 /** 已知的 SiliconFlow 免费模型列表 */
 export const SILICONFLOW_MODELS: string[] = [
   "Pro/zai-org/GLM-4.7",
-  "deepseek-ai/DeepSeek-V3",
-  "deepseek-ai/DeepSeek-R1",
+  "deepseek-ai/DeepSeek-OCR",
+  "tencent/Hunyuan-MT-7B",
+  "nex-agi/Nex-N2-Pro",
 ];
 
 function isSiliconFlowModel(model: string): boolean {
