@@ -135,9 +135,18 @@ async function getUserPreferredModel(userId: string): Promise<string | null> {
 // Provider 工厂
 // ============================================================
 
-export async function createProvider(userId?: string): Promise<AIProvider> {
+export async function createProvider(userId?: string, requestModel?: string): Promise<AIProvider> {
+  // 0. 优先判断：请求中指定的模型是否为公益 AI
+  if (requestModel && isSiliconFlowModel(requestModel)) {
+    return new OpenAICompatibleProvider(
+      SILICONFLOW_API_KEY,
+      SILICONFLOW_BASE_URL,
+      requestModel,
+    );
+  }
+
+  // 1. 其次判断用户设置的模型
   if (userId) {
-    // 1. 优先判断：用户选择了公益 AI（SiliconFlow）
     const preferredModel = await getUserPreferredModel(userId);
     if (preferredModel && isSiliconFlowModel(preferredModel)) {
       return new OpenAICompatibleProvider(
@@ -147,7 +156,7 @@ export async function createProvider(userId?: string): Promise<AIProvider> {
       );
     }
 
-    // 2. 其次：有自定义 API Key
+    // 2. 有自定义 API Key
     const custom = await getUserCustomApiKey(userId);
     if (custom) {
       return new OpenAICompatibleProvider(custom.apiKey, custom.apiBase, custom.model);

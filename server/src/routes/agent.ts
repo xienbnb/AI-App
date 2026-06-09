@@ -259,7 +259,7 @@ router.post("/execute", async (req: Request, res: Response) => {
     }
 
     // ---- 6. Agent 主循环 ----
-    const provider = await createProvider(userId);
+    const provider = await createProvider(userId, model);
     let toolRound = 0;
     let fullResponse = "";
 

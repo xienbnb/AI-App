@@ -71,6 +71,11 @@ const PRESET_MODELS = [
   { id: "kimi-k2-5-260127", name: "Kimi K2", provider: "Moonshot", desc: "长文本处理，理解力强" },
   { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", provider: "Anthropic", desc: "安全可控，创意出色" },
   { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", desc: "全能模型，综合表现优秀" },
+  // ---- 公益 AI (SiliconFlow) ----
+  { id: "Pro/deepseek-ai/DeepSeek-V3", name: "DeepSeek-V3", provider: "免费", desc: "通用对话，免费使用" },
+  { id: "Pro/zai-org/GLM-4.7", name: "GLM-4.9B", provider: "免费", desc: "中文友好，免费使用" },
+  { id: "Pro/Qwen/Qwen2.5-7B-Instruct", name: "Qwen2.5-7B", provider: "免费", desc: "轻量快速，免费使用" },
+  { id: "nex-agi/Nex-N2-Pro", name: "NexN2-Pro", provider: "免费", desc: "综合性能，免费使用" },
 ];
 
 // ===== Model Picker Modal =====
@@ -106,7 +111,11 @@ function ModelPickerModal({ visible, selectedId, onSelect, onClose }: {
                       <Text className={`text-sm font-semibold ${selectedId === model.id ? "text-indigo-700" : "text-gray-900"}`}>
                         {model.name}
                       </Text>
-                      {selectedId === model.id && (
+                      {model.provider === "免费" ? (
+                        <View className="bg-emerald-500 rounded-full px-1.5 py-0.5">
+                          <Text className="text-[10px] text-white font-medium">免费</Text>
+                        </View>
+                      ) : selectedId === model.id && (
                         <View className="bg-indigo-500 rounded-full px-1.5 py-0.5">
                           <Text className="text-[10px] text-white font-medium">当前</Text>
                         </View>
