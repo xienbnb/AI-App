@@ -30,6 +30,25 @@ export function isVip(): boolean {
   return _isVip;
 }
 
+/**
+ * 从 AsyncStorage 读取缓存的用户信息来判断 VIP 状态
+ * 用于模块初始化时 _isVip 尚未被 AuthContext 设置的场景
+ */
+async function checkVipFromCache(): Promise<boolean> {
+  if (_isVip) return true;
+  try {
+    const raw = await AsyncStorage.getItem("auth_user");
+    if (raw) {
+      const user = JSON.parse(raw);
+      const pt = user?.planType || "free";
+      return pt === "vip" || pt === "super_admin";
+    }
+  } catch {
+    // ignore
+  }
+  return false;
+}
+
 // ============================================================
 // 认证辅助
 // ============================================================
@@ -46,7 +65,8 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 // ============================================================
 
 export async function fetchBooks(): Promise<LocalBook[]> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing`, { headers });
     const json = await res.json();
@@ -64,7 +84,8 @@ export async function createBook(data: {
   cover?: string;
   coverImage?: string;
 }): Promise<LocalBook> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing`, {
       method: "POST",
@@ -99,7 +120,8 @@ export async function updateBook(
   bookId: string,
   updates: Partial<LocalBook>,
 ): Promise<LocalBook> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, {
       method: "PUT",
@@ -117,7 +139,8 @@ export async function updateBook(
 }
 
 export async function deleteBook(bookId: string): Promise<void> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, {
       method: "DELETE",
@@ -131,7 +154,8 @@ export async function deleteBook(bookId: string): Promise<void> {
 }
 
 export async function getBookDetail(bookId: string): Promise<LocalBook> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, { headers });
     const json = await res.json();
@@ -149,7 +173,8 @@ export async function getBookDetail(bookId: string): Promise<LocalBook> {
 // ============================================================
 
 export async function fetchChapters(bookId: string): Promise<LocalChapter[]> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`, { headers });
     const json = await res.json();
@@ -163,7 +188,8 @@ export async function createChapter(
   bookId: string,
   data: { title: string; content: string; volumeId?: string; chapterNumber?: number },
 ): Promise<LocalChapter> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`, {
       method: "POST",
@@ -229,7 +255,8 @@ export async function updateChapter(
   chapterId: string,
   updates: Partial<LocalChapter>,
 ): Promise<LocalChapter> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, {
       method: "PUT",
@@ -247,7 +274,8 @@ export async function updateChapter(
 }
 
 export async function deleteChapter(bookId: string, chapterId: string): Promise<void> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, {
       method: "DELETE",
@@ -265,7 +293,8 @@ export async function deleteChapter(bookId: string, chapterId: string): Promise<
 // ============================================================
 
 export async function fetchOutlines(bookId: string): Promise<LocalOutline[]> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, { headers });
     const json = await res.json();
@@ -279,7 +308,8 @@ export async function saveOutline(
   bookId: string,
   outline: { content: string },
 ): Promise<LocalOutline> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, {
       method: "POST",
@@ -308,7 +338,8 @@ export async function saveOutline(
 // ============================================================
 
 export async function fetchSettings(bookId: string): Promise<LocalSetting[]> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/settings`, { headers });
     const json = await res.json();
@@ -323,7 +354,8 @@ export async function fetchSettings(bookId: string): Promise<LocalSetting[]> {
 // ============================================================
 
 export async function fetchInspirations(bookId: string): Promise<LocalInspiration[]> {
-  if (_isVip) {
+  const vip = _isVip || (await checkVipFromCache());
+  if (vip) {
     const headers = await getAuthHeaders();
     const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/inspirations`, { headers });
     const json = await res.json();
