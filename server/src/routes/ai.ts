@@ -421,4 +421,48 @@ router.post("/detect/structured", async (req: Request, res: Response) => {
   }
 });
 
+// ============ 15. 测试 AI 连接 ============
+// POST /api/v1/ai/test-connection
+router.post("/test-connection", async (req: Request, res: Response) => {
+  try {
+    const { apiKey, baseUrl, modelId } = req.body;
+    if (!apiKey || !baseUrl || !modelId) {
+      return res.status(400).json({ success: false, error: "缺少参数：apiKey、baseUrl、modelId 为必填" });
+    }
+
+    const url = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: "user", content: "Hello" }],
+        max_tokens: 5,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      return res.json({
+        success: false,
+        error: `HTTP ${response.status}${errorBody ? `: ${errorBody.substring(0, 200)}` : ""}`,
+      });
+    }
+
+    const data: any = await response.json();
+    if (data?.choices?.[0]?.message?.content !== undefined) {
+      return res.json({ success: true, message: "连接成功，API 可正常使用" });
+    } else {
+      return res.json({ success: false, error: "响应格式异常，无法解析返回内容" });
+    }
+  } catch (err: any) {
+    console.error("Test connection error:", err.message);
+    return res.json({ success: false, error: `连接失败: ${err.message}` });
+  }
+});
+
 export default router;

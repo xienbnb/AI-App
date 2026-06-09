@@ -1,162 +1,72 @@
-# AI 写作助手 - 长期发展规划
+# 创作助手 App — 首页 & AI 设置优化
 
 ## 概述
 
-AI 写作助手是一款集 AI 辅助创作、作品管理、社区交流于一体的移动写作平台，支持多端运行（iOS/Android/Web）。当前已完成核心功能搭建，包括 AI 对话创作、书籍卷章管理、富文本编辑、技能系统、社区帖子、作品列表等。本计划旨在按阶段持续完善，打造专业级别的写作工具。
-
-**当前技术栈**：Expo 54 + React Native + Express.js + Supabase PostgreSQL + 大语言模型(SSE流式)
-
----
+在现有创作助手 App 基础上进行 5 项优化：首页历史会话可视化管理、AI 消息状态友好化、输入区布局重构、AI 自定义密钥接入与连接测试、Agent 记忆持久化。配合原型设计先行，确保交互体验与视觉效果一致。
 
 ## 技术方案
 
 | 维度 | 选择 | 理由 |
 |------|------|------|
-| 前端框架 | Expo 54 + React Native (Uniwind) | 三端兼容，快速迭代 |
-| 后端框架 | Express.js + TypeScript | 与前端语言统一，轻量高效 |
-| 数据库 | Supabase PostgreSQL | 托管数据库，内置权限管理 |
-| AI 推理 | 豆包大模型(SSE) | 流式输出，低延迟 |
-| 存储 | AsyncStorage (前端) + Supabase (后端) | 本地持久化 + 云端存储 |
-| 认证 | (待接入) Supabase Auth | 渐进式引入登录系统 |
-
----
+| 前端 | Expo 54 + React Native | 现有技术栈，不改动 |
+| 样式 | TailwindCSS (Uniwind) | 现有方案 |
+| 导航 | Stack + 模态弹窗 | 现有方案 |
+| 存储 | AsyncStorage + Drizzle (PG) | 会话用 AsyncStorage 缓存，消息/记忆用 PG 持久化 |
+| AI 协议 | Coze SDK + OpenAI 兼容 + SiliconFlow | 现有 ai-provider.ts 已支持 |
+| 原型 | 是（设计引导已开启） | 移动端原型优先 |
 
 ## 功能模块
 
-### 1. AI 创作中心（首页）
-- AI 对话式创作，支持 13 种技能（大纲/正文/设定/灵感等）
-- 技能系统从设置页动态同步，严格权限范围
-- 书籍上下文挂载，插入到指定章节/大纲/设定/灵感
-- 文件上传分析
-- 历史会话管理（保存/删除/切换）
+### 1. 历史会话管理（P0）
+- 左侧侧边栏展示所有会话（不限 8 条），支持滚动
+- 每条展示预览文字 + 时间戳
+- 支持删除、点击加载、新建会话
+- 自动保存最新 50 条消息到 AsyncStorage
 
-### 2. 作品管理
-- 书籍 CRUD（创建/编辑/删除）
-- 卷/章组织结构（可折叠、可排序）
-- 大纲/设定/灵感独立编辑区（富文本+结构化）
-- 多种视图（网格/列表/画廊）
+### 2. AI 消息状态友好化（P1）
+- 后端 `action_start` 中 `toolLabel` 映射为中文化提示：
+  - create_book → "正在创建书籍..."
+  - save_outline → "正在生成大纲..."
+  - create_chapter → "正在创作章节..."
+  - create_volume → "正在规划卷..."
+  - save_world_setting → "正在构建世界观..."
+  - get_book_info → "正在加载作品信息..."
+  - get_characters → "正在读取角色..."
+  - get_volumes → "正在整理目录..."
+  - continue_chapter → "正在续写章节..."
+- 前端 agent 状态栏使用纯中文描述，不显示 `[处理]` `[完成]` 等技术前缀
+- 流式内容实时展示（已有 `agentStreamContent` / `streamContent`，确认可用）
 
-### 3. 富文本编辑器
-- 自动保存 + 保存状态指示
-- 更多菜单（辅助功能/AI助手/常用工具/写作设置）
-- 悬浮 AI 助手（选中文字后浮现）
-- 夜间模式
-- 撤销/恢复(50步)
+### 3. 输入区布局优化（P1）
+- 重新设计输入栏布局：`+` 按钮 → 输入框 → 发送按钮（箭头）
+- 模型选择器保留在输入区，但默认收起（隐藏），点击输入框时在输入栏上方展开显示（类似 iOS 键盘工具栏效果），输入完成后自动隐藏
+- 解决键盘弹出时输入框被遮挡问题
 
-### 4. 社区
-- 帖子列表（分类/标签/点赞）
-- 帖子详情
-- （待完善）评论系统、用户主页
+### 4. AI 自定义密钥 + 测试按钮（P1）
+- AI 设置页「自定义模型」Tab 已有表单，需补充：
+  - 添加「测试连接」按钮，调用 `POST /api/v1/ai/test-connection`
+  - 后端新增测试接口，用 `fetch` 请求 OpenAI 兼容 API 的 `/v1/models` 或 `/v1/chat/completions`（单条消息极短）验证 key 是否有效
+  - 测试结果 Toast/提示：成功或失败原因
+- 自定义模型选择后，首页模型选择器下拉中显示自定义模型列表
 
-### 5. AI 工具箱
-- AI 文生图
-- AI 角色对话
-- AI 地图生成
-- 关系网分析等
+### 6. Agent 模式切换（P1）
+- 创作首页顶部/标题栏区域添加模式选择器（三段式切换）：
+  - **Agent 模式**（默认）：当前 agent 行为，支持工具调用（创建书籍/生成章节等）
+  - **对话模式**：纯对话，无工具调用，类似普通 AI 聊天
+  - **计划模式**：agent 输出结构化计划（分步展开），用户确认后再执行
+- 切换模式后，前台只发当前模式、输入框 placeholder 变化，后端根据模式调整 agent 行为
 
-### 6. 个人中心
-- 技能管理（启用/禁用/自定义）
-- AI 模型参数配置
-- 知识库管理
-- 统计数据
-
-### 数据结构
-
-```typescript
-// 书籍
-books: { id: uuid, userId: string, title: string, author: string,
-  category: string, description: string, cover: string, status: string,
-  outline: string, volumes: jsonb, outlineItems: jsonb,
-  inspirations: jsonb, settings: jsonb, createdAt, updatedAt }
-
-// 章节
-chapters: { id: uuid, bookId: uuid, title: string, content: string,
-  volumeId: string, sortOrder: number, status: string, wordCount: number }
-
-// 社区帖子
-posts: { id: uuid, userId: string, userName: string, title: string,
-  content: string, tag: string, likes: number, comments: number,
-  featured: boolean }
-
-// 聊天会话 (AsyncStorage)
-chatSessions: { id: string, messages: ChatMessage[], createdAt: string }
-
-// AI 设置 (AsyncStorage)
-aiSettings: { provider: string, model: string, skillEnabled: boolean[],
-  customSkills: Skill[], temperature: number }
-```
-
----
+### 5. Agent 记忆设计（P1）
+- **会话级记忆**（已完成）：每次 agent 执行保存到 `agentConversations` 表，`messages` 字段存完整 JSON
+- **全局记忆**：`userSettings` 表存储 AI 偏好（model, temperature, skills 等）—— 已完成
+- **长期记忆**：新增 `agent_memories` 表，存储 key-value 型的长期知识（如用户偏好风格、常用角色名等）
+  - 表结构：`id, userId, key, value, createdAt, updatedAt`
+  - API: `GET/PUT /api/v1/agent/memories`
+  - agent 系统 prompt 尾部注入记忆内容
 
 ## 是否有原型设计
 
-否（此为已开发项目的长期优化计划，非全新项目）
-
----
-
-## 实施步骤
-
-### 阶段一：核心稳定与数据闭环（当前优先）
-
-**Step 1: 后端健全性加固**
-- 新增全局 API 错误处理中间件（统一错误格式 + 日志）
-- 所有 POST/PUT 路由添加参数校验（zod schemas）
-- 关键 API 添加 try-catch 兜底，返回友好错误信息
-- 涉及文件: `server/src/routes/writing.ts`, `server/src/routes/community.ts`, `server/src/index.ts`
-
-**Step 2: 插入系统完整闭环**
-- 确保插入大纲 / 章节 / 灵感 / 设定均调通后端 API
-- 插入成功后刷新前端数据（useFocusEffect + 本地状态同步）
-- 插入章节时自动计算 sortOrder 和 volumeId
-- 涉及文件: `client/screens/home/index.tsx`, `server/src/routes/writing.ts`
-
-**Step 3: 空状态 / 加载态 / 错误态覆盖**
-- 所有列表页（首页会话、作品列表、社区、知识库）添加空状态引导
-- 数据加载中显示骨架屏或 Loading 指示器
-- API 请求失败时显示错误提示 + 重试按钮
-- 涉及文件: `client/screens/home/index.tsx`, `client/screens/works/index.tsx`, `client/screens/community/index.tsx`, `client/screens/ai-knowledge/index.tsx`
-
-### 阶段二：写作体验升级
-
-**Step 4: 编辑器全面增强**
-- 添加字数/阅读时间统计（底部状态栏）
-- 悬浮 AI 助手增加更多选中文本操作（翻译、提炼摘要）
-- 全文搜索替换增加高亮匹配和逐条跳转
-- 导出功能兼容 .txt / .md / .pdf 格式
-- 涉及文件: `client/screens/editor/index.tsx`, `server/src/routes/writing.ts`
-
-**Step 5: 作品管理增强**
-- 卷/章拖拽排序
-- 书籍封面自定义（上传图片）
-- 作品字数/章节数统计展示
-- 多选批量操作（删除/移动章节）
-- 涉及文件: `client/screens/detail/index.tsx`, `client/screens/works/index.tsx`, `server/src/routes/writing.ts`
-
-### 阶段三：社区与社交
-
-**Step 6: 社区功能完善**
-- 帖子评论系统（嵌套评论）
-- 用户个人主页（作品列表、发帖记录）
-- 帖子搜索/热门推荐
-- 关注/粉丝系统
-- 涉及文件: `client/app/(tabs)/community.tsx`, `client/screens/community/index.tsx`, `client/screens/post-detail/index.tsx`, `server/src/routes/community.ts`, `server/src/routes/user.ts`
-
-### 阶段四：数据洞察与高级功能
-
-**Step 7: 写作统计与报告**
-- 写作日历（每日字数热力图）
-- 作品分析报告（总字数/章节分布/写作速度）
-- 读者互动数据（社区）
-- 涉及文件: `client/screens/report/index.tsx`, `server/src/routes/writing.ts`, `server/src/storage/database/shared/schema.ts`
-
-**Step 8: 用户体验打磨**
-- 全局动画（页面过渡、列表入場、按钮反馈）
-- 深色模式所有弹窗/Modal 全面适配
-- 输入体验优化（键盘避让、自动聚焦、快捷键）
-- 性能优化（大列表虚拟化、图片懒加载）
-- 涉及文件: 全局 (client/app/_layout.tsx, client/components/)
-
----
+是
 
 ## 页面规格
 
@@ -166,123 +76,75 @@ aiSettings: { provider: string, model: string, skillEnabled: boolean[],
 > type: tabbar
 > platform: mobile
 
-- @page(/) 首页 | icon: comment-dots
-- @page(/works) 作品 | icon: book-open
-- @page(/community) 社区 | icon: users
-- @page(/ai) AI工坊 | icon: sparkles
-- @page(/me) 我的 | icon: user
+- @page(/) 创作 | icon: pen-nib
+- @page(/my-ai-settings) AI设置 | icon: sliders
+- @page(/profile) 我的 | icon: user
 
-### 页面详情
+### @page(/) 创作首页
 
-##### @page(/) 首页（AI 对话）
-
-**核心职责**：AI 辅助创作的主入口，按技能分类提供上下文感知的写作对话。
-
+**核心职责**：AI 对话/Agent 创作的主交互页面
+**访问路径**：底部 Tab 直接访问，自动加载最近会话
 **布局**：
-- 顶部：Logo + 设置入口 + 历史会话按钮
-- 书籍上下文条：显示当前挂载的作品名，点击打开选择器
-- 技能标签行：从设置页同步的已启用技能
-- 消息列表：Markdown 渲染 + 操作按钮（追问/插入/重新生成）
-- 底部输入区：文本输入 + 技能标签提示 + 文件上传 + @技能
+- 顶部导航栏：左侧汉堡菜单（打开历史侧边栏）+ 标题"AI 创作" + 模式选择器（Agent/对话/计划）+ 右侧新建按钮
+- 作品上下文栏：当前挂载书籍提示，可点击切换
+- 消息列表区：滚动消息流，AI 头像（机器人/魔法棒）+ 用户气泡
+- 底部输入区：`+` 附件按钮 + 多行输入框 + 发送按钮（↑）
+- 模型选择器：默认收起，点击输入框时在输入栏上方展开显示，输入完成后自动收起
+- 侧边栏：从左侧滑出的历史会话列表
 
 **状态**：
-- 空态：对话引导卡（"试试这些技能"）
-- 加载态：流式输出实时展示
-- 错误态：重试按钮
+- 空态：欢迎语卡片，引导用户开始创作
+- 加载态：`AI 思考中...` 提示 + 流式内容实时展示
+- Agent 状态：中文化步骤提示（"正在创建书籍..."）而非 `[处理]...`
 
 **交互说明**
 
-| 元素 | 动作 | 响应 | 备注 |
-|------|------|------|------|
-| 技能标签 | 点击 | 输入框显示提示文案，发送时携带 skill 参数 | |
-| AI 回复 | 追问 | 将内容填入输入框，追加"请进一步..." | |
-| AI 回复 | 插入当前书籍 | 弹出 InsertModal，选择插入目标 | |
-| AI 回复 | 重新生成 | 删除最后一条AI消息，重新发送请求 | |
-| 侧边栏会话 | 点击 | 切换会话 | |
-| 侧边栏会话 | 长按 | 弹出删除确认弹窗 | |
-| 书籍上下文条 | 点击 | 打开 BookPickerModal | |
-| 文件上传按钮 | 点击 | 打开文件选择器 | |
+| 元素 | 动作 | 响应 | 传参 | 备注 |
+|------|------|------|------|------|
+| 历史菜单 | 点击 | 左侧滑出侧边栏 | — | 显示会话列表 |
+| 侧边栏会话项 | 点击 | 加载该会话消息 | sessionId | — |
+| 侧边栏删除 | 点击 | 弹窗确认删除 | sessionId | — |
+| 模式选择器 | 点击 | 切换 Agent/对话/计划模式 | mode | 输入框 placeholder 随模式变化 |
+| 新建设建按钮 | 点击 | 新建会话 | — | 清空当前消息 |
+| 模型选择栏（输入框上方） | 点击 | 弹出模型选择面板 | modelId | 输入框获得焦点时自动展开 |
+| 作品上下文栏 | 点击 | 弹出书籍选择器 | — | — |
+| + 按钮 | 点击 | 弹出附件菜单（上传文件/选择技能） | — | — |
+| 发送按钮 | 点击 | 发送消息 | 输入文本 | 禁用态：无输入或 AI 思考中 |
+| AI 消息 | 显示 | 追问/插入书籍/重新生成按钮组 | — | — |
+| 停止按钮 | 点击 | 停止 AI 生成 | — | AI 思考中时显示 |
 
-##### @page(/works) 作品
+### @page(/my-ai-settings) AI 设置
 
-**核心职责**：管理所有创作作品，支持多视图展示。
-
-**布局**：
-- 顶部：搜索 + 视图切换（网格/列表）
-- 作品列表：封面 + 标题 + 字数 + 状态
-- 创建按钮（FAB）
-
-**状态**：
-- 空态：插画 + "创作你的第一部作品" + 新建按钮
-- 加载态：骨架屏
+**核心职责**：管理 AI 模型（预设/自定义/公益AI）、技能开关、自定义 API Key
+**访问路径**：底部 Tab 直接访问
+**布局**：顶部 Tabs（预设模型 | 自定义模型 | 技能）
 
 **交互说明**
 
-| 元素 | 动作 | 响应 |
-|------|------|------|
-| 作品卡片 | 点击 | 跳转 @page(/detail) |
-| 作品卡片 | 长按 | 弹出操作菜单（编辑/删除） |
-| 创建按钮 | 点击 | 弹出新建作品表单 |
-| 视图切换 | 点击 | 切换网格/列表 |
+| 元素 | 动作 | 响应 | 传参 | 备注 |
+|------|------|------|------|------|
+| 预设模型项 | 点击 | 选择该模型 | modelId | — |
+| 自定义模型项 | 点击 | 选择该模型 | modelId | — |
+| 自定义模型「测试连接」 | 点击 | 调用测试接口，显示结果 | modelId | 新增功能 |
+| 添加自定义模型 | 点击 | 展开表单 | — | — |
+| 删除自定义模型 | 点击 | 确认删除 | modelId | — |
+| 技能开关 | 点击 | 切换启用/禁用 | skillId | — |
+| 添加自定义技能 | 点击 | 展开表单 | — | — |
 
-##### @page(/detail) 作品详情
+## 实施步骤
 
-**核心职责**：管理单本书的卷/章/大纲/设定/灵感。
+### 阶段一：原型设计
 
-**布局**：
-- 顶部：作品信息 + 编辑按钮
-- Tab 切换：章节 / 大纲 / 设定 / 灵感
-- 内容区：对应 Tab 的列表/编辑器
+先对 **创作首页** 和 **AI 设置页** 进行移动端原型设计，确保交互方案准确后再开发。
 
-**交互说明**
+涉及页面：
+- @page(/) 创作首页（消息区 + 输入区 + 侧边栏 + 模型选择器）
+- @page(/my-ai-settings) AI 设置页（自定义模型测试按钮）
 
-| 元素 | 动作 | 响应 |
-|------|------|------|
-| 章节/卷 | + 按钮 | 弹出选项（创建章节/创建卷） |
-| 章节项 | 点击 | 跳转 @page(/editor) |
-| 章节项 | 长按 | 编辑/删除 |
-| 卷 | 点击 | 折叠/展开 |
-| 大纲项 | 长按 | 编辑/删除 |
-| 大纲 | 导入按钮 | 弹出导入面板 |
-| 灵感项 | 长按 | 编辑/删除 |
+### 阶段二：代码开发
 
-##### @page(/editor) 编辑器
-
-**核心职责**：章节内容的富文本编辑，自动保存 + AI辅助。
-
-**布局**：
-- 顶部：返回 + 书名/章节名 + 保存状态 + 更多菜单
-- 正文区：全屏 TextInput
-- 工具栏（底部）：排版/撤销/恢复/AI/搜索/预览
-- 悬浮AI助手：选中文字后浮现
-
-**交互说明**
-
-| 元素 | 动作 | 响应 |
-|------|------|------|
-| 正文输入 | 内容变更 | 3秒防抖自动保存 |
-| 更多菜单 | 点击 | 弹出底部面板（辅助/AI/工具/设置） |
-| 选中文字 | 自动 | 悬浮AI助手出现 |
-| 悬浮AI | 点击功能 | 执行对应操作（润写/扩写等） |
-| 搜索按钮 | 点击 | 弹出搜索替换面板 |
-| 预览按钮 | 点击 | 切换预览模式 |
-
-##### @page(/community) 社区
-
-**核心职责**：用户作品分享与交流。
-
-**布局**：
-- 顶部：分类Tab（推荐/热门/最新/标签）
-- 帖子列表：标题 + 预览 + 标签 + 互动数据
-- 发布按钮（FAB）
-
-##### @page(/me) 我的
-
-**核心职责**：个人配置与数据管理。
-
-**布局**：
-- 顶部：用户头像 + 昵称 + 统计数据
-- Tab 切换：技能管理 / AI 设置 / 知识库
-- 技能管理：技能开关 + 自定义技能创建
-- AI 设置：模型选择 + 参数配置
-- 知识库：文档上传 + 管理
+1. **AI 消息友好化 + 输入区重构 + Agent 模型切换** — 修改 `server/src/routes/agent.ts`（工具名中文映射 + 模式处理） + 修改 `client/screens/home/index.tsx`（输入栏布局 + 模式选择器 + 收起模型选择器）
+2. **历史会话管理优化** — 修改 `client/screens/home/index.tsx` 侧边栏会话列表（不限8条、加载全部）
+3. **自定义 Key 测试接口** — 新增 `server/src/routes/ai.ts`（`POST /api/v1/ai/test-connection`）+ 修改 `client/screens/my-ai-settings/index.tsx`（添加测试按钮 + 结果展示）
+4. **Agent 长期记忆** — 新增数据库迁移 + `server/src/routes/agent-memory.ts`（`GET/PUT /api/v1/agent/memories`）+ 修改 `server/src/routes/agent.ts`（注入记忆到 system prompt）
+5. **集成测试 & 部署** — 重启服务、curl 测试 API、前端静态检查

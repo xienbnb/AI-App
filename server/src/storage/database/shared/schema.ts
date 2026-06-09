@@ -38,9 +38,16 @@ checkInDate: text("check_in_date").default(''),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
-export const healthCheck = pgTable("health_check", {
-	id: serial().notNull(),
-	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow(),
+export const agentMemories = pgTable("agent_memories", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	userId: text("user_id").notNull(),
+	key: text().notNull().default('general'),
+	content: text().notNull().default(''),
+	summary: text().default(''),
+	source: text().default('conversation'),
+	conversationId: text("conversation_id").default(''),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
 
 export const books = pgTable("books", {

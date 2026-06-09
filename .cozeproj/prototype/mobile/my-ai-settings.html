@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- 字体 -->
+  <link href="https://lf-code-agent.coze.cn/obj/x-ai-cn/fonts/google/google-all-fonts.css" rel="stylesheet"/>
+
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
+  <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+
+  <style type="text/tailwindcss">
+    @theme {
+      /* === 品牌色 === */
+      --color-primary:              #8B5CF6;
+      --color-primary-container:    #4C1D95;
+      --color-on-primary:           #ffffff;
+      /* === 背景 / 表面 === */
+      --color-background:                 #0F172A;
+      --color-surface-container-lowest:   #1E293B;
+      --color-surface:                    #1E293B;
+      --color-surface-container:          #334155;
+      --color-surface-container-high:     #475569;
+      --color-surface-container-highest:  #64748B;
+      /* === 文字 === */
+      --color-on-surface:           #F1F5F9;
+      --color-on-surface-variant:   #94A3B8;
+      /* === 功能色 === */
+      --color-success:  #22c55e;
+      --color-error:    #ef4444;
+      --color-warning:  #f59e0b;
+      /* === 边框 === */
+      --color-outline:          #475569;
+      --color-outline-variant:  #334155;
+      /* === 圆角 === */
+      --radius-sm:   0.375rem;
+      --radius-md:   0.5rem;
+      --radius-lg:   0.75rem;
+      --radius-xl:   1rem;
+      --radius-2xl:  1.25rem;
+      --radius-full: 9999px;
+      /* === 阴影（紫辉） === */
+      --shadow-card:   0 4px 12px rgba(139,92,246,0.15), 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-float:  0 10px 25px rgba(139,92,246,0.2), 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-dialog: 0 25px 50px rgba(0,0,0,0.5);
+      /* === 字体 === */
+      --font-sans: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+    }
+  </style>
+
+  <style>
+    body {
+      min-height: max(812px, 100dvh);
+      font-family: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-surface-container-high); border-radius: 999px; }
+    /* Tab 面板动画 */
+    .tab-panel { animation: fadeIn 0.2s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    /* Toast 动画 */
+    .toast-show { animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 2.2s forwards; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(20px); } }
+  </style>
+</head>
+
+<body class="bg-background text-on-surface font-sans">
+
+  <!-- @nav:start -->
+  <!-- 顶部导航栏：一级页，无返回按钮，中间标题，右侧无操作 -->
+  <header class="bg-background sticky top-0 z-40 h-14 flex items-center justify-between px-4">
+    <div class="w-10"></div>
+    <h1 class="text-base font-semibold text-on-surface">AI 设置</h1>
+    <div class="w-10"></div>
+  </header>
+  <!-- @nav:end -->
+
+  <main class="overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
+    <!-- @main-content:start -->
+
+    <!-- Tab 切换器 -->
+    <div id="tab-switcher" class="flex px-4 pt-3 pb-1 gap-0 border-b border-outline-variant/20">
+      <button id="tab-preset" class="tab-btn flex-1 pb-3 text-sm font-semibold text-primary border-b-2 border-primary transition-colors" data-tab="preset">预设模型</button>
+      <button id="tab-custom" class="tab-btn flex-1 pb-3 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent transition-colors" data-tab="custom">自定义模型</button>
+      <button id="tab-skills" class="tab-btn flex-1 pb-3 text-sm font-semibold text-on-surface-variant border-b-2 border-transparent transition-colors" data-tab="skills">技能</button>
+    </div>
+
+    <!-- ==================== 预设模型 Tab ==================== -->
+    <div id="panel-preset" class="tab-panel px-4 pt-3 pb-6 space-y-3">
+      <!-- 模型-1: Coze - GPT-4o（默认选中） -->
+      <div id="model-item-1" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="coze-gpt4o" data-selected="true">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">GPT-4o</p>
+              <p class="text-xs text-on-surface-variant">Coze</p>
+            </div>
+            <!-- 选中态 radio button -->
+            <div id="radio-model-1" class="w-5 h-5 rounded-full bg-primary flex items-center justify-center shrink-0">
+              <div class="w-2 h-2 rounded-full bg-white"></div>
+            </div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">OpenAI 旗舰多模态模型，支持文本、图像理解，推理能力强</p>
+        </div>
+      </div>
+
+      <!-- 模型-2: Coze - DeepSeek-V3 -->
+      <div id="model-item-2" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="coze-deepseek-v3" data-selected="false">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">DeepSeek-V3</p>
+              <p class="text-xs text-on-surface-variant">Coze</p>
+            </div>
+            <!-- 未选中态 radio button -->
+            <div id="radio-model-2" class="w-5 h-5 rounded-full border-2 border-on-surface-variant shrink-0"></div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">深度求索最新大语言模型，高性能低成本推理</p>
+        </div>
+      </div>
+
+      <!-- 模型-3: 公益 - GLM-4.9B (Zhipu) -->
+      <div id="model-item-3" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="public-glm49b" data-selected="false">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">GLM-4.9B (Zhipu)</p>
+              <p class="text-xs text-on-surface-variant">公益</p>
+            </div>
+            <div class="w-5 h-5 rounded-full border-2 border-on-surface-variant shrink-0"></div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">智谱AI开源轻量级模型，适合本地部署与推理</p>
+        </div>
+      </div>
+
+      <!-- 模型-4: 公益 - DeepSeek-OCR -->
+      <div id="model-item-4" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="public-deepseek-ocr" data-selected="false">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">DeepSeek-OCR</p>
+              <p class="text-xs text-on-surface-variant">公益</p>
+            </div>
+            <div class="w-5 h-5 rounded-full border-2 border-on-surface-variant shrink-0"></div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">DeepSeek 光学字符识别模型，高效图文提取</p>
+        </div>
+      </div>
+
+      <!-- 模型-5: 公益 - 混元MT-7B (Tencent) -->
+      <div id="model-item-5" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="public-hunyuan-mt7b" data-selected="false">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">混元MT-7B (Tencent)</p>
+              <p class="text-xs text-on-surface-variant">公益</p>
+            </div>
+            <div class="w-5 h-5 rounded-full border-2 border-on-surface-variant shrink-0"></div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">腾讯混元机器翻译模型，支持多语言互译</p>
+        </div>
+      </div>
+
+      <!-- 模型-6: 公益 - Nex-N2-Pro -->
+      <div id="model-item-6" class="model-card bg-surface-container rounded-xl p-4 flex items-start gap-3 cursor-pointer" data-model-id="public-nex-n2pro" data-selected="false">
+        <div class="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-5 h-5 text-primary"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm font-semibold text-on-surface">Nex-N2-Pro</p>
+              <p class="text-xs text-on-surface-variant">公益</p>
+            </div>
+            <div class="w-5 h-5 rounded-full border-2 border-on-surface-variant shrink-0"></div>
+          </div>
+          <p class="text-xs text-on-surface-variant/70 mt-1.5">下一代轻量级推理模型，响应速度极快</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 自定义模型 Tab ==================== -->
+    <div id="panel-custom" class="tab-panel px-4 pt-3 pb-6 space-y-4 hidden">
+      <!-- 表单卡片 -->
+      <div class="bg-surface-container rounded-xl p-4 space-y-3">
+        <h2 class="text-sm font-semibold text-on-surface">添加自定义模型</h2>
+
+        <!-- 模型名称 -->
+        <div>
+          <label class="text-xs text-on-surface-variant mb-1 block">模型名称</label>
+          <input id="input-model-name" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors" type="text" placeholder="如：我的 GPT-4" />
+        </div>
+
+        <!-- API 地址 -->
+        <div>
+          <label class="text-xs text-on-surface-variant mb-1 block">API 地址</label>
+          <input id="input-api-url" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors" type="text" placeholder="https://api.openai.com/v1" />
+        </div>
+
+        <!-- API Key -->
+        <div>
+          <label class="text-xs text-on-surface-variant mb-1 block">API Key</label>
+          <input id="input-api-key" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors" type="password" placeholder="sk-..." />
+        </div>
+
+        <!-- 模型 ID -->
+        <div>
+          <label class="text-xs text-on-surface-variant mb-1 block">模型 ID</label>
+          <input id="input-model-id" class="w-full bg-surface-container-high border-none rounded-xl px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors" type="text" placeholder="gpt-4" />
+        </div>
+
+        <!-- 添加按钮 -->
+        <button id="btn-add-model" class="w-full bg-primary text-on-primary py-3 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-2">
+          <i data-lucide="plus" class="w-4 h-4"></i>添加模型
+        </button>
+      </div>
+
+      <!-- 已有自定义模型列表 -->
+      <div>
+        <h3 class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2 px-1">已有模型</h3>
+
+        <!-- 自定义模型-1: 我的模型 - gpt-4 -->
+        <div id="custom-model-item-1" class="bg-surface-container rounded-xl p-4 flex items-center justify-between" data-custom-model-id="my-gpt4">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-on-surface">我的模型 - gpt-4</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">https://api.openai.com/v1</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <button id="btn-test-connection-1" class="test-connection-btn text-xs text-on-surface-variant underline underline-offset-2 hover:text-primary transition-colors">测试连接</button>
+            <button id="btn-delete-custom-1" class="delete-custom-btn w-8 h-8 flex items-center justify-center text-on-surface-variant hover:text-error transition-colors rounded-full hover:bg-surface-container-high">
+              <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== 技能 Tab ==================== -->
+    <div id="panel-skills" class="tab-panel px-4 pt-3 pb-6 space-y-1 hidden">
+      <!-- 技能-1: create_book - 创建书籍（开启） -->
+      <div id="skill-item-1" class="flex items-center justify-between px-4 py-3.5 bg-surface-container rounded-xl" data-skill-id="create_book">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <i data-lucide="book" class="w-4.5 h-4.5 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-on-surface">创建书籍</p>
+            <p class="text-xs text-on-surface-variant">根据主题自动创建完整书籍结构</p>
+          </div>
+        </div>
+        <!-- Switch 开启态 -->
+        <div id="switch-skill-1" class="switch-toggle w-10 h-6 rounded-full bg-primary relative cursor-pointer shrink-0" data-on="true">
+          <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 right-0.5 shadow-sm transition-all"></div>
+        </div>
+      </div>
+
+      <!-- 技能-2: save_outline - 生成大纲（开启） -->
+      <div id="skill-item-2" class="flex items-center justify-between px-4 py-3.5 bg-surface-container rounded-xl" data-skill-id="save_outline">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <i data-lucide="list-tree" class="w-4.5 h-4.5 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-on-surface">生成大纲</p>
+            <p class="text-xs text-on-surface-variant">为书籍自动生成章节大纲结构</p>
+          </div>
+        </div>
+        <div id="switch-skill-2" class="switch-toggle w-10 h-6 rounded-full bg-primary relative cursor-pointer shrink-0" data-on="true">
+          <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 right-0.5 shadow-sm transition-all"></div>
+        </div>
+      </div>
+
+      <!-- 技能-3: create_chapter - 创作章节（开启） -->
+      <div id="skill-item-3" class="flex items-center justify-between px-4 py-3.5 bg-surface-container rounded-xl" data-skill-id="create_chapter">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <i data-lucide="file-pen-line" class="w-4.5 h-4.5 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-on-surface">创作章节</p>
+            <p class="text-xs text-on-surface-variant">根据大纲自动创作章节内容</p>
+          </div>
+        </div>
+        <div id="switch-skill-3" class="switch-toggle w-10 h-6 rounded-full bg-primary relative cursor-pointer shrink-0" data-on="true">
+          <div class="w-5 h-5 rounded-full bg-white absolute top-0.5 right-0.5 shadow-sm transition-all"></div>
+        </div>
+      </div>
+
+      <!-- 技能-4: create_character - 角色设定（关闭） -->
+      <div id="skill-item-4" class="flex items-center justify-between px-4 py-3.5 bg-surface-container rounded-xl" data-skill-id="create_character">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <i data-lucide="users" class="w-4.5 h-4.5 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-on-surface">角色设定</p>
+            <p class="text-xs text-on-surface-variant">为作品创建和管理角色设定</p>
+          </div>
+        </div>
+        <!-- Switch 关闭态 -->
+        <div id="switch-skill-4" class="switch-toggle w-10 h-6 rounded-full bg-surface-container-high relative cursor-pointer shrink-0" data-on="false">
+          <div class="w-5 h-5 rounded-full bg-surface absolute top-0.5 left-0.5 shadow-sm transition-all"></div>
+        </div>
+      </div>
+
+      <!-- 技能-5: world_setting - 世界观构建（关闭） -->
+      <div id="skill-item-5" class="flex items-center justify-between px-4 py-3.5 bg-surface-container rounded-xl" data-skill-id="world_setting">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <div class="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+            <i data-lucide="globe" class="w-4.5 h-4.5 text-primary"></i>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-on-surface">世界观构建</p>
+            <p class="text-xs text-on-surface-variant">构建作品的世界观和背景设定</p>
+          </div>
+        </div>
+        <div id="switch-skill-5" class="switch-toggle w-10 h-6 rounded-full bg-surface-container-high relative cursor-pointer shrink-0" data-on="false">
+          <div class="w-5 h-5 rounded-full bg-surface absolute top-0.5 left-0.5 shadow-sm transition-all"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast 提示 -->
+    <div id="toast-container" class="fixed left-1/2 bottom-24 -translate-x-1/2 z-50 pointer-events-none">
+      <div id="toast-message" class="toast-show hidden bg-surface-container-high text-on-surface text-sm font-medium px-5 py-3 rounded-xl shadow-float inline-flex items-center gap-2">
+        <i data-lucide="check-circle" class="w-4 h-4 text-success"></i>
+        <span id="toast-text">连接成功 ✅</span>
+      </div>
+    </div>
+
+    <!-- @main-content:end -->
+  </main>
+
+  <!-- @nav:start -->
+  <!-- 底部 TabBar -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface flex justify-around items-center h-14 pb-[env(safe-area-inset-bottom)]">
+    <!-- 创作 -->
+    <a id="tabbar-create" href="home.html" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant hover:text-on-surface transition-colors">
+      <i data-lucide="pen-nib" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">创作</span>
+    </a>
+    <!-- AI 设置（激活态） -->
+    <a id="tabbar-ai-settings" href="my-ai-settings.html" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-primary" aria-current="page">
+      <i data-lucide="sliders" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">AI设置</span>
+    </a>
+    <!-- 我的 -->
+    <a id="tabbar-profile" href="profile.html" class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant hover:text-on-surface transition-colors">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">我的</span>
+    </a>
+  </nav>
+  <!-- @nav:end -->
+
+  <script>
+    // 导航辅助函数
+    function navPush(route) {
+        console.log(`[原型演示] PUSH 到: ${route}`);
+        window.location.href = route;
+    }
+    function navReplace(route) {
+        console.log(`[原型演示] REPLACE 为: ${route}`);
+        window.location.replace(route);
+    }
+    function navReset(route) {
+        console.log(`[原型演示] RESET 到: ${route}`);
+        window.location.href = route;
+    }
+    function navBack() {
+        console.log(`[原型演示] BACK 返回上一页`);
+        if(window.history.length > 1) window.history.back();
+    }
+  </script>
+
+  <script>
+    $(function() {
+
+      // ==========================================
+      // Tab 切换
+      // ==========================================
+      $('#tab-switcher').on('click', '.tab-btn', function() {
+        var tab = $(this).data('tab');
+
+        // 更新 tab 按钮样式
+        $('.tab-btn').removeClass('text-primary border-primary').addClass('text-on-surface-variant border-transparent');
+        $(this).removeClass('text-on-surface-variant border-transparent').addClass('text-primary border-primary');
+
+        // 切换面板
+        $('.tab-panel').addClass('hidden');
+        $('#panel-' + tab).removeClass('hidden');
+      });
+
+      // ==========================================
+      // 预设模型选择（radio 切换）
+      // ==========================================
+      $('#panel-preset').on('click', '.model-card', function() {
+        var card = $(this);
+        var modelId = card.data('model-id');
+
+        // 重置所有卡片为未选中
+        $('.model-card').data('selected', 'false');
+        $('.model-card').each(function() {
+          var radio = $(this).find('> div > div > div:last-child, > div.flex-1 > div > div:last-child');
+          // 找到 radio 容器（第二个 flex 容器内的最后一个 div 或卡片内第二层的 radio）
+          // 更精确：每张卡片 radio 是卡片内 .flex.items-center.justify-between 下的最后一个 div
+        });
+
+        // 重新查找 radio 方式：通过卡片内部的 radio 容器
+        // 因为结构是固定的，用更直接的方式
+        $('.model-card').each(function() {
+          var container = $(this).find('.flex.items-center.justify-between');
+          var radioDiv = container.children('div:last');
+          // 如果 radioDiv 有子元素（选中态的内圆），则清空
+          radioDiv.empty();
+          if ($(this).data('selected') === 'true') {
+            // 旧选中项变为未选中
+            radioDiv.removeClass('bg-primary').addClass('border-2 border-on-surface-variant');
+            // 重置宽高样式
+            radioDiv.css({background: '', width: '', height: ''});
+            radioDiv.removeClass('flex items-center justify-center');
+            radioDiv.addClass('w-5 h-5 rounded-full border-2 border-on-surface-variant');
+          }
+        });
+
+        // 设置当前卡片为选中
+        card.data('selected', 'true');
+        var activeContainer = card.find('.flex.items-center.justify-between');
+        var activeRadio = activeContainer.children('div:last');
+        activeRadio.removeClass('border-2 border-on-surface-variant w-5 h-5');
+        activeRadio.addClass('w-5 h-5 rounded-full bg-primary flex items-center justify-center');
+        activeRadio.html('<div class="w-2 h-2 rounded-full bg-white"></div>');
+      });
+
+      // ==========================================
+      // 自定义模型 - 测试连接（Mock 成功 Toast）
+      // ==========================================
+      $('#panel-custom').on('click', '.test-connection-btn', function() {
+        var btn = $(this);
+        var item = btn.closest('[data-custom-model-id]');
+        var modelName = item.find('.text-sm.font-semibold').text();
+
+        // 显示 Toast
+        $('#toast-text').text('连接成功 ✅');
+        var toast = $('#toast-message');
+        toast.removeClass('hidden').addClass('toast-show');
+
+        // 3 秒后隐藏
+        setTimeout(function() {
+          toast.addClass('hidden').removeClass('toast-show');
+        }, 2500);
+      });
+
+      // ==========================================
+      // 自定义模型 - 删除
+      // ==========================================
+      $('#panel-custom').on('click', '.delete-custom-btn', function() {
+        var btn = $(this);
+        var item = btn.closest('[data-custom-model-id]');
+        var modelName = item.find('.text-sm.font-semibold').text();
+
+        // 删除交互：弹出确认后删除
+        // 当前实现：直接删除该节点（原型演示）
+        if (confirm('确认删除自定义模型「' + modelName + '」？')) {
+          item.remove();
+          // 显示删除成功 Toast
+          $('#toast-text').text('已删除');
+          var toast = $('#toast-message');
+          toast.removeClass('hidden').addClass('toast-show');
+          setTimeout(function() {
+            toast.addClass('hidden').removeClass('toast-show');
+          }, 2500);
+        }
+      });
+
+      // ==========================================
+      // 添加模型按钮 - 点击后应完成以下行为：
+      // 1. 校验四个输入框是否为空，任一为空则显示错误提示
+      // 2. 构造 { name, apiUrl, apiKey, modelId } JSON 对象
+      // 3. 调用 POST /api/v1/ai/custom-models 接口保存
+      // 4. 成功后，将新模型追加到下方"已有模型"列表中
+      // 5. 清空表单输入框
+      // 6. 显示 Toast "模型添加成功"
+      // ==========================================
+      $('#btn-add-model').on('click', function() {
+        var name = $('#input-model-name').val().trim();
+        var apiUrl = $('#input-api-url').val().trim();
+        var apiKey = $('#input-api-key').val().trim();
+        var modelId = $('#input-model-id').val().trim();
+
+        if (!name || !apiUrl || !apiKey || !modelId) {
+          $('#toast-text').text('请填写完整的模型信息');
+          var toast = $('#toast-message');
+          toast.removeClass('hidden').addClass('toast-show');
+          setTimeout(function() {
+            toast.addClass('hidden').removeClass('toast-show');
+          }, 2500);
+          return;
+        }
+
+        console.log('[原型演示] 添加自定义模型:', { name: name, apiUrl: apiUrl, modelId: modelId });
+
+        // 原型演示：Mock 添加成功 Toast
+        $('#toast-text').text('模型添加成功');
+        var toast = $('#toast-message');
+        toast.removeClass('hidden').addClass('toast-show');
+        setTimeout(function() {
+          toast.addClass('hidden').removeClass('toast-show');
+        }, 2500);
+      });
+
+      // ==========================================
+      // 技能开关切换
+      // ==========================================
+      $('.switch-toggle').on('click', function() {
+        var sw = $(this);
+        var isOn = sw.data('on') === true;
+        var thumb = sw.children('div');
+
+        if (isOn) {
+          // 关闭
+          sw.data('on', false);
+          sw.removeClass('bg-primary').addClass('bg-surface-container-high');
+          thumb.removeClass('right-0.5').addClass('left-0.5');
+          thumb.removeClass('bg-white').addClass('bg-surface');
+        } else {
+          // 开启
+          sw.data('on', true);
+          sw.removeClass('bg-surface-container-high').addClass('bg-primary');
+          thumb.removeClass('left-0.5').addClass('right-0.5');
+          thumb.removeClass('bg-surface').addClass('bg-white');
+        }
+
+        var skillId = sw.closest('[data-skill-id]').data('skill-id');
+        console.log('[原型演示] 技能切换:', skillId, isOn ? '关闭 → 开启' : '开启 → 关闭');
+      });
+
+      // ==========================================
+      // TabBar 导航
+      // ==========================================
+      $('#tabbar-create').on('click', function(e) {
+        e.preventDefault();
+        navReset('home.html');
+      });
+      $('#tabbar-ai-settings').on('click', function(e) {
+        e.preventDefault();
+        navReset('my-ai-settings.html');
+      });
+      $('#tabbar-profile').on('click', function(e) {
+        e.preventDefault();
+        navReset('profile.html');
+      });
+
+    });
+  </script>
+
+  <script>lucide.createIcons();</script>
+</body>
+
+</html>

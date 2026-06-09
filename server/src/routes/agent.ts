@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import { db } from "../storage/database/client.js";
-import { users, books, outlines, userSettings, agentConversations } from "../storage/database/shared/schema.js";
-import { eq } from "drizzle-orm";
+import { users, books, outlines, userSettings, agentConversations, agentMemories } from "../storage/database/shared/schema.js";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { findTool, getToolsSystemPrompt, getBookInfo, type ToolResult } from "../utils/agent-tools.js";
 import { createProvider } from "../utils/ai-provider.js";
 
@@ -110,7 +110,8 @@ router.post("/execute", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "未登录" });
     }
     const userId = req.user.id;
-    const { message, conversationId, model, bookId, skillPrompt, skillName } = req.body;
+    const { message, conversationId, model, bookId, skillPrompt, skillName, mode } = req.body;
+    const agentMode = mode || "agent"; // agent / chat / plan
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "message 是必填参数" });
@@ -152,14 +153,44 @@ router.post("/execute", async (req: Request, res: Response) => {
     // ---- 2. 添加用户消息 ----
     messages.push({ role: "user", content: message, timestamp: new Date().toISOString() });
 
-    // ---- 3. 构建 LLM 消息 ----
+    // ---- 3. 查询长期记忆并注入到系统提示 ----
+    let memoryContext = "";
+    try {
+      const memories = await db
+        .select()
+        .from(agentMemories)
+        .where(eq(agentMemories.userId, userId))
+        .orderBy(desc(agentMemories.updatedAt))
+        .limit(10);
+
+      if (memories.length > 0) {
+        memoryContext = "\n\n## 你对该用户的长期记忆\n以下是你之前与该用户交互中记住的关键信息：\n";
+        for (const mem of memories) {
+          memoryContext += `- [${mem.key}] ${mem.content}\n`;
+        }
+        memoryContext += "\n以上记忆仅供参考，如果与当前对话上下文矛盾，以当前对话为准。";
+      }
+    } catch (err) {
+      // 记忆查询失败不影响主流程
+      console.warn("Memory query failed:", (err as Error).message);
+    }
+
+    // ---- 4. 构建 LLM 消息 ----
+    const baseSystemPrompt = AGENT_SYSTEM_PROMPT + memoryContext;
     const llmMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
-      { role: "system", content: AGENT_SYSTEM_PROMPT },
+      { role: "system", content: baseSystemPrompt },
     ];
 
     // 技能约束注入
     if (skillPrompt) {
       llmMessages.push({ role: "system", content: `## 当前技能约束\n你当前处于「${skillName || "自定义"}」技能模式。请严格遵守以下职责范围：\n${skillPrompt}\n\n【技能规则】在此模式下，你只能执行与上述职责相关的操作。超出职责范围的请求应礼貌拒绝。` });
+    }
+
+    // 模式处理
+    if (agentMode === "chat") {
+      llmMessages.push({ role: "system", content: "【对话模式】你处于纯对话模式。请直接回答用户的问题，不要输出任何工具调用 JSON。保持自然对话风格。" });
+    } else if (agentMode === "plan") {
+      llmMessages.push({ role: "system", content: "【计划模式】在回答之前，请先输出一个结构化计划（包含编号步骤），然后在每个步骤完成时标注执行状态。格式：\n\n## 计划\n1. 步骤一...\n2. 步骤二...\n...\n\n然后逐步执行。每完成一步在末尾标注 ✅ 或 ❌。" });
     }
 
     // 添加上下文（最多保留最近20条）
@@ -281,6 +312,12 @@ router.post("/execute", async (req: Request, res: Response) => {
 
       fullResponse += currentResponse;
 
+      // 【对话模式】跳过工具调用，直接返回文本
+      if (agentMode === "chat") {
+        res.write(`data: ${JSON.stringify({ type: "text", content: currentResponse })}\n\n`);
+        break;
+      }
+
       // 检测是否有工具调用，有则切除 JSON 后再发送
       const toolCall = detectToolCall(currentResponse);
       let displayText = currentResponse;
@@ -327,12 +364,23 @@ router.post("/execute", async (req: Request, res: Response) => {
         create_volume: "创建卷", create_chapter: "创建章节", save_world_setting: "保存设定",
         get_characters: "读取角色", get_volumes: "读取卷信息", continue_chapter: "续写章节",
       };
+      // 工具执行时面向用户的中文提示
+      const TOOL_PROMPTS: Record<string, string> = {
+        create_book: "正在创建书籍...",
+        save_outline: "正在生成大纲...",
+        create_chapter: "正在创作章节...",
+        create_volume: "正在规划卷...",
+        save_world_setting: "正在构建世界观...",
+        get_book_info: "正在加载作品信息...",
+        get_characters: "正在读取角色...",
+        get_volumes: "正在整理目录...",
+        continue_chapter: "正在续写章节...",
+      };
       const toolLabel = TOOL_NAMES[toolCall.tool] || toolCall.tool;
+      const toolPrompt = TOOL_PROMPTS[toolCall.tool] || `正在${toolLabel}...`;
 
-      // 通知前端开始执行工具（中文名+关键参数）
-      const toolArgs = toolCall.args || {};
-      const shortArgs = typeof toolArgs === "object" ? Object.entries(toolArgs).slice(0, 2).map(([k, v]) => `${k}=${String(v).slice(0, 20)}`).join(", ") : "";
-      res.write(`data: ${JSON.stringify({ type: "action_start", content: toolLabel + (shortArgs ? ` (${shortArgs})` : "") })}\n\n`);
+      // 通知前端开始执行工具（友好中文提示，不暴露技术参数）
+      res.write(`data: ${JSON.stringify({ type: "action_start", content: toolPrompt })}\n\n`);
 
       // 执行工具（get_book_info 走缓存）
       let result: ToolResult;

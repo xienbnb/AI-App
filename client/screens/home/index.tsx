@@ -565,12 +565,13 @@ export default function HomeScreen() {
   // Selected AI model
   const [selectedModel, setSelectedModel] = useState("doubao-seed-2-0-lite-260215");
   const [showModelPicker, setShowModelPicker] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   // API base
   const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "";
 
-  // ===== Agent Mode =====
-  const [isAgentMode, setIsAgentMode] = useState(false);
+  // ===== Agent Mode / Chat Mode / Plan Mode =====
+  const [chatMode, setChatMode] = useState<"chat" | "agent" | "plan">("chat");
   const [agentConversations, setAgentConversations] = useState<any[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
@@ -705,6 +706,7 @@ export default function HomeScreen() {
           bookId: activeBook?.id || null,
           skillPrompt: activeSkill?.prompt || "",
           skillName: activeSkill?.name || "",
+          mode: chatMode,
         }),
       });
       agentSseRef.current = sse;
@@ -734,18 +736,18 @@ export default function HomeScreen() {
             fullContent += parsed.content || "";
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_start") {
-            setAgentActionStatus(`[处理] ${parsed.content || parsed.tool || "处理中..."}`);
+            setAgentActionStatus(parsed.content || "处理中...");
           } else if (parsed.type === "text_replace") {
             fullContent = parsed.content || "";
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_result") {
             if (parsed.success) {
-              setAgentActionStatus(`[完成] ${parsed.tool || parsed.message?.slice(0, 40) || "完成"}`);
+              setAgentActionStatus(`完成: ${parsed.tool || "执行"}`);
             } else {
-              setAgentActionStatus(`[失败] ${parsed.tool || "失败"}`);
+              setAgentActionStatus(`失败: ${parsed.tool || "执行"}`);
             }
           } else if (parsed.type === "error") {
-            setAgentActionStatus(`[错误] ${parsed.message}`);
+            setAgentActionStatus(`错误: ${parsed.message}`);
           } else if (parsed.type === "done") {
             // Save conversation ID for persistence
             if (parsed.conversationId) {
@@ -862,7 +864,7 @@ export default function HomeScreen() {
   // Save sessions on change
   useEffect(() => {
     if (sessionList.length > 0) {
-      AsyncStorage.setItem("chat_sessions", JSON.stringify(sessionList.slice(0, 20)));
+      AsyncStorage.setItem("chat_sessions", JSON.stringify(sessionList.slice(0, 100)));
     }
   }, [sessionList]);
 
@@ -1141,7 +1143,7 @@ export default function HomeScreen() {
   // ===== Send =====
   const handleSend = () => {
     if (!inputText.trim() || isAiThinking) return;
-    if (isAgentMode) {
+    if (chatMode !== "chat") {
       sendAgentChat(inputText.trim());
       return;
     }
@@ -1198,7 +1200,7 @@ export default function HomeScreen() {
 
   // ===== Build session items =====
   const curSid = currentSessionId;
-  const sessionsToShow = sessionList.slice(0, 8);
+  const sessionsToShow = sessionList;
   const sessionItems = sessionsToShow.map((s) => {
     const isActive = s.id === curSid;
     const dateStr = new Date(s.ts).toLocaleDateString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -1232,7 +1234,7 @@ export default function HomeScreen() {
           <Text className="text-base font-bold text-gray-900">AI 创作</Text>
         </View>
         <View className="flex-row items-center gap-2">
-          <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={isAgentMode ? handleNewAgentConv : resetDialog}>
+          <TouchableOpacity className="h-9 px-3 rounded-xl bg-indigo-50 items-center justify-center" onPress={chatMode !== "chat" ? handleNewAgentConv : resetDialog}>
             <FontAwesome6 name="plus" size={13} color="#6366F1" />
           </TouchableOpacity>
         </View>
@@ -1271,7 +1273,7 @@ export default function HomeScreen() {
       {/* Messages Area */}
       <ScrollView ref={scrollRef} className="flex-1 px-4 pt-4" showsVerticalScrollIndicator={false} onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}>
         {/* Agent Mode Messages */}
-        {isAgentMode ? (
+        {chatMode !== "chat" ? (
           <>
             {agentMessages.length === 0 && (
               <View className="mb-6">
@@ -1495,10 +1497,12 @@ export default function HomeScreen() {
         {/* AI status indicator */}
         {isAiThinking && (
           <View className="flex-row items-center justify-center gap-1.5 py-1.5 mb-1">
-            <ActivityIndicator size="small" color={isAgentMode ? "#10B981" : "#6366F1"} />
+            <ActivityIndicator size="small" color={chatMode === "agent" ? "#10B981" : chatMode === "plan" ? "#D97706" : "#6366F1"} />
             <Text className="text-xs text-gray-400">
-              {isAgentMode
+              {chatMode === "agent"
                 ? (agentActionStatus || "Agent 思考中...")
+                : chatMode === "plan"
+                ? (agentActionStatus || "AI 规划中...")
                 : "AI 生成中..."
               }
             </Text>
@@ -1518,15 +1522,31 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* 主输入区域 - Coze style */}
+        {/* 模型选择栏（输入框聚焦时显示） */}
+        {inputFocused && !isAiThinking && (
+          <View className="flex-row items-center gap-2 mb-2 px-1 py-1.5 bg-gray-100 rounded-xl overflow-hidden">
+            <TouchableOpacity
+              className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white shadow-sm active:opacity-70"
+              onPress={() => setShowModelPicker(true)}
+            >
+              <FontAwesome6 name="brain" size={10} color="#6366F1" />
+              <Text className="text-[11px] font-medium text-indigo-600" numberOfLines={1}>
+                {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "模型"}
+              </Text>
+              <FontAwesome6 name="chevron-down" size={8} color="#6366F1" />
+            </TouchableOpacity>
+            <Text className="text-[10px] text-gray-400">当前模型</Text>
+          </View>
+        )}
+
+        {/* 主输入区域 */}
         <View className="bg-gray-50 rounded-2xl border border-gray-200 overflow-hidden">
-          {/* 输入行: [+按钮] [输入框] [模型] [发送] */}
+          {/* 输入行: [+按钮] [输入框] [发送] */}
           <View className="flex-row items-end px-2 pt-2 pb-1">
             {/* + 按钮 */}
             <TouchableOpacity
               className="w-8 h-8 rounded-lg bg-gray-200 items-center justify-center mb-0.5 active:opacity-70"
               onPress={() => {
-                // Show action sheet: 上传文件 / 技能选择
                 Keyboard.dismiss();
                 setShowPlusMenu(true);
               }}
@@ -1540,26 +1560,21 @@ export default function HomeScreen() {
               className="flex-1 px-2 py-1.5 text-gray-900 text-[15px] leading-5 max-h-24 min-h-[36px]"
               value={inputText}
               onChangeText={setInputText}
-              placeholder={isAiThinking ? "AI 正在回复..." : isAgentMode ? "告诉Agent你的创作需求..." : "输入创作想法..."}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
+              placeholder={
+                isAiThinking ? "AI 正在回复..." :
+                chatMode === "agent" ? "告诉Agent你的创作需求..." :
+                chatMode === "plan" ? "描述你的创作计划..." :
+                "输入创作想法..."
+              }
               placeholderTextColor="#9CA3AF"
               multiline
               editable={!isAiThinking}
             />
 
-            {/* 模型名称 + 发送/停止 */}
+            {/* 发送/停止按钮 */}
             <View className="flex-row items-center gap-1 mb-0.5">
-              {/* 模型选择 */}
-              <TouchableOpacity
-                className="flex-row items-center gap-1 px-2 h-7 bg-indigo-50 rounded-lg active:opacity-70"
-                onPress={() => setShowModelPicker(true)}
-              >
-                <FontAwesome6 name="brain" size={9} color="#6366F1" />
-                <Text className="text-[10px] font-medium text-indigo-600 max-w-[60px]" numberOfLines={1}>
-                  {PRESET_MODELS.find(m => m.id === selectedModel)?.name || "模型"}
-                </Text>
-              </TouchableOpacity>
-
-              {/* 发送/停止按钮 */}
               {isAiThinking ? (
                 <TouchableOpacity
                   className="w-8 h-7 rounded-lg items-center justify-center bg-red-500"
@@ -1570,7 +1585,7 @@ export default function HomeScreen() {
               ) : (
                 <TouchableOpacity
                   className="w-8 h-7 rounded-lg items-center justify-center"
-                  style={{ backgroundColor: inputText.trim() ? (isAgentMode ? "#10B981" : "#6366F1") : "#E5E7EB" }}
+                  style={{ backgroundColor: inputText.trim() ? (chatMode === "agent" ? "#10B981" : chatMode === "plan" ? "#D97706" : "#6366F1") : "#E5E7EB" }}
                   onPress={handleSend}
                   disabled={!inputText.trim()}
                 >
@@ -1582,25 +1597,31 @@ export default function HomeScreen() {
 
           {/* 模式切换 + 底部工具栏行 */}
           <View className="flex-row items-center justify-between px-2 pb-1.5">
-            {/* 模式切换 Tab */}
+            {/* 模式切换 Tab - 三段式 */}
             <View className="flex-row bg-gray-200/70 rounded-lg p-0.5">
               <TouchableOpacity
-                className={`px-3 py-1 rounded-[7px] ${!isAgentMode ? "bg-white shadow-sm" : ""}`}
-                onPress={() => { setIsAgentMode(false); setIsAiThinking(false); cleanupAgentSSE(); }}
+                className={`px-3 py-1 rounded-[7px] ${chatMode === "agent" ? "bg-white shadow-sm" : ""}`}
+                onPress={() => { setChatMode("agent"); setIsAiThinking(false); cleanupAgentSSE(); handleNewAgentConv(); loadAgentConversations(); }}
               >
-                <Text className={`text-[11px] font-medium ${!isAgentMode ? "text-indigo-600" : "text-gray-500"}`}>对话</Text>
+                <Text className={`text-[11px] font-medium ${chatMode === "agent" ? "text-emerald-600" : "text-gray-500"}`}>Agent</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                className={`px-3 py-1 rounded-[7px] ${isAgentMode ? "bg-white shadow-sm" : ""}`}
-                onPress={() => { setIsAgentMode(true); handleNewAgentConv(); loadAgentConversations(); }}
+                className={`px-3 py-1 rounded-[7px] ${chatMode === "chat" ? "bg-white shadow-sm" : ""}`}
+                onPress={() => { setChatMode("chat"); setIsAiThinking(false); cleanupAgentSSE(); }}
               >
-                <Text className={`text-[11px] font-medium ${isAgentMode ? "text-emerald-600" : "text-gray-500"}`}>Agent</Text>
+                <Text className={`text-[11px] font-medium ${chatMode === "chat" ? "text-indigo-600" : "text-gray-500"}`}>对话</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className={`px-3 py-1 rounded-[7px] ${chatMode === "plan" ? "bg-white shadow-sm" : ""}`}
+                onPress={() => { setChatMode("plan"); setIsAiThinking(false); cleanupAgentSSE(); handleNewAgentConv(); loadAgentConversations(); }}
+              >
+                <Text className={`text-[11px] font-medium ${chatMode === "plan" ? "text-amber-600" : "text-gray-500"}`}>计划</Text>
               </TouchableOpacity>
             </View>
 
-            {/* 技能指示器 + 挂载书籍按钮 */}
+            {/* 技能指示器 + 挂载书籍按钮（仅对话模式显示） */}
             <View className="flex-row items-center gap-1.5">
-              {!isAgentMode && (
+              {chatMode === "chat" && (
                 <TouchableOpacity
                   className="flex-row items-center gap-1 px-2 py-1 rounded-lg active:bg-gray-200"
                   onPress={() => setShowSkillPicker(true)}
@@ -1611,7 +1632,7 @@ export default function HomeScreen() {
                   </Text>
                 </TouchableOpacity>
               )}
-              {!activeBook && !isAgentMode && (
+              {!activeBook && chatMode === "chat" && (
                 <TouchableOpacity className="w-6 h-6 rounded-lg items-center justify-center active:bg-gray-200" onPress={() => setShowBookPicker(true)}>
                   <FontAwesome6 name="book-open" size={11} color="#9CA3AF" />
                 </TouchableOpacity>
@@ -1669,9 +1690,9 @@ export default function HomeScreen() {
             <View className="px-4 mb-4">
               <View className="flex-row items-center justify-between">
                 <View>
-                  <Text className="text-lg font-bold text-gray-900">{isAgentMode ? "Agent 对话" : "对话历史"}</Text>
+                  <Text className="text-lg font-bold text-gray-900">{chatMode !== "chat" ? "Agent 对话" : "对话历史"}</Text>
                   <Text className="text-xs text-gray-400 mt-1">
-                    共 {isAgentMode ? agentConversations.length : sessionList.length} 条记录
+                    共 {chatMode !== "chat" ? agentConversations.length : sessionList.length} 条记录
                   </Text>
                 </View>
                 <TouchableOpacity
@@ -1684,7 +1705,7 @@ export default function HomeScreen() {
               </View>
             </View>
             <ScrollView className="flex-1 px-3">
-              {isAgentMode ? (
+              {chatMode !== "chat" ? (
                 agentConversations.length === 0 ? (
                   <View className="items-center py-10">
                     <FontAwesome6 name="wand-magic-sparkles" size={28} color="#D1D5DB" />

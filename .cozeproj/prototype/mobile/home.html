@@ -1,247 +1,764 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- 字体 -->
+  <link href="https://lf-code-agent.coze.cn/obj/x-ai-cn/fonts/google/google-all-fonts.css" rel="stylesheet"/>
+
   <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/jquery/jquery-3.7.1.min.js"></script>
   <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/lucide/lucide-1.11.0.min.js"></script>
   <script src="https://lf-code-agent.coze.cn/obj/x-ai-cn/cdn/tailwindcss/tailwindcss-browser-4.2.4.min.js"></script>
+
   <style type="text/tailwindcss">
     @theme {
-      --color-primary: #6366F1; --color-primary-container: #EEF2FF; --color-on-primary: #ffffff;
-      --color-purple: #8B5CF6; --color-purple-container: #F5F3FF;
-      --color-background: #F8FAFC; --color-surface-container-lowest: #FAFAFA;
-      --color-surface: #FFFFFF; --color-surface-container: #F1F5F9;
-      --color-surface-container-high: #E2E8F0; --color-surface-container-highest: #CBD5E1;
-      --color-on-surface: #1E293B; --color-on-surface-variant: #64748B;
-      --color-success: #10B981; --color-error: #EF4444; --color-warning: #F59E0B;
-      --color-outline: #CBD5E1; --color-outline-variant: #E2E8F0;
-      --radius-sm: 0.375rem; --radius-md: 0.5rem; --radius-lg: 0.75rem;
-      --radius-xl: 1rem; --radius-2xl: 1.5rem;
-      --shadow-card: 0 2px 8px rgba(99,102,241,0.08);
-      --shadow-float: 0 8px 20px rgba(99,102,241,0.10);
-      --font-sans: system-ui, -apple-system, sans-serif;
+      /* === 品牌色 === */
+      --color-primary:              #8B5CF6;
+      --color-primary-container:    #4C1D95;
+      --color-on-primary:           #ffffff;
+      /* === 背景 / 表面 === */
+      --color-background:                 #0F172A;
+      --color-surface-container-lowest:   #1E293B;
+      --color-surface:                    #1E293B;
+      --color-surface-container:          #334155;
+      --color-surface-container-high:     #475569;
+      --color-surface-container-highest:  #64748B;
+      /* === 文字 === */
+      --color-on-surface:           #F1F5F9;
+      --color-on-surface-variant:   #94A3B8;
+      /* === 功能色 === */
+      --color-success:  #22c55e;
+      --color-error:    #ef4444;
+      --color-warning:  #f59e0b;
+      /* === 边框 === */
+      --color-outline:          #475569;
+      --color-outline-variant:  #334155;
+      /* === 圆角 === */
+      --radius-sm:   0.375rem;
+      --radius-md:   0.5rem;
+      --radius-lg:   0.75rem;
+      --radius-xl:   1rem;
+      --radius-2xl:  1.25rem;
+      --radius-full: 9999px;
+      /* === 阴影（紫辉） === */
+      --shadow-card:   0 4px 12px rgba(139,92,246,0.15), 0 1px 3px rgba(0,0,0,0.3);
+      --shadow-float:  0 10px 25px rgba(139,92,246,0.2), 0 4px 6px rgba(0,0,0,0.3);
+      --shadow-dialog: 0 25px 50px rgba(0,0,0,0.5);
+      /* === 字体 === */
+      --font-sans: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
     }
   </style>
+
   <style>
-    body { margin:0; background:#F8FAFC; font-family:system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; }
-    .slide-up { animation: slideUp .4s ease forwards; }
-    @keyframes slideUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-    .progress-bar { transition: width .6s ease; }
-    .skill-item:active { transform: scale(0.95); }
-    ::-webkit-scrollbar { display:none; }
+    body {
+      min-height: max(812px, 100dvh);
+      font-family: "Space Grotesk", "Noto Sans SC", system-ui, sans-serif;
+    }
+    /* 滚动条美化 */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--color-surface-container-high); border-radius: 999px; }
+    /* 模型选择器滑入动画 */
+    .model-bar-enter { animation: slideUp 0.25s ease-out forwards; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* 侧边栏滑入动画 */
+    .sidebar-enter { animation: slideInLeft 0.3s ease-out forwards; }
+    @keyframes slideInLeft { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+    .sidebar-leave { animation: slideOutLeft 0.25s ease-in forwards; }
+    @keyframes slideOutLeft { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+    /* agent 状态打字动画 */
+    .typing-dot { animation: blink 1.4s infinite both; }
+    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0% { opacity: 0.2; } 20% { opacity: 1; } 100% { opacity: 0.2; } }
+    /* 文本区域自动增高 */
+    .auto-textarea { min-height: 20px; }
   </style>
+
+  <!-- 图片兜底 -->
+  <script>
+    document.addEventListener('error', function (e) {
+      const img = e.target;
+      if (img.tagName !== 'IMG' || img.dataset.fallback) return;
+      img.dataset.fallback = '1';
+      const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const cat = img.getAttribute('data-category') || '其他';
+      const alt = img.getAttribute('alt') || '';
+      const label = esc(alt.length > 8 ? alt.slice(0, 8) + '…' : alt);
+      const icons = { '人物': '👤', '自然风景': '🏞', '动物': '🐾', '建筑城市': '🏙', '运动体育': '⚽', '交通工具': '🚗', '食物': '🍽', '服饰时尚': '👗', '商业科技': '💼', '游戏娱乐': '🎮', '艺术': '🎨', '其他': '🖼' };
+      const icon = icons[cat] || '🖼';
+      const w = img.width || 400, h = img.height || 300;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="100%" height="100%" fill="%23334155"/><text x="50%" y="45%" text-anchor="middle" font-size="${Math.min(w, h) * 0.18}" dominant-baseline="central">${icon}</text><text x="50%" y="68%" text-anchor="middle" font-size="${Math.min(w, h) * 0.07}" fill="%2394A3B8" font-family="system-ui,sans-serif" dominant-baseline="central">${label}</text></svg>`;
+      img.src = 'data:image/svg+xml,' + svg;
+    }, true);
+  </script>
 </head>
-<body>
-  <!-- Header -->
-  <div class="bg-white px-5 pt-4 pb-3 border-b border-gray-100 flex items-center justify-between">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-full bg-gradient-to-br from-primary to-purple flex items-center justify-center text-white text-sm font-bold">创</div>
-      <div>
-        <div class="text-lg font-bold text-gray-900">创作台</div>
-        <div class="text-xs text-gray-400">灵感 · 创作 · 发布</div>
+
+<body class="bg-background text-on-surface font-sans h-dvh flex flex-col">
+
+  <!-- ============================================================ -->
+  <!-- @nav:start 导航组件 -->
+  <!-- ============================================================ -->
+
+  <!-- 顶部 Header -->
+  <header class="bg-background sticky top-0 z-40 h-14 flex items-center justify-between px-4 shrink-0">
+    <!-- 左侧：汉堡菜单 -->
+    <button id="btn-menu" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full
+                   hover:bg-surface-container active:bg-surface-container-high transition-colors"
+            aria-label="打开历史记录">
+      <i data-lucide="menu" class="w-5 h-5"></i>
+    </button>
+
+    <!-- 中间：标题 -->
+    <h1 class="text-base font-semibold text-on-surface">AI 创作</h1>
+
+    <!-- 右侧：模式切换 + 新建会话 -->
+    <div class="flex items-center gap-1">
+      <!-- 三段式模式切换 -->
+      <div class="flex bg-surface-container rounded-lg p-0.5 gap-0.5">
+        <button id="mode-agent" class="mode-btn px-2.5 py-1 text-xs rounded-md bg-primary text-on-primary font-medium transition-all"
+                data-mode="agent">Agent</button>
+        <button id="mode-chat" class="mode-btn px-2.5 py-1 text-xs rounded-md text-on-surface-variant hover:text-on-surface transition-all"
+                data-mode="chat">对话</button>
+        <button id="mode-plan" class="mode-btn px-2.5 py-1 text-xs rounded-md text-on-surface-variant hover:text-on-surface transition-all"
+                data-mode="plan">计划</button>
+      </div>
+      <!-- 新建会话按钮 -->
+      <button id="btn-new-session" class="w-9 h-9 flex items-center justify-center text-on-surface-variant rounded-full
+                     hover:bg-surface-container active:bg-surface-container-high transition-colors"
+              aria-label="新建会话">
+        <i data-lucide="plus" class="w-4.5 h-4.5"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 底部 TabBar（一级页专用） -->
+  <nav class="fixed bottom-0 left-0 right-0 z-40 bg-surface
+              flex justify-around items-center h-14 pb-[env(safe-area-inset-bottom)]">
+    <!-- 创作 tab - 激活态 -->
+    <a id="nav-create" href="home.html" aria-current="page"
+       class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-primary">
+      <i data-lucide="pen-nib" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">创作</span>
+    </a>
+    <!-- AI 设置 tab -->
+    <a id="nav-ai-settings" href="my-ai-settings.html"
+       class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant
+              hover:text-on-surface transition-colors">
+      <i data-lucide="sliders" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">AI 设置</span>
+    </a>
+    <!-- 我的 tab -->
+    <a id="nav-profile" href="#"
+       class="flex flex-col items-center gap-0.5 px-5 py-1.5 text-on-surface-variant
+              hover:text-on-surface transition-colors">
+      <i data-lucide="user" class="w-5 h-5"></i>
+      <span class="text-[10px] font-bold tracking-wide">我的</span>
+    </a>
+  </nav>
+
+  <!-- ============================================================ -->
+  <!-- @nav:end 导航组件 -->
+  <!-- ============================================================ -->
+
+  <!-- 作品上下文栏 -->
+  <div id="work-context-bar" class="flex items-center justify-between px-4 py-2 bg-surface-container-lowest shrink-0">
+    <span class="text-xs text-on-surface-variant">
+      当前作品：
+      <span class="text-on-surface font-medium">《星辰大海》</span>
+    </span>
+    <button id="btn-switch-work" class="w-6 h-6 flex items-center justify-center text-on-surface-variant rounded
+                   hover:bg-surface-container transition-colors" aria-label="切换作品">
+      <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+    </button>
+  </div>
+  <!-- 分割线 -->
+  <div class="border-b border-outline-variant/10 shrink-0"></div>
+
+  <!-- 消息列表区（可滚动） -->
+  <main class="flex-1 overflow-y-auto pb-[calc(7rem+env(safe-area-inset-bottom))]">
+    <!-- @main-content:start -->
+
+    <!-- 空态（默认隐藏，新建会话时显示） -->
+    <div id="empty-state" class="hidden flex flex-col items-center justify-center px-6 pt-16 gap-6">
+      <!-- 欢迎语 -->
+      <div class="text-center">
+        <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <i data-lucide="sparkles" class="w-8 h-8 text-primary"></i>
+        </div>
+        <h2 class="text-lg font-semibold text-on-surface mb-1">开始你的创作之旅吧！</h2>
+        <p class="text-sm text-on-surface-variant">选择一个创作方向，AI 将为你提供专业的创作帮助</p>
+      </div>
+      <!-- 推荐功能卡片 -->
+      <div class="w-full max-w-sm space-y-3">
+        <!-- 推荐卡片-写一本小说 -->
+        <div id="card-novel" class="bg-surface rounded-xl shadow-card p-4 flex items-center gap-3 cursor-pointer
+                     hover:bg-surface-container active:bg-surface-container transition-colors">
+          <div class="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center shrink-0">
+            <i data-lucide="book-open" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-on-surface">写一本小说</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">从零开始创作你的第一部小说</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-on-surface-variant/50 shrink-0"></i>
+        </div>
+        <!-- 推荐卡片-生成大纲 -->
+        <div id="card-outline" class="bg-surface rounded-xl shadow-card p-4 flex items-center gap-3 cursor-pointer
+                     hover:bg-surface-container active:bg-surface-container transition-colors">
+          <div class="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center shrink-0">
+            <i data-lucide="list-tree" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-on-surface">生成大纲</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">为已有灵感梳理清晰的故事脉络</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-on-surface-variant/50 shrink-0"></i>
+        </div>
+        <!-- 推荐卡片-角色设定 -->
+        <div id="card-character" class="bg-surface rounded-xl shadow-card p-4 flex items-center gap-3 cursor-pointer
+                     hover:bg-surface-container active:bg-surface-container transition-colors">
+          <div class="w-10 h-10 bg-primary/15 rounded-full flex items-center justify-center shrink-0">
+            <i data-lucide="users" class="w-5 h-5 text-primary"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-semibold text-on-surface">角色设定</p>
+            <p class="text-xs text-on-surface-variant mt-0.5">设计有血有肉的人物和背景故事</p>
+          </div>
+          <i data-lucide="chevron-right" class="w-4 h-4 text-on-surface-variant/50 shrink-0"></i>
+        </div>
       </div>
     </div>
-    <div class="flex items-center gap-3">
-      <i data-lucide="bell" class="w-5 h-5 text-gray-400"></i>
-      <i data-lucide="settings" class="w-5 h-5 text-gray-400"></i>
+
+    <!-- 消息列表（有内容时显示） -->
+    <div id="message-list" class="px-4 pt-3 pb-2 space-y-4">
+
+      <!-- 消息-AI：欢迎消息 -->
+      <div class="flex items-start gap-2.5" data-msg-id="1">
+        <!-- AI 头像：紫色圆形 sparkles 图标 -->
+        <div class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+        </div>
+        <!-- AI 气泡 -->
+        <div class="max-w-[80%]">
+          <div class="bg-surface-container-high rounded-xl px-3.5 py-2.5">
+            <p class="text-sm text-on-surface leading-relaxed">你好！我是你的 AI 创作助手，你可以让我帮你写小说、生成大纲、创作角色，或者讨论任何故事创意～</p>
+          </div>
+          <!-- 时间戳 L4 -->
+          <p class="text-xs text-on-surface-variant mt-1">09:32</p>
+          <!-- AI 消息操作按钮组（追问/插入书籍/重新生成） -->
+          <div class="flex items-center gap-1 mt-1.5">
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="followup">追问</button>
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="insert-book">插入书籍</button>
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="regenerate">重新生成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 消息-用户：科幻小说 -->
+      <div class="flex justify-end" data-msg-id="2">
+        <div class="max-w-[80%]">
+          <div class="bg-surface-container rounded-xl px-3.5 py-2.5">
+            <p class="text-sm text-on-surface leading-relaxed">我想写一本关于星际探险的科幻小说</p>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1 text-right">09:33</p>
+        </div>
+      </div>
+
+      <!-- 消息-AI：思考中（加载态） -->
+      <div class="flex items-start gap-2.5" data-msg-id="3">
+        <!-- AI 头像 -->
+        <div class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+        </div>
+        <div class="max-w-[80%]">
+          <div class="bg-surface-container-high rounded-xl px-3.5 py-2.5">
+            <!-- Agent 状态栏 -->
+            <div id="agent-status" class="flex items-center gap-1.5 mb-2">
+              <span class="text-xs text-on-surface-variant">正在生成大纲</span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+            </div>
+            <!-- 流式内容预览 -->
+            <p class="text-sm text-on-surface leading-relaxed">好的！我来为你构思一个星际探险的科幻故事大纲。这个故事将围绕一支由多元背景成员组成的探险队展开，他们受命前往一个未知星系探索神秘信号源……</p>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1">09:33</p>
+          <!-- AI 消息操作按钮组 -->
+          <div class="flex items-center gap-1 mt-1.5">
+            <!-- 正在生成时显示停止按钮 -->
+            <button id="btn-stop-generate" class="text-xs text-on-surface-variant/60 hover:text-error px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="stop">
+              <i data-lucide="square" class="w-3 h-3 inline-block mr-0.5"></i>停止生成
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 消息-AI：继续生成（部分内容已输出） -->
+      <div class="flex items-start gap-2.5" data-msg-id="4">
+        <div class="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+          <i data-lucide="sparkles" class="w-4 h-4 text-primary"></i>
+        </div>
+        <div class="max-w-[80%]">
+          <div class="bg-surface-container-high rounded-xl px-3.5 py-2.5">
+            <!-- Agent 状态更新 -->
+            <div class="flex items-center gap-1.5 mb-2">
+              <span class="text-xs text-on-surface-variant">正在创作章节</span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+              <span class="typing-dot w-1.5 h-1.5 bg-primary rounded-full inline-block"></span>
+            </div>
+            <p class="text-sm text-on-surface leading-relaxed">## 《星辰彼岸》第一章：意外的信号<br><br>2147年，深空探测站"望舒"号接收到一组来自比邻星系的不规则脉冲信号。信号经过破译，竟是一段包含了星图坐标的数学方程……</p>
+          </div>
+          <p class="text-xs text-on-surface-variant mt-1">09:34</p>
+          <!-- AI 消息操作按钮组 -->
+          <div class="flex items-center gap-1 mt-1.5">
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="followup">追问</button>
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="continue">续写</button>
+            <button class="msg-action text-xs text-on-surface-variant/60 hover:text-primary px-2 py-1 rounded-md hover:bg-surface-container transition-colors"
+                    data-action="regenerate">重新生成</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- @main-content:end -->
+  </main>
+
+  <!-- 底部输入区（固定在 TabBar 上方） -->
+  <div id="input-area" class="fixed bottom-14 left-0 right-0 z-30 bg-background">
+
+    <!-- 模型选择栏（默认隐藏，输入框获得焦点时滑入） -->
+    <div id="model-selector" class="hidden bg-surface-container-lowest px-4 py-2 overflow-x-auto whitespace-nowrap border-t border-outline-variant/10">
+      <span class="text-xs text-on-surface-variant mr-2">当前模型：</span>
+      <button id="btn-model-select" class="inline-flex items-center gap-1 text-xs text-on-surface font-medium
+                     px-2.5 py-1 rounded-md hover:bg-surface-container transition-colors">
+        GPT-4o
+        <i data-lucide="chevron-down" class="w-3 h-3"></i>
+      </button>
+      <span class="text-xs text-on-surface-variant/50 mx-1.5">|</span>
+      <button id="btn-model-claude" class="inline-flex items-center gap-1 text-xs text-on-surface-variant
+                     px-2.5 py-1 rounded-md hover:bg-surface-container transition-colors">
+        Claude 3.5 Sonnet
+      </button>
+      <span class="text-xs text-on-surface-variant/50 mx-1.5">|</span>
+      <button id="btn-model-custom" class="inline-flex items-center gap-1 text-xs text-on-surface-variant
+                     px-2.5 py-1 rounded-md hover:bg-surface-container transition-colors">
+        自定义模型
+        <i data-lucide="chevron-down" class="w-3 h-3"></i>
+      </button>
+    </div>
+
+    <!-- 输入框容器 -->
+    <div class="flex items-end gap-2 px-3 py-2.5 bg-background">
+      <!-- + 附件按钮 -->
+      <button id="btn-attach" class="w-10 h-10 flex items-center justify-center text-on-surface-variant rounded-full
+                     hover:bg-surface-container active:bg-surface-container-high transition-colors shrink-0"
+              aria-label="添加附件">
+        <i data-lucide="paperclip" class="w-5 h-5"></i>
+      </button>
+      <!-- 多行输入框 -->
+      <div class="flex-1 bg-surface-container rounded-xl px-3 py-2.5">
+        <textarea id="message-input" class="auto-textarea w-full bg-transparent border-none text-sm text-on-surface
+                   placeholder:text-on-surface-variant/50 focus:outline-none resize-none leading-relaxed"
+                  rows="1" placeholder="输入消息..." maxlength="2000"
+                  style="max-height: 4.5rem; min-height: 1.25rem; overflow-y: auto;"></textarea>
+      </div>
+      <!-- 发送按钮 -->
+      <button id="btn-send" class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-full shrink-0
+                     hover:opacity-90 active:scale-[0.95] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label="发送消息" disabled>
+        <i data-lucide="arrow-up" class="w-5 h-5"></i>
+      </button>
     </div>
   </div>
 
-  <div class="px-4 pb-24 overflow-y-auto" style="max-height:calc(100dvh - 140px);">
-    <!-- Stats Banner -->
-    <div class="mt-4 bg-gradient-to-r from-primary to-purple rounded-2xl p-5 text-white slide-up">
-      <div class="grid grid-cols-3 gap-3 text-center">
-        <div>
-          <div class="text-2xl font-bold">3</div>
-          <div class="text-xs text-white/70 mt-0.5">作品总数</div>
-        </div>
-        <div class="border-x border-white/20">
-          <div class="text-2xl font-bold">15.6w</div>
-          <div class="text-xs text-white/70 mt-0.5">累计字数</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold">2</div>
-          <div class="text-xs text-white/70 mt-0.5">连载中</div>
-        </div>
-      </div>
-    </div>
+  <!-- ============================================================ -->
+  <!-- 历史侧边栏（Overlay 抽屉） -->
+  <!-- ============================================================ -->
+  <div id="sidebar-overlay" class="fixed inset-0 z-50 hidden">
+    <!-- 半透明遮罩 -->
+    <div id="sidebar-backdrop" class="absolute inset-0 bg-black/50"></div>
 
-    <!-- Quick Create -->
-    <div class="mt-5 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.1s">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-bold text-gray-900 text-base">快捷创作</div>
-        <div class="text-xs text-primary flex items-center gap-1">
-          进入完整工作流 <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
-        </div>
+    <!-- 侧边栏面板 -->
+    <div id="sidebar" class="absolute left-0 top-0 bottom-0 w-[280px] bg-surface flex flex-col -translate-x-full">
+      <!-- 侧边栏顶部标题 -->
+      <div class="flex items-center justify-between px-4 h-14 shrink-0 border-b border-outline-variant/10">
+        <h2 class="text-base font-semibold text-on-surface">历史记录</h2>
+        <button id="btn-close-sidebar" class="w-9 h-9 flex items-center justify-center text-on-surface-variant rounded-full
+                       hover:bg-surface-container transition-colors" aria-label="关闭侧边栏">
+          <i data-lucide="x" class="w-4.5 h-4.5"></i>
+        </button>
       </div>
-      <div class="relative">
-        <textarea placeholder="输入你的小说灵感..." class="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm text-gray-900 border-0 outline-none resize-none h-20 placeholder:text-gray-300">一名社畜穿越到修仙世界，获得签到系统…</textarea>
-        <div class="flex items-center justify-between mt-3">
-          <div class="flex gap-2">
-            <span class="text-xs bg-primary-container text-primary px-3 py-1 rounded-full">重生</span>
-            <span class="text-xs bg-purple-container text-purple px-3 py-1 rounded-full">穿越</span>
-            <span class="text-xs bg-orange-50 text-orange-500 px-3 py-1 rounded-full">系统流</span>
+
+      <!-- 会话列表 -->
+      <div id="session-list" class="flex-1 overflow-y-auto">
+        <!-- 会话-1 -->
+        <div class="session-item flex items-center px-4 py-3.5 hover:bg-surface-container active:bg-surface-container-high transition-colors cursor-pointer border-b border-outline-variant/5"
+             data-session-id="sess-1">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-on-surface truncate">你好！我是你的 AI 创作助手，你可以让我帮你写小说...</p>
+            <p class="text-xs text-on-surface-variant mt-1">10分钟前</p>
           </div>
-          <button class="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium flex items-center gap-1.5">
-            <i data-lucide="sparkles" class="w-4 h-4"></i> 开始创作
+          <button class="session-delete w-7 h-7 flex items-center justify-center text-on-surface-variant/30 hover:text-error rounded-full hover:bg-surface-container-high transition-colors shrink-0 ml-2"
+                  aria-label="删除会话">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <!-- 会话-2 -->
+        <div class="session-item flex items-center px-4 py-3.5 hover:bg-surface-container active:bg-surface-container-high transition-colors cursor-pointer border-b border-outline-variant/5"
+             data-session-id="sess-2">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-on-surface truncate">我想写一本关于星际探险的科幻小说</p>
+            <p class="text-xs text-on-surface-variant mt-1">1小时前</p>
+          </div>
+          <button class="session-delete w-7 h-7 flex items-center justify-center text-on-surface-variant/30 hover:text-error rounded-full hover:bg-surface-container-high transition-colors shrink-0 ml-2"
+                  aria-label="删除会话">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <!-- 会话-3 -->
+        <div class="session-item flex items-center px-4 py-3.5 hover:bg-surface-container active:bg-surface-container-high transition-colors cursor-pointer border-b border-outline-variant/5"
+             data-session-id="sess-3">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-on-surface truncate">帮我设计一个魔法世界的角色设定，主角是一名失忆的法师...</p>
+            <p class="text-xs text-on-surface-variant mt-1">3小时前</p>
+          </div>
+          <button class="session-delete w-7 h-7 flex items-center justify-center text-on-surface-variant/30 hover:text-error rounded-full hover:bg-surface-container-high transition-colors shrink-0 ml-2"
+                  aria-label="删除会话">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <!-- 会话-4 -->
+        <div class="session-item flex items-center px-4 py-3.5 hover:bg-surface-container active:bg-surface-container-high transition-colors cursor-pointer border-b border-outline-variant/5"
+             data-session-id="sess-4">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-on-surface truncate">生成一个关于狼人的恐怖故事大纲，背景设定在19世纪的伦敦</p>
+            <p class="text-xs text-on-surface-variant mt-1">昨天</p>
+          </div>
+          <button class="session-delete w-7 h-7 flex items-center justify-center text-on-surface-variant/30 hover:text-error rounded-full hover:bg-surface-container-high transition-colors shrink-0 ml-2"
+                  aria-label="删除会话">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+        <!-- 会话-5 -->
+        <div class="session-item flex items-center px-4 py-3.5 hover:bg-surface-container active:bg-surface-container-high transition-colors cursor-pointer"
+             data-session-id="sess-5">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm text-on-surface truncate">创作一个武侠小说的主角背景故事，主角从无名小卒成长为一代宗师</p>
+            <p class="text-xs text-on-surface-variant mt-1">2天前</p>
+          </div>
+          <button class="session-delete w-7 h-7 flex items-center justify-center text-on-surface-variant/30 hover:text-error rounded-full hover:bg-surface-container-high transition-colors shrink-0 ml-2"
+                  aria-label="删除会话">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- In Progress Book -->
-    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.2s">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-bold text-gray-900 text-base">创作中的作品</div>
-        <a href="home-outline.html" class="text-xs text-primary flex items-center gap-1">查看全部 <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i></a>
-      </div>
-      <div class="flex gap-3">
-        <div class="w-14 h-20 rounded-lg bg-gradient-to-br from-primary/80 to-purple/80 flex items-center justify-center text-white text-xs font-bold shrink-0">签到<br>修仙</div>
-        <div class="flex-1 min-w-0">
-          <div class="text-sm font-bold text-gray-900">签到修仙传</div>
-          <div class="text-xs text-gray-400 mt-0.5">玄幻 · 长篇 · 男频</div>
-          <div class="mt-2">
-            <div class="flex justify-between text-xs text-gray-400 mb-1">
-              <span>大纲进度</span>
-              <span>6/30章</span>
-            </div>
-            <div class="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-              <div class="h-full bg-primary rounded-full progress-bar" style="width:20%"></div>
-            </div>
-          </div>
-          <div class="flex gap-3 mt-2.5">
-            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="book-open" class="w-3.5 h-3.5"></i> 大纲</div>
-            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="users" class="w-3.5 h-3.5"></i> 角色</div>
-            <div class="flex items-center gap-1 text-xs text-gray-400"><i data-lucide="globe" class="w-3.5 h-3.5"></i> 世界观</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 12 Skills Grid -->
-    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.3s">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-bold text-gray-900 text-base">创作技能</div>
-        <div class="text-xs text-gray-400">12项专业工具</div>
-      </div>
-      <div class="grid grid-cols-4 gap-3">
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-500"><i data-lucide="target" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">赛道分析</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500"><i data-lucide="calendar" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">篇幅规划</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-500"><i data-lucide="globe" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">世界观</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-500"><i data-lucide="user" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">人物设定</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center text-purple"><i data-lucide="share-2" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">关系网</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-500"><i data-lucide="layers" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">分卷大纲</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center text-cyan-500"><i data-lucide="file-text" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">单章大纲</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500"><i data-lucide="pen-tool" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">正文生成</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center text-red-500"><i data-lucide="zap" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">场景优化</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-teal-50 flex items-center justify-center text-teal-500"><i data-lucide="search" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">逻辑校验</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500"><i data-lucide="brush" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">润色文风</span>
-        </div>
-        <div class="skill-item flex flex-col items-center gap-1.5 cursor-pointer">
-          <div class="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center text-pink-500"><i data-lucide="megaphone" class="w-5 h-5"></i></div>
-          <span class="text-[10px] text-gray-500 text-center leading-tight">简介爆款</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Knowledge Base Quick Access -->
-    <div class="mt-4 bg-white rounded-2xl p-5 shadow-card slide-up" style="animation-delay:.4s">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-bold text-gray-900 text-base">知识库</div>
-        <div class="text-xs text-primary">管理</div>
-      </div>
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center text-amber-500"><i data-lucide="globe" class="w-4.5 h-4.5"></i></div>
-          <div>
-            <div class="text-sm font-medium text-gray-900">世界观库</div>
-            <div class="text-xs text-gray-400">2个世界</div>
-          </div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500"><i data-lucide="users" class="w-4.5 h-4.5"></i></div>
-          <div>
-            <div class="text-sm font-medium text-gray-900">人物库</div>
-            <div class="text-xs text-gray-400">12个角色</div>
-          </div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center text-blue-500"><i data-lucide="book-open" class="w-4.5 h-4.5"></i></div>
-          <div>
-            <div class="text-sm font-medium text-gray-900">大纲库</div>
-            <div class="text-xs text-gray-400">2部作品</div>
-          </div>
-        </div>
-        <div class="bg-gray-50 rounded-xl p-3.5 flex items-center gap-3">
-          <div class="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500"><i data-lucide="archive" class="w-4.5 h-4.5"></i></div>
-          <div>
-            <div class="text-sm font-medium text-gray-900">素材库</div>
-            <div class="text-xs text-gray-400">36条</div>
-          </div>
-        </div>
+      <!-- 底部清空按钮 -->
+      <div class="px-4 py-3 border-t border-outline-variant/10 shrink-0">
+        <button id="btn-clear-history" class="w-full bg-surface-container text-on-surface-variant border-none py-2.5 rounded-xl text-sm font-semibold
+                       hover:bg-surface-container-high active:scale-[0.98] transition-all">
+          清空记录
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- Bottom Tab Bar -->
-  <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 pb-2 pt-2 flex justify-around items-center" style="box-shadow:0 -2px 10px rgba(0,0,0,0.04);">
-    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
-      <div class="w-10 h-7 rounded-full bg-primary-container flex items-center justify-center"><i data-lucide="layout-dashboard" class="w-5 h-5 text-primary"></i></div>
-      <span class="text-[10px] text-primary font-medium">创作台</span>
-    </div>
-    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
-      <i data-lucide="book" class="w-5 h-5 text-gray-400"></i>
-      <span class="text-[10px] text-gray-400">作品</span>
-    </div>
-    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
-      <i data-lucide="compass" class="w-5 h-5 text-gray-400"></i>
-      <span class="text-[10px] text-gray-400">社区</span>
-    </div>
-    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
-      <i data-lucide="wand-2" class="w-5 h-5 text-gray-400"></i>
-      <span class="text-[10px] text-gray-400">AI工坊</span>
-    </div>
-    <div class="flex flex-col items-center gap-0.5 cursor-pointer">
-      <i data-lucide="user" class="w-5 h-5 text-gray-400"></i>
-      <span class="text-[10px] text-gray-400">我的</span>
-    </div>
-  </div>
+  <script>lucide.createIcons();</script>
 
   <script>
-    lucide.createIcons();
+    $(function () {
+
+      // ========== 导航辅助函数（每个页面必须定义） ==========
+      function navPush(route) {
+        console.log('[原型演示] PUSH 到: ' + route);
+        window.location.href = route;
+      }
+      function navReplace(route) {
+        console.log('[原型演示] REPLACE 为: ' + route);
+        window.location.replace(route);
+      }
+      function navReset(route) {
+        console.log('[原型演示] RESET 到: ' + route);
+        window.location.href = route;
+      }
+      function navBack() {
+        console.log('[原型演示] BACK 返回上一页');
+        if (window.history.length > 1) window.history.back();
+      }
+
+      // ========== TabBar 导航 ==========
+      $('#nav-create').on('click', function (e) {
+        e.preventDefault();
+        navReset('home.html');
+      });
+      $('#nav-ai-settings').on('click', function (e) {
+        e.preventDefault();
+        navReset('my-ai-settings.html');
+      });
+      // 我的 - 暂无页面，使用 # 占位
+      $('#nav-profile').on('click', function (e) {
+        e.preventDefault();
+        console.log('[原型演示] 我的页面暂未实现');
+      });
+
+      // ========== 侧边栏：打开 ==========
+      $('#btn-menu').on('click', function () {
+        $('#sidebar-overlay').removeClass('hidden');
+        // 延迟一帧触发滑入动画
+        requestAnimationFrame(function () {
+          $('#sidebar').removeClass('sidebar-leave').addClass('sidebar-enter').css('transform', 'translateX(0)');
+        });
+      });
+
+      // ========== 侧边栏：关闭（遮罩点击 / 关闭按钮） ==========
+      function closeSidebar() {
+        $('#sidebar').removeClass('sidebar-enter').addClass('sidebar-leave').css('transform', '');
+        // 等待动画结束后隐藏 overlay
+        setTimeout(function () {
+          $('#sidebar-overlay').addClass('hidden');
+          $('#sidebar').removeClass('sidebar-leave');
+        }, 250);
+      }
+      $('#sidebar-backdrop').on('click', closeSidebar);
+      $('#btn-close-sidebar').on('click', closeSidebar);
+
+      // ========== 侧边栏：点击会话项加载会话 ==========
+      $('#session-list').on('click', '.session-item', function () {
+        var sessionId = $(this).data('session-id');
+        console.log('[原型演示] 加载会话: ' + sessionId);
+        // 实际实现应：
+        // 1. 根据 sessionId 从 AsyncStorage 或后端 API 获取该会话的消息列表
+        // 2. 将消息渲染到 #message-list 区域
+        // 3. 更新当前会话上下文
+        // 4. 清空输入框
+        // 5. 关闭侧边栏
+        closeSidebar();
+      });
+
+      // ========== 侧边栏：删除会话 ==========
+      $('#session-list').on('click', '.session-delete', function (e) {
+        e.stopPropagation();
+        var $item = $(this).closest('.session-item');
+        var sessionId = $item.data('session-id');
+        console.log('[原型演示] 删除会话: ' + sessionId);
+        // 实际实现应：
+        // 1. 弹出确认弹窗："确定要删除此会话吗？"
+        // 2. 用户确认后，从 AsyncStorage/后端删除该会话数据
+        // 3. 从 DOM 中移除该会话项（$item.remove()）
+        // 4. 如果当前显示的正是被删除的会话，则清空消息列表并显示空态
+        // 原型演示：直接移除
+        $item.remove();
+      });
+
+      // ========== 侧边栏：清空所有记录 ==========
+      $('#btn-clear-history').on('click', function () {
+        console.log('[原型演示] 清空所有历史记录');
+        // 实际实现应：
+        // 1. 弹出确认弹窗："确定要清空所有历史记录吗？此操作不可恢复。"
+        // 2. 用户确认后，清空 AsyncStorage/后端的所有会话数据
+        // 3. 清空 DOM 中 #session-list 内的所有会话项
+        // 4. 关闭侧边栏，清空消息列表并显示空态
+        // 原型演示：直接清空列表
+        $('#session-list .session-item').remove();
+      });
+
+      // ========== 模式切换 ==========
+      $('.mode-btn').on('click', function () {
+        var $btn = $(this);
+        // 重置所有按钮样式
+        $('.mode-btn').removeClass('bg-primary text-on-primary font-medium')
+                      .addClass('text-on-surface-variant');
+        // 设置选中态
+        $btn.addClass('bg-primary text-on-primary font-medium')
+            .removeClass('text-on-surface-variant');
+        var mode = $btn.data('mode');
+        console.log('[原型演示] 切换到模式: ' + mode);
+
+        // 根据模式改变输入框 placeholder
+        var placeholders = {
+          'agent': '输入消息...',
+          'chat': '开始对话...',
+          'plan': '描述你的创作计划...'
+        };
+        $('#message-input').attr('placeholder', placeholders[mode] || '输入消息...');
+
+        // 实际实现应：
+        // 1. 将当前模式通过 API 参数传给后端（如 mode=agent/chat/plan）
+        // 2. Agent 模式：支持工具调用（创建书籍/生成章节等）
+        // 3. 对话模式：纯对话，无工具调用
+        // 4. 计划模式：agent 输出结构化计划，用户确认后再执行
+      });
+
+      // ========== 新建会话 ==========
+      $('#btn-new-session').on('click', function () {
+        console.log('[原型演示] 新建会话');
+        // 实际实现应：
+        // 1. 清空 #message-list 中的消息（但保留空态欢迎卡片）
+        // 2. 清空输入框
+        // 3. 生成新的 sessionId
+        // 4. 将新会话保存到 AsyncStorage
+        // 5. 在侧边栏顶部插入新会话项
+        // 原型演示：显示空态，隐藏消息列表
+        $('#message-list').addClass('hidden');
+        $('#empty-state').removeClass('hidden');
+        $('#message-input').val('').trigger('input');
+      });
+
+      // ========== 输入框：自动调整高度 ==========
+      $('#message-input').on('input', function () {
+        var $this = $(this);
+        $this.css('height', 'auto');
+        var scrollH = $this[0].scrollHeight;
+        var maxH = 72; // 4.5rem = 72px (约3行)
+        $this.css('height', Math.min(scrollH, maxH) + 'px');
+
+        // 根据输入内容启用/禁用发送按钮
+        if ($this.val().trim().length > 0) {
+          $('#btn-send').prop('disabled', false);
+        } else {
+          $('#btn-send').prop('disabled', true);
+        }
+      });
+
+      // ========== 模型选择器：输入框聚焦时展开 ==========
+      $('#message-input').on('focus', function () {
+        var $selector = $('#model-selector');
+        if ($selector.hasClass('hidden')) {
+          $selector.removeClass('hidden').addClass('model-bar-enter');
+        }
+      });
+
+      // ========== 模型选择器：输入框失焦时收起（延迟以允许点击模型项） ==========
+      $('#message-input').on('blur', function () {
+        setTimeout(function () {
+          $('#model-selector').addClass('hidden').removeClass('model-bar-enter');
+        }, 200);
+      });
+
+      // ========== 发送消息 ==========
+      $('#btn-send').on('click', function () {
+        var text = $('#message-input').val().trim();
+        if (!text) return;
+        console.log('[原型演示] 发送消息: ' + text);
+
+        // 实际实现应：
+        // 1. 将用户消息添加到 #message-list 顶部（移动端消息从底部向上排列）
+        // 2. 清空输入框并禁用发送按钮
+        // 3. 调用后端 AI 接口获取响应
+        // 4. 显示 agent 状态栏（带打字动画）
+        // 5. 流式展示 AI 回复内容
+        // 6. 完成后显示操作按钮组（追问/续写/重新生成）
+        // 7. 如果当前是空态，先隐藏空态再显示消息列表
+
+        // 原型演示：模拟添加用户消息和 AI 响应
+        if ($('#empty-state').is(':visible')) {
+          $('#empty-state').addClass('hidden');
+          $('#message-list').removeClass('hidden');
+        }
+        $('#message-input').val('').css('height', 'auto').trigger('input');
+      });
+
+      // ========== 快捷键：Enter 发送 / Shift+Enter 换行 ==========
+      $('#message-input').on('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          $('#btn-send').trigger('click');
+        }
+      });
+
+      // ========== 附件按钮 ==========
+      $('#btn-attach').on('click', function () {
+        console.log('[原型演示] 弹出附件菜单（上传文件/选择技能）');
+        // 实际实现应：
+        // 1. 从底部弹出 ActionSheet 菜单
+        // 2. 选项包括："上传文件"、"选择技能"、"粘贴内容"
+        // 3. 每个选项调用对应的第三方接口或系统选择器
+        // 4. 选中后关闭菜单，并在输入框中显示预览
+      });
+
+      // ========== 作品上下文切换 ==========
+      $('#btn-switch-work').on('click', function () {
+        console.log('[原型演示] 弹出书籍选择器');
+        // 实际实现应：
+        // 1. 从底部弹出模态面板，展示用户所有作品列表
+        // 2. 每个作品显示名称、最后编辑时间
+        // 3. 点击选中后更新 #work-context-bar 中的作品名称
+        // 4. 关闭面板
+        // 5. 切换作品后，重新加载该作品关联的会话
+      });
+
+      // ========== 模型选择 ==========
+      $('#model-selector').on('click', 'button', function () {
+        var modelName = $(this).text().trim();
+        console.log('[原型演示] 选择模型: ' + modelName);
+        // 实际实现应：
+        // 1. 保存所选模型到 userSettings
+        // 2. 高亮当前选中的模型按钮
+        // 3. 更新发送请求时的 model 参数
+        // 4. 如果选择的是"自定义模型"，弹出模型配置面板
+        // 原型演示：更新选中态
+        $('#model-selector button').removeClass('text-on-surface font-medium').addClass('text-on-surface-variant');
+        $(this).addClass('text-on-surface font-medium').removeClass('text-on-surface-variant');
+      });
+
+      // ========== AI 消息操作按钮 ==========
+      $('#message-list').on('click', '.msg-action', function () {
+        var action = $(this).data('action');
+        var $msg = $(this).closest('[data-msg-id]');
+        var msgId = $msg.data('msg-id');
+        console.log('[原型演示] 消息操作: ' + action + ' (msgId=' + msgId + ')');
+
+        // 实际实现应：
+        // - "followup"：在输入框中插入追问前缀，聚焦输入框
+        // - "insert-book"：将 AI 回复内容插入到当前挂载的书籍中
+        // - "regenerate"：重新请求 AI 生成该条消息
+        // - "continue"：继续生成后续内容
+        // - "stop"：中断当前 AI 生成
+      });
+
+      // ========== 停止生成 ==========
+      $('#btn-stop-generate').on('click', function () {
+        console.log('[原型演示] 停止 AI 生成');
+        // 实际实现应：
+        // 1. 调用 AbortController 中断当前 AI 请求
+        // 2. 隐藏 agent 状态栏的 typing dots
+        // 3. 显示"已停止生成"提示
+        // 4. 恢复发送按钮为可用状态
+        // 原型演示：隐藏 agent 状态栏
+        $('#agent-status').fadeOut();
+      });
+
+      // ========== 推荐卡片点击 ==========
+      $('#card-novel').on('click', function () {
+        console.log('[原型演示] 选择: 写一本小说');
+        // 实际实现应：
+        // 1. 在输入框中自动填入引导语："帮我写一本小说，主题是..."
+        // 2. 聚焦输入框
+        // 3. 如果处于空态，先切换到消息视图
+        $('#message-input').val('帮我写一本小说，主题是...').trigger('input').focus();
+      });
+      $('#card-outline').on('click', function () {
+        console.log('[原型演示] 选择: 生成大纲');
+        $('#message-input').val('帮我生成一个故事大纲，主题是...').trigger('input').focus();
+      });
+      $('#card-character').on('click', function () {
+        console.log('[原型演示] 选择: 角色设定');
+        $('#message-input').val('帮我设计一个角色设定，类型是...').trigger('input').focus();
+      });
+
+    });
   </script>
+
 </body>
 </html>

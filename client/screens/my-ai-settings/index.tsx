@@ -104,6 +104,27 @@ export default function MyAISettingsPage() {
   const [customApiKey, setCustomApiKey] = useState("");
   const [customBaseUrl, setCustomBaseUrl] = useState("");
 
+  // 测试连接
+  const [testingIndex, setTestingIndex] = useState<number | string | null>(null);
+
+  // 测试连接
+  const testConnection = async (apiKey: string, baseUrl: string, modelId: string, idx: number | string | null) => {
+    setTestingIndex(idx);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/ai/test-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey, baseUrl, modelId }),
+      });
+      const data = await res.json();
+      Alert.alert(data.success ? "连接成功" : "连接失败", data.message || data.error || "未知错误");
+    } catch (err: any) {
+      Alert.alert("连接失败", err.message || "网络错误");
+    } finally {
+      setTestingIndex(null);
+    }
+  };
+
   // 自定义技能表单
   const [showCustomSkillForm, setShowCustomSkillForm] = useState(false);
   const [newSkillName, setNewSkillName] = useState("");
@@ -453,6 +474,17 @@ export default function MyAISettingsPage() {
               <Text className="text-[10px] text-white font-medium">当前</Text>
             </View>
           )}
+          <TouchableOpacity
+            className="mr-2 px-2 py-1 rounded-lg bg-blue-50 active:bg-blue-100"
+            onPress={() => testConnection(model.apiKey, model.baseUrl, model.modelId, `list-${model.id}`)}
+            disabled={testingIndex === `list-${model.id}`}
+          >
+            {testingIndex === `list-${model.id}` ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <FontAwesome6 name="link" size={12} color="#3B82F6" />
+            )}
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => deleteCustomModel(model.id)}>
             <FontAwesome6 name="trash-can" size={14} color="#EF4444" />
           </TouchableOpacity>
@@ -509,6 +541,22 @@ export default function MyAISettingsPage() {
             value={customBaseUrl}
             onChangeText={setCustomBaseUrl}
           />
+
+          {/* 测试连接按钮 */}
+          <TouchableOpacity
+            className="flex-row items-center justify-center py-2.5 rounded-xl bg-blue-50 border border-blue-200 mb-3 active:opacity-70"
+            onPress={() => testConnection(customApiKey, customBaseUrl || "https://api.openai.com/v1", customModelId, "form")}
+            disabled={testingIndex === "form" || !customApiKey || !customModelId}
+          >
+            {testingIndex === "form" ? (
+              <ActivityIndicator size="small" color="#3B82F6" />
+            ) : (
+              <FontAwesome6 name="link" size={12} color="#3B82F6" />
+            )}
+            <Text className="text-sm font-medium text-blue-600 ml-2">
+              {testingIndex === "form" ? "测试中..." : "测试连接"}
+            </Text>
+          </TouchableOpacity>
 
           <View className="flex-row gap-3 mt-1">
             <TouchableOpacity
