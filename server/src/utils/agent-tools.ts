@@ -281,6 +281,41 @@ export async function createChapter(
       })
       .where(eq(books.id, bookId as any));
 
+    // 同步更新 volumes JSON，使章节显示在书籍页面上
+    if (volumeId) {
+      const [book] = await db
+        .select({ volumes: books.volumes })
+        .from(books)
+        .where(eq(books.id, bookId as any))
+        .limit(1);
+
+      if (book?.volumes && Array.isArray(book.volumes)) {
+        const updatedVolumes = book.volumes.map((vol: any) => {
+          if (vol.id === volumeId) {
+            return {
+              ...vol,
+              chapters: [
+                ...(vol.chapters || []),
+                {
+                  id: data.id,
+                  title,
+                  chapterNumber,
+                  wordCount: content.length,
+                  createdAt: now,
+                },
+              ],
+            };
+          }
+          return vol;
+        });
+
+        await db
+          .update(books)
+          .set({ volumes: updatedVolumes as any })
+          .where(eq(books.id, bookId as any));
+      }
+    }
+
     return {
       success: true,
       data,
