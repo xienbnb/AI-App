@@ -55,6 +55,14 @@ const presetModels = [
   { id: "gpt-4o", name: "GPT-4o", provider: "OpenAI", desc: "全能模型，综合表现优秀" },
 ];
 
+// 公益AI模型列表（SiliconFlow 免费接口）
+const publicWelfareModels = [
+  { id: "Pro/zai-org/GLM-4.7", name: "GLM-4.7", provider: "公益AI", desc: "智谱GLM，免费公益模型" },
+  { id: "nex-agi/Nex-N2-Pro", name: "Nex N2 Pro", provider: "公益AI", desc: "高性能免费模型" },
+  { id: "deepseek-ai/DeepSeek-OCR", name: "DeepSeek OCR", provider: "公益AI", desc: "DeepSeek 视觉理解" },
+  { id: "tencent/Hunyuan-MT-7B", name: "混元 MT-7B", provider: "公益AI", desc: "腾讯混元翻译模型" },
+];
+
 // 默认技能列表
 const defaultSkills: Skill[] = [
   { id: "create-book", name: "创建书籍", desc: "创建新作品（仅此技能可创建书籍）", enabled: true, icon: "book", prompt: "你是一个帮助用户创建新书籍的助手。根据用户提供的小说名称、类型和简介，严格遵守以下规则：只创建书籍，不生成大纲，不生成正文，不生成任何其他内容。创建完成后告知用户书籍已创建成功。" },
@@ -333,6 +341,57 @@ export default function MyAISettingsPage() {
               <Text className="text-sm font-semibold text-gray-800">{model.name}</Text>
               {aiModel === model.id && (
                 <View className="bg-indigo-500 rounded-full px-1.5 py-0.5">
+                  <Text className="text-[10px] text-white font-medium">当前</Text>
+                </View>
+              )}
+            </View>
+            <Text className="text-xs text-gray-400 mt-0.5">
+              {model.provider} · {model.desc}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      ))}
+
+      {/* 公益AI分隔线 */}
+      <View className="flex-row items-center my-2">
+        <View className="flex-1 h-px bg-gray-200" />
+        <View className="flex-row items-center bg-blue-50 rounded-full px-2.5 py-1 mx-2">
+          <FontAwesome6 name="hand-holding-heart" size={10} color="#3B82F6" />
+          <Text className="text-xs font-medium text-blue-600 ml-1">公益AI</Text>
+        </View>
+        <View className="flex-1 h-px bg-gray-200" />
+      </View>
+
+      {publicWelfareModels.map((model) => (
+        <TouchableOpacity
+          key={model.id}
+          className={`flex-row items-center p-3.5 rounded-xl border ${
+            aiModel === model.id
+              ? "border-blue-500 bg-blue-50"
+              : "border-gray-100 bg-white"
+          }`}
+          onPress={() => selectPresetModel(model.id)}
+          activeOpacity={0.7}
+        >
+          <View
+            className={`w-10 h-10 rounded-xl items-center justify-center mr-3 ${
+              aiModel === model.id ? "bg-blue-100" : "bg-gray-50"
+            }`}
+          >
+            <FontAwesome6
+              name="seedling"
+              size={16}
+              color={aiModel === model.id ? "#3B82F6" : "#9CA3AF"}
+            />
+          </View>
+          <View className="flex-1">
+            <View className="flex-row items-center gap-2">
+              <Text className="text-sm font-semibold text-gray-800">{model.name}</Text>
+              <View className="bg-blue-500 rounded-full px-1.5 py-0.5">
+                <Text className="text-[10px] text-white font-medium">免费</Text>
+              </View>
+              {aiModel === model.id && (
+                <View className="bg-blue-500 rounded-full px-1.5 py-0.5">
                   <Text className="text-[10px] text-white font-medium">当前</Text>
                 </View>
               )}

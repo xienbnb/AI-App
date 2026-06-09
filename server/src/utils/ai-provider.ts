@@ -92,13 +92,69 @@ async function getUserCustomApiKey(userId: string) {
 // Provider 工厂
 // ============================================================
 
+// ============================================================
+// 公益 AI（SiliconFlow）配置
+// ============================================================
+
+const SILICONFLOW_API_KEY = "sk-pswiizdmufuynmehxtjihfipxdixymnvxzlujxezfomhlgvg";
+const SILICONFLOW_BASE_URL = "https://api.siliconflow.cn/v1";
+
+/** 已知的 SiliconFlow 免费模型列表 */
+export const SILICONFLOW_MODELS: string[] = [
+  "Pro/zai-org/GLM-4.7",
+  "deepseek-ai/DeepSeek-V3",
+  "deepseek-ai/DeepSeek-R1",
+];
+
+function isSiliconFlowModel(model: string): boolean {
+  return SILICONFLOW_MODELS.includes(model);
+}
+
+// ============================================================
+// 读取用户偏好的模型
+// ============================================================
+
+async function getUserPreferredModel(userId: string): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ aiSettings: users.aiSettings })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    if (row?.aiSettings) {
+      const settings = row.aiSettings as { aiModel?: string };
+      if (settings.aiModel) {
+        return settings.aiModel;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+// ============================================================
+// Provider 工厂
+// ============================================================
+
 export async function createProvider(userId?: string): Promise<AIProvider> {
   if (userId) {
+    // 1. 优先判断：用户选择了公益 AI（SiliconFlow）
+    const preferredModel = await getUserPreferredModel(userId);
+    if (preferredModel && isSiliconFlowModel(preferredModel)) {
+      return new OpenAICompatibleProvider(
+        SILICONFLOW_API_KEY,
+        SILICONFLOW_BASE_URL,
+        preferredModel,
+      );
+    }
+
+    // 2. 其次：有自定义 API Key
     const custom = await getUserCustomApiKey(userId);
     if (custom) {
       return new OpenAICompatibleProvider(custom.apiKey, custom.apiBase, custom.model);
     }
   }
+
+  // 3. 默认：Coze SDK
   return new CozeSdkProvider();
 }
 
