@@ -306,31 +306,30 @@ router.post("/execute", async (req: Request, res: Response) => {
 
       for await (const chunk of stream) {
         if (chunk.content) {
-          currentResponse += chunk.content.toString();
+          const text = chunk.content.toString();
+          currentResponse += text;
+          // 逐块流式发送，用户能看到实时生成的内容
+          res.write(`data: ${JSON.stringify({ type: "text", content: text })}\n\n`);
         }
       }
 
       fullResponse += currentResponse;
 
-      // 【对话模式】跳过工具调用，直接返回文本
+      // 【对话模式】文本已流式发送完毕，直接跳出
       if (agentMode === "chat") {
-        res.write(`data: ${JSON.stringify({ type: "text", content: currentResponse })}\n\n`);
         break;
       }
 
-      // 检测是否有工具调用，有则切除 JSON 后再发送
+      // 检测是否有工具调用，有则切除 JSON 后通过 text_replace 修正 UI
       const toolCall = detectToolCall(currentResponse);
-      let displayText = currentResponse;
-
       if (toolCall) {
         const before = currentResponse.slice(0, toolCall.startIndex);
         const after = currentResponse.slice(toolCall.endIndex);
-        displayText = (before + after).trim();
-      }
-
-      // 发送干净文本（一次性发送，用户不会看到 JSON）
-      if (displayText) {
-        res.write(`data: ${JSON.stringify({ type: "text", content: displayText })}\n\n`);
+        const cleanText = (before + after).trim();
+        if (cleanText) {
+          // text_replace 会用干净文本替换掉之前流式发送的内容（包括其中的 JSON）
+          res.write(`data: ${JSON.stringify({ type: "text_replace", content: cleanText })}\n\n`);
+        }
       }
 
       if (!toolCall) {
