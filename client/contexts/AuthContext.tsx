@@ -8,6 +8,7 @@
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { setVipStatus } from "@/services/data-manager";
 
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
@@ -21,6 +22,7 @@ interface UserInfo {
   nickname: string;
   avatar: string;
   bio: string;
+  planType?: string;
 }
 
 interface AuthContextType {
@@ -28,6 +30,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  planType: string;
   login: (token: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (userData: Partial<UserInfo>) => void;
@@ -70,6 +73,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     })();
   }, []);
+
+  // 同步 planType 到 data-manager
+  useEffect(() => {
+    const pt = user?.planType || "free";
+    setVipStatus(pt === "vip" || pt === "super_admin");
+  }, [user?.planType]);
 
   const fetchUser = useCallback(async (tok: string): Promise<UserInfo | null> => {
     try {
@@ -142,6 +151,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     token,
     isAuthenticated: !!token,
     isLoading,
+    planType: user?.planType || "free",
     login,
     logout,
     updateUser,

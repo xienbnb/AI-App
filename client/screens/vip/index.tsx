@@ -35,6 +35,7 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
+import { DataManager } from "@/services/data-manager";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -207,7 +208,31 @@ export default function VipCenterScreen() {
 
   // 处理升级/续费
   const handleUpgrade = () => {
-    Alert.alert("升级VIP", "即将跳转至支付页面", [{ text: "知道了" }]);
+    Alert.alert(
+      "升级VIP",
+      "升级后将解锁云端存储、多设备同步等高级功能。\n是否将本地创作数据同步到云端？",
+      [
+        { text: "取消", style: "cancel" },
+        {
+          text: "同步到云端",
+          onPress: async () => {
+            try {
+              const result = await DataManager.syncToCloud();
+              if (result.success) {
+                Alert.alert(
+                  "同步成功",
+                  `已同步 ${result.results?.books || 0} 本书籍、${result.results?.chapters || 0} 个章节到云端`,
+                );
+              } else {
+                Alert.alert("同步失败", (result as any).error || "请稍后重试");
+              }
+            } catch (e) {
+              Alert.alert("同步失败", "网络错误，请稍后重试");
+            }
+          },
+        },
+      ],
+    );
   };
 
   // 判断某功能在当前等级是否高亮

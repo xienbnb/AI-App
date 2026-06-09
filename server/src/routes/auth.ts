@@ -12,7 +12,7 @@ import { getSupabaseCredentials, getSupabaseServiceRoleKey } from "../storage/da
 import { getSupabaseClient } from "../storage/database/supabase-client.js";
 import { authMiddleware } from "../middleware/auth.js";
 import { db } from "../storage/database/client.js";
-import { users } from "../storage/database/shared/schema.js";
+import { users, userVips } from "../storage/database/shared/schema.js";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
@@ -22,6 +22,18 @@ const router = Router();
 const otpStore = new Map<string, { code: string; expiresAt: number; lastSentAt: number }>();
 const OTP_EXPIRES_IN = 5 * 60 * 1000; // 5 分钟
 const OTP_RATE_LIMIT = 60 * 1000; // 60 秒限流
+
+/**
+ * 获取用户的 VIP 计划类型
+ */
+async function getUserPlanType(userId: string): Promise<string> {
+  try {
+    const [vip] = await db.select({ planType: userVips.planType }).from(userVips).where(eq(userVips.userId, userId)).limit(1);
+    return vip?.planType || "free";
+  } catch {
+    return "free";
+  }
+}
 
 /**
  * POST /api/v1/auth/register
@@ -322,6 +334,7 @@ router.get("/me", async (req: Request, res: Response) => {
         
         const result = await db.select().from(users).where(eq(users.id, guestId)).limit(1);
         if (result.length > 0) {
+          const planType = await getUserPlanType(result[0].id);
           return res.json({
             user: {
               id: result[0].id,
@@ -330,6 +343,7 @@ router.get("/me", async (req: Request, res: Response) => {
               avatar: result[0].avatar || "",
               bio: result[0].bio || "",
               isGuest: true,
+              planType,
             },
           });
         }
@@ -350,6 +364,7 @@ router.get("/me", async (req: Request, res: Response) => {
         
         const result = await db.select().from(users).where(eq(users.id, userId)).limit(1);
         if (result.length > 0) {
+          const planType = await getUserPlanType(result[0].id);
           return res.json({
             user: {
               id: result[0].id,
@@ -358,6 +373,7 @@ router.get("/me", async (req: Request, res: Response) => {
               avatar: result[0].avatar || "",
               bio: result[0].bio || "",
               isGuest: false,
+              planType,
             },
           });
         }
@@ -388,6 +404,8 @@ router.get("/me", async (req: Request, res: Response) => {
       return;
     }
 
+    const planType = await getUserPlanType(user.id);
+
     res.json({
       user: {
         id: user.id,
@@ -395,6 +413,7 @@ router.get("/me", async (req: Request, res: Response) => {
         nickname: user.nickname,
         avatar: user.avatar,
         bio: user.bio,
+        planType,
       },
     });
   } catch (err: any) {

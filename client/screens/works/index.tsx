@@ -37,6 +37,7 @@ import * as Haptics from "expo-haptics";
 import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { DataManager } from "@/services/data-manager";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -333,10 +334,8 @@ export default function WorksScreen() {
 
   const fetchBooks = useCallback(async () => {
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/writing`, { headers });
-      const json = await res.json();
-      if (json.success) setBooks(json.data);
+      const result = await DataManager.getBooks();
+      if (result.success) setBooks(result.data);
     } catch (e) {
       console.error("获取书籍列表失败", e);
     }
@@ -392,14 +391,8 @@ export default function WorksScreen() {
         status: newStatus,
       };
       body.coverImage = customCoverUrl.trim() || selectedCover;
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/writing/${editingBookId}`, {
-        method: "PUT",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const json = await res.json();
-      if (json.success) {
+      const result = await DataManager.updateBook(editingBookId, body);
+      if (result.success) {
         setModalVisible(false);
         setLongPressBook(null);
         resetForm();
@@ -417,25 +410,19 @@ export default function WorksScreen() {
       return;
     }
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/writing`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: newTitle.trim(),
-          description: newDesc.trim(),
-          category: newCategory,
-          status: newStatus,
-          cover: "cover-image",
-          coverImage: customCoverUrl.trim() || selectedCover,
-        }),
+      const result = await DataManager.createBook({
+        title: newTitle.trim(),
+        description: newDesc.trim(),
+        category: newCategory,
+        status: newStatus,
+        cover: "cover-image",
+        coverImage: customCoverUrl.trim() || selectedCover,
       });
-      const json = await res.json();
-      if (json.success) {
+      if (result.success) {
         setModalVisible(false);
         resetForm();
         await fetchBooks();
-        router.push("/detail", { id: json.data.id });
+        router.push("/detail", { id: result.data?.id });
       }
     } catch (e) {
       Alert.alert("错误", "创建书籍失败");
@@ -450,18 +437,12 @@ export default function WorksScreen() {
     }
     setAiGenerating(true);
     try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/writing/ai-generate`, {
-        method: "POST",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: aiTopic.trim() }),
-      });
-      const json = await res.json();
-      if (json.success) {
+      const result = await DataManager.aiCreateBook(aiTopic.trim());
+      if (result.success) {
         setAiModalVisible(false);
         setAiTopic("");
         await fetchBooks();
-        router.push("/detail", { id: json.data.id });
+        router.push("/detail", { id: result.data.id });
       }
     } catch (e) {
       Alert.alert("错误", "AI创建失败，请重试");
@@ -481,13 +462,8 @@ export default function WorksScreen() {
   // 删除书籍
   const executeDeleteBook = async (book: Book) => {
     try {
-      const token = await AsyncStorage.getItem("auth_token");
-      const res = await fetch(`${API_BASE}/api/v1/writing/${book.id}`, {
-        method: "DELETE",
-        headers: token ? { "x-session": token, "Content-Type": "application/json" } : { "Content-Type": "application/json" },
-      });
-      const json = await res.json();
-      if (json.success) {
+      const result = await DataManager.deleteBook(book.id);
+      if (result.success) {
         setConfirmDeleteBook(null);
         await fetchBooks();
       }
@@ -499,10 +475,9 @@ export default function WorksScreen() {
   // 导出作品
   const handleExportBook = async (bookId: string, bookTitle: string) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`);
-      const json = await res.json();
-      if (!json.success) { Alert.alert("错误", "获取书籍数据失败"); return; }
-      const book = json.data;
+      const result = await DataManager.getBookDetail(bookId);
+      if (!result.success || !result.data) { Alert.alert("错误", "获取书籍数据失败"); return; }
+      const book = result.data;
 
       let md = `# ${book.title}\n\n`;
       md += `> **分类**：${book.category || "未分类"}  |  **状态**：${book.status === "writing" ? "连载中" : book.status === "completed" ? "已完结" : "已暂停"}\n`;
