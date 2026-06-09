@@ -301,7 +301,9 @@ export async function createChapter(
                   title,
                   chapterNumber,
                   wordCount: content.length,
+                  content,
                   createdAt: now,
+                  updatedAt: now,
                 },
               ],
             };
