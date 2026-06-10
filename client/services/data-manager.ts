@@ -40,7 +40,27 @@ async function checkVipFromCache(): Promise<boolean> {
     const raw = await AsyncStorage.getItem("auth_user");
     if (raw) {
       const user = JSON.parse(raw);
-      const pt = user?.planType || "free";
+      let pt = user?.planType;
+      // 旧缓存可能没有 planType，从服务端获取最新值
+      if (!pt) {
+        const token = await AsyncStorage.getItem("auth_token");
+        if (token) {
+          try {
+            const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/auth/me`, {
+              headers: { "x-session": token },
+            });
+            if (res.ok) {
+              const data = await res.json();
+              pt = data.user?.planType || "free";
+              // 更新缓存
+              await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
+            }
+          } catch {
+            // 网络不可用，回退到本地判断
+          }
+        }
+      }
+      if (!pt) pt = "free";
       return pt === "monthly" || pt === "yearly" || pt === "super_admin";
     }
   } catch {
