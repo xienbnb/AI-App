@@ -507,7 +507,7 @@ export default function EditorScreen() {
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
-      if (e.data === "[DONE]") { sse.close(); return; }
+      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
       try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => { setIsGenerating(false); sse.close(); });
@@ -534,7 +534,7 @@ export default function EditorScreen() {
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
-      if (e.data === "[DONE]") { sse.close(); return; }
+      if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
       try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => setIsGenerating(false));
@@ -786,7 +786,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
@@ -799,7 +799,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
@@ -813,7 +813,7 @@ export default function EditorScreen() {
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); return; }
+                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
