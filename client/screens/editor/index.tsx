@@ -789,6 +789,7 @@ export default function EditorScreen() {
                         if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
+                      sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
@@ -802,6 +803,7 @@ export default function EditorScreen() {
                         if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
+                      sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
@@ -816,6 +818,7 @@ export default function EditorScreen() {
                         if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
                         try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
+                      sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
                     {/* 标记工具 */}
