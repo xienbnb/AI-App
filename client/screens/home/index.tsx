@@ -581,6 +581,10 @@ export default function HomeScreen() {
   const agentSseRef = useRef<any>(null);
   const agentActionStatusRef = useRef("");
 
+  // Ref to track latest messages for sendFreeChat history (avoid stale closure)
+  const messagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Keyboard avoiding
   useEffect(() => {
     const showSub = Keyboard.addListener("keyboardWillShow", (e: any) => {
@@ -633,7 +637,8 @@ export default function HomeScreen() {
         headers: getAuthHeaders(),
       });
       const json = await res.json();
-      if (json.success) setAgentConversations(json.data || []);
+      if (json.conversations) setAgentConversations(json.conversations || []);
+      else if (json.success) setAgentConversations(json.data || []);
     } catch (e) { /* silent */ }
   }, [token, API_BASE, getAuthHeaders]);
 
@@ -656,7 +661,13 @@ export default function HomeScreen() {
         headers: getAuthHeaders(),
       });
       const json = await res.json();
-      if (json.success && json.data?.messages) {
+      if (json.conversation?.messages) {
+        const msgs = json.conversation.messages.map((m: any) => ({
+          role: m.role === "assistant" ? "ai" : m.role,
+          content: m.content,
+        }));
+        setAgentMessages(msgs);
+      } else if (json.success && json.data?.messages) {
         const msgs = json.data.messages.map((m: any) => ({
           role: m.role === "assistant" ? "ai" : m.role,
           content: m.content,
@@ -930,7 +941,7 @@ export default function HomeScreen() {
       addMessage("user", userText);
     }
 
-    const history = messages
+    const history = messagesRef.current
       .filter((m) => m.content && m.content.length > 0)
       .slice(-10)
       .map((m) => ({ role: m.role, content: m.content }));
@@ -973,6 +984,18 @@ export default function HomeScreen() {
             addMessage("ai", fullContent);
           }
           setStreamContent("");
+          // 更新会话列表
+          const preview = userText.slice(0, 40);
+          const sid = sessionIdRef.current;
+          setSessionList(prev => {
+            const existing = prev.findIndex(s => s.id === sid);
+            if (existing >= 0) {
+              const updated = [...prev];
+              updated[existing] = { ...updated[existing], preview, ts: Date.now() };
+              return updated;
+            }
+            return [{ id: sid, preview, ts: Date.now() }, ...prev];
+          });
           return;
         }
         try {

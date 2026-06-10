@@ -310,7 +310,7 @@ export default function EditorScreen() {
     if (!bookId || !outlineHtml) return;
     setSavingOutline(true);
     try {
-      await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, {
+      await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline`, {
         method: "PUT",
         headers: getAuthHeaders(),
         body: JSON.stringify({ outline: outlineHtml }),
@@ -363,7 +363,7 @@ export default function EditorScreen() {
     setIsGenerating(true);
     setGeneratedContent("");
     const body = JSON.stringify({ prompt: "请检查并修正以下文本中的错别字和语法错误，直接返回修正后的完整文本：\n" + content.slice(-3000), style: "default", wordCount: 3000 });
-    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, { method: "POST", headers: getAuthHeaders(), body });
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, { method: "POST", headers: getAuthHeaders(), body });
     sseRef.current = sse;
     sse.addEventListener("message", (event: any) => {
       if (!event.data) return;
@@ -499,7 +499,7 @@ export default function EditorScreen() {
       person: "生成10个小说角色名(含姓氏，男女各5):",
       item: "生成10个网络小说神器/法宝名:", ability: "生成10个技能/功法名:", place: "生成10个地名/秘境名:",
     };
-    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
       method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: prompts[nameType], style: "default", wordCount: 200 }),
     });
@@ -515,15 +515,18 @@ export default function EditorScreen() {
     if (!aiPrompt.trim()) { Alert.alert("提示", "请输入写作指令"); return; }
     setIsGenerating(true); setGeneratedContent(""); setAiModalVisible(false);
     const context = content.slice(-2000);
+    const hasSelection = selectedText && selectedText.length > 0;
     let systemPrompt = aiPrompt.trim();
     if (aiMode === "generate") {
       systemPrompt = `续写以下内容，保持叙事风格、人物性格和文风一致：\n---上下文---\n${context}\n---写作要求---\n${aiPrompt.trim()}`;
     } else if (aiMode === "expand") {
-      systemPrompt = `请扩写以下内容，增加细节描写（环境、心理、感官），丰富场景和情感，不改变原意：\n${context.slice(-1000)}\n---扩写要求---\n${aiPrompt.trim()}`;
+      const targetText = hasSelection ? selectedText : context.slice(-1000);
+      systemPrompt = `请扩写以下内容，增加细节描写（环境、心理、感官），丰富场景和情感，不改变原意：\n${targetText}\n---扩写要求---\n${aiPrompt.trim()}`;
     } else if (aiMode === "polish") {
-      systemPrompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅：\n${context.slice(-1000)}\n---润色要求---\n${aiPrompt.trim()}`;
+      const targetText = hasSelection ? selectedText : context.slice(-1000);
+      systemPrompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅：\n${targetText}\n---润色要求---\n${aiPrompt.trim()}`;
     }
-    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
       method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: systemPrompt, style: "default", wordCount: 1000 }),
     });
@@ -573,7 +576,7 @@ export default function EditorScreen() {
   const handleQuickWords = () => {
     pushUndo(content);
     const lastText = content.slice(-2000);
-    const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
       method: "POST", headers: getAuthHeaders(),
       body: JSON.stringify({ prompt: `从以下文字提取关键词(逗号分隔):\n${lastText}`, style: "default", wordCount: 200 }),
     });
@@ -739,13 +742,26 @@ export default function EditorScreen() {
             {/* ===== 浮动AI栏（选中文字时显示，浮层不推挤内容） ===== */}
             {showFloatingAI && selectedText && (
               <View style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 100,
+                position: 'absolute',
+                bottom: 55,
+                left: 8,
+                right: 8,
+                zIndex: 100,
+                borderRadius: 14,
                 backgroundColor: nightMode ? "#1E1E38" : "#FFFFFF",
-                shadowColor: "#6366F1",
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: nightMode ? 0 : 0.08,
-                shadowRadius: 12, elevation: 8,
+                shadowColor: nightMode ? "#6366F1" : "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: nightMode ? 0 : 0.15,
+                shadowRadius: 16, elevation: 12,
+                borderWidth: 1,
+                borderColor: nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.06)",
               }}>
+                <Text style={{
+                  fontSize: 11, color: nightMode ? "#8888AA" : "#9CA3AF",
+                  paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2,
+                }} numberOfLines={1}>
+                  已选中：{selectedText.length} 字
+                </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
                   <View className="flex-row items-center gap-0.5">
                     {/* 编辑操作 */}
@@ -756,7 +772,7 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="pen" label="润色" color="#EC4899" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
@@ -769,7 +785,7 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
@@ -783,7 +799,7 @@ export default function EditorScreen() {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       const context = content.slice(-1500);
                       const prompt = `请根据以上上下文风格，自然地续写接下来的内容。保持叙事节奏、人物性格和文风一致，不要重复已有内容：\n---上下文---\n${context}`;
-                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/generate`, {
+                      const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
                         body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
                       });
@@ -827,6 +843,7 @@ export default function EditorScreen() {
                   onChangeText={(t) => { pushUndo(t); setContent(t); }}
                   onSelectionChange={handleSelectionChange}
                   multiline
+                  contextMenuHidden={true}
                   className="w-full flex-1 outline-none"
                   style={{
                     color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,

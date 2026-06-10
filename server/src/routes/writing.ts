@@ -1,9 +1,8 @@
 import { Router, type Request, type Response } from "express";
 import { createProvider } from "../utils/ai-provider.js";
-import type { LLMConfig } from "coze-coding-dev-sdk";
 import multer from "multer";
 import { db } from "../storage/database/client.js";
-import { inspirations, books, users } from "../storage/database/shared/schema.js";
+import { inspirations, books, users, userSettings, outlines } from "../storage/database/shared/schema.js";
 import { eq, and, asc, desc, isNull, sql } from "drizzle-orm";
 import { toCamelCase, toSnakeCaseTopLevel } from "../utils/case-transform.js";
 import { quotaMiddleware } from "../middleware/quota.middleware.js";
@@ -98,6 +97,188 @@ router.post("/", upload.single("cover"), async (req: Request, res: Response) => 
   } catch (err: any) {
     console.error("创建作品错误:", err);
     res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// ============================================================
+// AI Services & Uploads (static routes, before /:id)
+// ============================================================
+
+// POST /ai-generate - AI 生成并创建新作品
+router.post("/ai-generate", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { topic } = req.body;
+    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
+      res.status(400).json({ success: false, error: "请提供创作主题" });
+      return;
+    }
+
+    const provider = await createProvider(userId);
+    const systemPrompt = "你是一个专业的文学创作助手。根据用户的创作主题，生成作品的基本信息。";
+    const userPrompt = `创作主题：${topic.trim()}\n\n请生成以下JSON格式的回复，不要包含其他内容：\n{"title": "作品标题", "description": "50-100字的作品简介", "category": "小说/散文/诗歌/剧本/其他中的一个"}`;
+
+    const stream = provider.generateStream(
+      [{ role: "system" as const, content: systemPrompt }, { role: "user" as const, content: userPrompt }] as any
+    );
+
+    let fullContent = "";
+    for await (const chunk of stream) {
+      if (chunk.content) fullContent += chunk.content;
+    }
+
+    let parsed;
+    try {
+      const jsonMatch = fullContent.match(/\{[\s\S]*\}/);
+      parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+    } catch {
+      parsed = null;
+    }
+
+    const title = parsed?.title || topic.trim();
+    const description = parsed?.description || "";
+    const category = parsed?.category || "小说";
+
+    const [row] = await db.insert(books).values({
+      userId,
+      title: title,
+      description,
+      category,
+      coverImage: "",
+      status: "draft",
+      volumes: [{ id: crypto.randomUUID(), title: "第一卷", order: 1, chapters: [] }],
+      wordCount: 0,
+      chapterCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).returning();
+
+    res.json({ success: true, data: toCamelCase(row) });
+  } catch (err: any) {
+    console.error("AI 创建作品错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// POST /ai-dialogue - AI 自由对话（SSE流式）
+router.post("/ai-dialogue", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { message, history } = req.body;
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
+      res.status(400).json({ success: false, error: "消息不能为空" });
+      return;
+    }
+
+    const provider = await createProvider(userId);
+    const messages: { role: string; content: string }[] = [
+      { role: "system", content: "你是一个专业的创作助手，可以帮助用户进行文学创作、润色、扩写等文字工作。请用中文回复，保持专业且热情的语调。" },
+    ];
+
+    if (history && Array.isArray(history)) {
+      for (const msg of history) {
+        if (msg.role && msg.content) {
+          messages.push({ role: msg.role, content: msg.content });
+        }
+      }
+    }
+    messages.push({ role: "user", content: message.trim() });
+
+    const stream = provider.generateStream(messages as any);
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    let fullContent = "";
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ type: "text", content: chunk.content })}\n\n`);
+      }
+    }
+
+    if (fullContent) {
+      res.write(`data: ${JSON.stringify({ type: "text", content: fullContent })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err: any) {
+    console.error("AI 对话错误:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message || "服务器错误" });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: "error", content: err.message })}\n\n`);
+      res.end();
+    }
+  }
+});
+
+// POST /upload - 文件上传
+router.post("/upload", upload.single("file"), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: "请选择文件" });
+      return;
+    }
+    // For now, store as memory only - return data URL for small files
+    const mimeType = req.file.mimetype;
+    const base64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${mimeType};base64,${base64}`;
+    res.json({ success: true, data: { url: dataUrl, name: req.file.originalname, size: req.file.size } });
+  } catch (err: any) {
+    console.error("上传文件错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// POST /generate - AI 独立内容生成（SSE流式，无需 bookId，供 Write 页面使用）
+router.post("/generate", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { topic, writingStyle, wordCount } = req.body;
+    if (!topic || typeof topic !== "string" || topic.trim().length === 0) {
+      res.status(400).json({ success: false, error: "请提供写作主题" });
+      return;
+    }
+
+    const provider = await createProvider(userId);
+    const stylePrompt = writingStyle ? `写作风格：${writingStyle}` : "";
+    const wordCountPrompt = wordCount ? `字数要求：${wordCount}字` : "";
+    const systemPrompt = "你是一个专业的文学创作助手，擅长各种类型的写作。";
+    const userPrompt = `写作主题：${topic.trim()}\n${stylePrompt}\n${wordCountPrompt}\n\n请根据主题创作一段完整的文字内容，如果指定了标题，请包含标题。`;
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, no-transform, must-revalidate");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no");
+
+    const messages = [
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: userPrompt },
+    ];
+    const stream = provider.generateStream(messages);
+    let fullContent = "";
+    for await (const chunk of stream) {
+      if (chunk.content) {
+        fullContent += chunk.content;
+        res.write(`data: ${JSON.stringify({ type: "text", content: chunk.content })}\n\n`);
+      }
+    }
+    if (fullContent) {
+      res.write(`data: ${JSON.stringify({ type: "text", content: fullContent })}\n\n`);
+    }
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch (err: any) {
+    console.error("AI 内容生成错误:", err);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message || "服务器错误" });
+    } else {
+      res.write(`data: ${JSON.stringify({ type: "error", content: err.message })}\n\n`);
+      res.end();
+    }
   }
 });
 
@@ -294,13 +475,13 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
     const volume = volumes.find((v: any) => v.id === req.params.volumeId);
     if (!volume) return res.status(404).json({ success: false, error: "未找到卷" });
 
-    const { title } = req.body;
+    const { title, content } = req.body;
     const newChapter = {
       id: crypto.randomUUID(),
       title: title || `第${(volume.chapters?.length || 0) + 1}章`,
-      wordCount: 0,
+      wordCount: content ? countWords(content) : 0,
       createdAt: new Date().toISOString().split("T")[0],
-      content: "",
+      content: content || "",
       volumeId: volume.id,
     };
     volume.chapters = volume.chapters || [];
@@ -644,8 +825,8 @@ router.post("/:id/generate", async (req: Request, res: Response) => {
     const provider = await createProvider(userId, model);
     const stream = provider.generateStream(
       [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt },
+        { role: "system" as const, content: systemPrompt },
+        { role: "user" as const, content: prompt },
       ],
       { model: model || "glm-4-9b" }
     );
@@ -731,6 +912,165 @@ router.put("/:id/outline", async (req: Request, res: Response) => {
     res.json({ success: true, data: outlineData });
   } catch (err: any) {
     console.error("保存大纲错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// ============================================================
+// Settings (using userSettings table)
+// ============================================================
+
+// GET /:id/settings - 获取设定
+router.get("/:id/settings", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const [row] = await db
+      .select()
+      .from(userSettings)
+      .where(and(eq(userSettings.bookId, req.params.id as string)))
+      .limit(1);
+    const data = row ? row.data : [];
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("获取设定错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// PUT /:id/settings - 保存设定
+router.put("/:id/settings", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const bookId = req.params.id as string;
+    const { data } = req.body;
+    const dataStr = JSON.stringify(data || []);
+
+    const [existing] = await db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.bookId, bookId))
+      .limit(1);
+
+    if (existing) {
+      await db
+        .update(userSettings)
+        .set({ data: dataStr, updatedAt: new Date().toISOString() })
+        .where(eq(userSettings.bookId, bookId));
+    } else {
+      await db.insert(userSettings).values({
+        id: crypto.randomUUID(),
+        bookId,
+        data: dataStr,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    res.json({ success: true, data: data || [] });
+  } catch (err: any) {
+    console.error("保存设定错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// ============================================================
+// Outline Items (using outlines table)
+// ============================================================
+
+// GET /:id/outline-items - 获取大纲条目
+router.get("/:id/outline-items", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const rows = await db
+      .select()
+      .from(outlines)
+      .where(eq(outlines.bookId, req.params.id as string))
+      .orderBy(asc(outlines.createdAt));
+    const data = rows.map(toCamelCase).map((r: any) => ({ id: r.id, content: r.content }));
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("获取大纲条目错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// PUT /:id/outline-items - 保存大纲条目
+router.put("/:id/outline-items", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const bookId = req.params.id as string;
+    const { items } = req.body;
+
+    if (!Array.isArray(items)) {
+      res.status(400).json({ success: false, error: "items 必须是数组" });
+      return;
+    }
+
+    await db.delete(outlines).where(eq(outlines.bookId, bookId));
+
+    if (items.length > 0) {
+      const vals = items.map((item: any, i: number) => ({
+        id: item.id || crypto.randomUUID(),
+        bookId,
+        content: item.content || "",
+        userId,
+        createdAt: new Date(Date.now() + i).toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+      await db.insert(outlines).values(vals);
+    }
+
+    res.json({ success: true, data: items });
+  } catch (err: any) {
+    console.error("保存大纲条目错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// ============================================================
+// Per-book Inspirations
+// ============================================================
+
+// GET /:id/inspirations - 获取某本书的灵感
+router.get("/:id/inspirations", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const rows = await db
+      .select()
+      .from(inspirations)
+      .where(eq(inspirations.bookId, req.params.id as string))
+      .orderBy(desc(inspirations.createdAt))
+      .limit(50);
+    const data = rows.map(toCamelCase).map((r: any) => {
+      const d = typeof r.data === "string" ? JSON.parse(r.data) : r.data || {};
+      return { id: r.id, ...d, createdAt: r.createdAt, updatedAt: r.updatedAt };
+    });
+    res.json({ success: true, data });
+  } catch (err: any) {
+    console.error("获取灵感列表错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// POST /:id/inspirations - 创建灵感（指定bookId）
+router.post("/:id/inspirations", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { title, content, category, tags } = req.body;
+    if (!title || !content) {
+      res.status(400).json({ success: false, error: "标题和内容不能为空" });
+      return;
+    }
+    const [row] = await db.insert(inspirations).values({
+      id: crypto.randomUUID(),
+      bookId: req.params.id as string,
+      data: JSON.stringify({ title, content, category: category || "通用", tags: tags || [] }),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }).returning();
+    res.json({ success: true, data: toCamelCase(row) });
+  } catch (err: any) {
+    console.error("创建灵感错误:", err);
     res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
