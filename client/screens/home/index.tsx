@@ -579,6 +579,7 @@ export default function HomeScreen() {
   const [agentActionStatus, setAgentActionStatus] = useState<string>("");
   const [agentTokenUsage, setAgentTokenUsage] = useState<string>("");
   const agentSseRef = useRef<any>(null);
+  const agentActionStatusRef = useRef("");
 
   // Keyboard avoiding
   useEffect(() => {
@@ -725,6 +726,7 @@ export default function HomeScreen() {
           }
           setAgentStreamContent("");
           setAgentActionStatus("");
+          agentActionStatusRef.current = "";
           setAgentTokenUsage("");
           // Load conversations list (re-fetch to get new/updated)
           loadAgentConversations();
@@ -735,18 +737,25 @@ export default function HomeScreen() {
           if (parsed.type === "text") {
             fullContent += parsed.content || "";
             setAgentStreamContent(fullContent);
+            // 新文本到达时清除 action 状态，确保内容正常渲染
+            agentActionStatusRef.current = "";
+            setAgentActionStatus("");
           } else if (parsed.type === "action_start") {
+            agentActionStatusRef.current = parsed.content || "处理中...";
             setAgentActionStatus(parsed.content || "处理中...");
           } else if (parsed.type === "text_replace") {
             fullContent = parsed.content || "";
             setAgentStreamContent(fullContent);
           } else if (parsed.type === "action_result") {
             if (parsed.success) {
+              agentActionStatusRef.current = `完成: ${parsed.tool || "执行"}`;
               setAgentActionStatus(`完成: ${parsed.tool || "执行"}`);
             } else {
+              agentActionStatusRef.current = `失败: ${parsed.tool || "执行"}`;
               setAgentActionStatus(`失败: ${parsed.tool || "执行"}`);
             }
           } else if (parsed.type === "error") {
+            agentActionStatusRef.current = `错误: ${parsed.message}`;
             setAgentActionStatus(`错误: ${parsed.message}`);
           } else if (parsed.type === "done") {
             // Save conversation ID for persistence
@@ -774,6 +783,7 @@ export default function HomeScreen() {
         }
         setAgentStreamContent("");
         setAgentActionStatus("");
+        agentActionStatusRef.current = "";
         setAgentTokenUsage("");
         loadAgentConversations();
       });

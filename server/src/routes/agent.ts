@@ -356,7 +356,8 @@ router.post("/execute", async (req: Request, res: Response) => {
       if (!toolDef) {
         // 未知工具，通知 LLM
         const errorMsg = `❌ 未知工具 "${toolCall.tool}"，请使用可用工具列表中的工具。`;
-        res.write(`data: ${JSON.stringify({ type: "action", content: errorMsg })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "action_start", content: `尝试调用: ${toolCall.tool}` })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "action_result", tool: toolCall.tool, success: false, message: errorMsg })}\n\n`);
         llmMessages.push({ role: "assistant", content: currentResponse });
         llmMessages.push({ role: "user", content: errorMsg });
         continue;
@@ -365,7 +366,8 @@ router.post("/execute", async (req: Request, res: Response) => {
       // 【硬拦截：挂载书籍时禁止创建新书】
       if (bookId && toolCall.tool === "create_book") {
         const errorMsg = `❌ 当前已挂载书籍，无需创建新书。用户的所有操作都应针对当前挂载的书籍。请调用 get_book_info 工具读取书籍信息。`;
-        res.write(`data: ${JSON.stringify({ type: "action", content: errorMsg })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "action_start", content: "尝试创建书籍" })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "action_result", tool: toolCall.tool, success: false, message: errorMsg })}\n\n`);
         llmMessages.push({ role: "assistant", content: currentResponse });
         llmMessages.push({ role: "user", content: errorMsg });
         continue;
