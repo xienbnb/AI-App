@@ -41,7 +41,7 @@ async function checkVipFromCache(): Promise<boolean> {
     if (raw) {
       const user = JSON.parse(raw);
       const pt = user?.planType || "free";
-      return pt === "vip" || pt === "super_admin";
+      return pt === "monthly" || pt === "yearly" || pt === "super_admin";
     }
   } catch {
     // ignore

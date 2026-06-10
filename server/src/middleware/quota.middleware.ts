@@ -55,10 +55,16 @@ export function quotaMiddleware(operationType: string = 'ai_generate') {
 
 /**
  * 流式响应的额度扣减（用于SSE场景，在流结束后扣减）
+ * @param useCustomKey 是否使用用户自定义 API Key（自定义 Key 不扣字数）
  */
-export async function consumeStreamQuota(userId: string, operationType: string, tokensUsed: number = 0) {
+export async function consumeStreamQuota(
+  userId: string,
+  operationType: string,
+  tokensUsed: number = 0,
+  useCustomKey: boolean = false,
+) {
   try {
-    await consumeQuota(userId, operationType, tokensUsed, true);
+    await consumeQuota(userId, operationType, tokensUsed, true, undefined, useCustomKey);
   } catch (err) {
     console.error("[QUOTA] Failed to consume stream quota:", err);
   }

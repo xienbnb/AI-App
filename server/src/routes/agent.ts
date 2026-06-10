@@ -4,6 +4,7 @@ import { users, books, outlines, userSettings, agentConversations, agentMemories
 import { eq, and, desc, sql } from "drizzle-orm";
 import { findTool, getToolsSystemPrompt, getBookInfo, type ToolResult } from "../utils/agent-tools.js";
 import { createProvider } from "../utils/ai-provider.js";
+import { checkQuota, consumeQuota } from "../services/vip.service.js";
 
 const router = Router();
 
@@ -118,6 +119,17 @@ router.post("/execute", async (req: Request, res: Response) => {
 
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "message 是必填参数" });
+    }
+
+    // ---- 0. 配额检查 ----
+    const useCustomKey = req.body?.useCustomKey === true;
+    const quotaResult = await checkQuota(userId, 0, useCustomKey);
+    if (!quotaResult.ok) {
+      return res.status(429).json({
+        success: false,
+        error: quotaResult.reason || "额度不足",
+        code: "QUOTA_EXCEEDED",
+      });
     }
 
     // SSE 头设置
@@ -452,6 +464,14 @@ router.post("/execute", async (req: Request, res: Response) => {
     // 发送完成信号（含 conversationId）
     res.write(`data: ${JSON.stringify({ type: "done", conversationId: conversation.id })}\n\n`);
     res.write("data: [DONE]\n\n");
+
+    // ---- 流结束后扣减配额 ----
+    try {
+      await consumeQuota(userId, "agent", totalTokens, true, undefined, useCustomKey);
+    } catch (quotaErr) {
+      console.error("[Agent] 配额扣减失败:", quotaErr);
+    }
+
     res.end();
   } catch (err: any) {
     console.error("[Agent] Error:", err);

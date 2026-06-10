@@ -77,7 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // 同步 planType 到 data-manager
   useEffect(() => {
     const pt = user?.planType || "free";
-    setVipStatus(pt === "vip" || pt === "super_admin");
+    setVipStatus(pt === "monthly" || pt === "yearly" || pt === "super_admin");
   }, [user?.planType]);
 
   const fetchUser = useCallback(async (tok: string): Promise<UserInfo | null> => {
