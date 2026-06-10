@@ -846,6 +846,7 @@ router.post("/:id/generate", async (req: Request, res: Response) => {
     }
 
     res.write(`data: ${JSON.stringify({ type: "done", content: fullContent })}\n\n`);
+    res.write("data: [DONE]\n\n");
     res.end();
   } catch (err: any) {
     console.error("AI 生成错误:", err);

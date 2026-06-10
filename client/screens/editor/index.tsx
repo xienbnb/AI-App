@@ -368,7 +368,7 @@ export default function EditorScreen() {
     sse.addEventListener("message", (event: any) => {
       if (!event.data) return;
       if (event.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-      try { const p = JSON.parse(event.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+      try { const p = JSON.parse(event.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => setIsGenerating(false));
   };
@@ -483,7 +483,9 @@ export default function EditorScreen() {
     if (start !== end) {
       const text = content.substring(start, end);
       if (text.trim()) { setSelectedText(text); setShowFloatingAI(true); }
-    } else { setShowFloatingAI(false); }
+    }
+    // 不在此处隐藏浮动栏，手指松开时 selection 会变回光标位置导致浮动栏消失
+    // 浮动栏通过点击关闭按钮或执行操作后隐藏
   };
 
   const replaceSelectedText = (newText: string) => {
@@ -506,9 +508,9 @@ export default function EditorScreen() {
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
       if (e.data === "[DONE]") { sse.close(); return; }
-      try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+      try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
-    sse.addEventListener("error", () => setIsGenerating(false));
+    sse.addEventListener("error", () => { setIsGenerating(false); sse.close(); });
   };
 
   const handleAIWrite = () => {
@@ -533,7 +535,7 @@ export default function EditorScreen() {
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
       if (e.data === "[DONE]") { sse.close(); return; }
-      try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+      try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
     sse.addEventListener("error", () => setIsGenerating(false));
   };
@@ -583,7 +585,7 @@ export default function EditorScreen() {
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
       if (e.data === "[DONE]") { sse.close(); setAiModalVisible(true); return; }
-      try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+      try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
     });
   };
 
@@ -756,12 +758,18 @@ export default function EditorScreen() {
                 borderWidth: 1,
                 borderColor: nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.06)",
               }}>
-                <Text style={{
-                  fontSize: 11, color: nightMode ? "#8888AA" : "#9CA3AF",
-                  paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2,
-                }} numberOfLines={1}>
-                  已选中：{selectedText.length} 字
-                </Text>
+                <View className="flex-row justify-between items-center" style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 2 }}>
+                  <Text style={{
+                    fontSize: 11, color: nightMode ? "#8888AA" : "#9CA3AF",
+                    flex: 1,
+                  }} numberOfLines={1}>
+                    已选中：{selectedText.length} 字
+                  </Text>
+                  <TouchableOpacity onPress={() => { setShowFloatingAI(false); setSelectedText(""); }}
+                    style={{ paddingLeft: 10, paddingVertical: 2 }}>
+                    <FontAwesome6 name="xmark" size={14} color={nightMode ? "#8888AA" : "#9CA3AF"} />
+                  </TouchableOpacity>
+                </View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
                   <View className="flex-row items-center gap-0.5">
                     {/* 编辑操作 */}
@@ -779,7 +787,7 @@ export default function EditorScreen() {
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
                         if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
@@ -792,7 +800,7 @@ export default function EditorScreen() {
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
                         if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
                     <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
@@ -806,7 +814,7 @@ export default function EditorScreen() {
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
                         if (e.data === "[DONE]") { sse.close(); return; }
-                        try { const p = JSON.parse(e.data); if (p.content) setGeneratedContent(prev => prev + p.content); } catch {}
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
                       });
                     }} />
                     <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
