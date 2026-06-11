@@ -160,51 +160,10 @@ export default function EditorScreen() {
   const [wheelPosX] = useState(() => new Animated.Value(0));
   const [wheelPosY] = useState(() => new Animated.Value(0));
   const wheelDragStart = useRef({ x: 0, y: 0 });
-  const wheelPanResponder = useMemo(() =>
-    // eslint-disable-next-line react-hooks/refs
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
-      onPanResponderGrant: () => {
-        rotatingRef.current = false;
-        draggingRef.current = false;
-        wheelDragStart.current = { x: 0, y: 0 };
-      },
-      onPanResponderMove: (_, g) => {
-        const dist = Math.hypot(g.dx, g.dy);
-        if (dist > 12) {
-          if (wheelOpen) {
-            // 转轮展开时：旋转选择工具
-            rotatingRef.current = true;
-          } else {
-            // 转轮折叠时：拖拽移动位置
-            draggingRef.current = true;
-            wheelPosX.setValue(g.dx);
-            wheelPosY.setValue(g.dy);
-          }
-        }
-      },
-      onPanResponderRelease: (_, g) => {
-        if (draggingRef.current) {
-          // 拖拽结束 - 保持当前位置
-          wheelDragStart.current = { x: g.dx, y: g.dy };
-          rotatingRef.current = false;
-          draggingRef.current = false;
-          return;
-        }
-        if (!rotatingRef.current) {
-          // 轻触 - 切换展开/折叠
-          setWheelOpen(prev => !prev);
-          return;
-        }
-        // 旋转选择工具
-        const angle = Math.atan2(g.dy, g.dx) * (180 / Math.PI);
-        const idx = Math.round(((angle + 180) / 360) * wheelTools.length) % wheelTools.length;
-        const tool = wheelTools[idx];
-        if (tool) { tool.action(); setWheelOpen(false); }
-        rotatingRef.current = false;
-      },
-    }), []);
+  const wheelCenterRef = useRef({ x: 0, y: 0 });
+  const startAngleRef = useRef(0);
+  const wheelLayoutRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
+  let wheelPanResponder: any; // 在 wheelTools 之后初始化
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -802,8 +761,57 @@ export default function EditorScreen() {
     }},
     { icon: "align-left", label: "排版", color: "#3B82F6", action: handleFormat },
     { icon: "check-double", label: "纠错", color: "#059669", action: handleCorrect },
-    { icon: "wand-sparkles", label: "AI", color: "#6366F1", action: () => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }},
-  ], [handleUndo, handleRedo, handleFormat, handleCorrect, selectedText, cursorPosition]);
+    { icon: "wand-sparkles", label: "AI创作", color: "#6366F1", action: () => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }},
+    { icon: "magnifying-glass", label: "搜索", color: "#F97316", action: () => { setSearchVisible(true); }},
+    { icon: "eye", label: "预览", color: "#14B8A6", action: handlePreview },
+    { icon: "copy", label: "复制", color: "#A855F7", action: handleCopyAll },
+    { icon: "file-plus", label: "新建", color: "#06B6D4", action: handleNewChapter },
+    { icon: "file-export", label: "导出", color: "#E11D48", action: () => { setExportModalVisible(true); }},
+    { icon: "chart-simple", label: "统计", color: "#84CC16", action: () => { setStatsModalVisible(true); }},
+    { icon: "moon", label: "夜间", color: "#1E293B", action: () => { setNightMode(prev => !prev); }},
+  ], [handleUndo, handleRedo, handleFormat, handleCorrect, handlePreview, handleCopyAll, handleNewChapter, selectedText, cursorPosition, setSearchVisible, setExportModalVisible, setStatsModalVisible, setNightMode]);
+
+  // ===== 圆形转轮 PanResponder（需在 wheelTools 定义之后） =====
+  // eslint-disable-next-line react-hooks/exhaustive-deps, prefer-const
+  wheelPanResponder = useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > 8,
+      onPanResponderGrant: () => {
+        rotatingRef.current = false;
+        draggingRef.current = false;
+      },
+      onPanResponderMove: (_, g) => {
+        if (!wheelOpen) {
+          draggingRef.current = true;
+          wheelPosX.setValue(wheelDragStart.current.x + g.dx);
+          wheelPosY.setValue(wheelDragStart.current.y + g.dy);
+        } else {
+          rotatingRef.current = true;
+          const cx = wheelLayoutRef.current.x + wheelLayoutRef.current.width / 2;
+          const cy = wheelLayoutRef.current.y + wheelLayoutRef.current.height / 2;
+          const angle = Math.atan2(g.moveY - cy, g.moveX - cx) * (180 / Math.PI);
+          const normAngle = ((angle + 360) % 360 + 360) % 360;
+          startAngleRef.current = normAngle;
+        }
+      },
+      onPanResponderRelease: (_, g) => {
+        if (wheelOpen && rotatingRef.current) {
+          const cx = wheelLayoutRef.current.x + wheelLayoutRef.current.width / 2;
+          const cy = wheelLayoutRef.current.y + wheelLayoutRef.current.height / 2;
+          const angle = Math.atan2(g.moveY - cy, g.moveX - cx) * (180 / Math.PI);
+          const normAngle = ((angle + 360) % 360 + 360) % 360;
+          const idx = Math.round((normAngle / 360) * wheelTools.length) % wheelTools.length;
+          const tool = wheelTools[idx];
+          if (tool) tool.action();
+          setWheelOpen(false);
+        } else if (!wheelOpen && draggingRef.current) {
+          wheelDragStart.current = { x: wheelDragStart.current.x + g.dx, y: wheelDragStart.current.y + g.dy };
+        }
+        rotatingRef.current = false;
+        draggingRef.current = false;
+      },
+    }), [wheelOpen]);
 
   // 提取 ref 值用于渲染（避免 lint 报错）
   const hasSelection = selectionStart !== selectionEnd;
@@ -1165,6 +1173,10 @@ export default function EditorScreen() {
 
           {/* ===== 圆形转轮悬浮按钮（右侧，可拖拽） ===== */}
           <Animated.View {...wheelPanResponder.panHandlers}
+            onLayout={(e) => {
+              const { x, y, width, height } = e.nativeEvent.layout;
+              wheelLayoutRef.current = { x, y, width, height };
+            }}
             style={[{
               position: 'absolute',
               right: wheelOpen ? 12 : 8,
@@ -1180,28 +1192,29 @@ export default function EditorScreen() {
               ],
             }]}>
             {!wheelOpen ? (
-              /* 折叠态 - 小圆点 */
-              <View style={{
-                width: 42, height: 42, borderRadius: 21,
-                backgroundColor: theme.accent,
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: theme.accent,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 10,
-                elevation: 8,
-              }}>
+              /* 折叠态 - 可拖拽小圆点 */
+              <TouchableOpacity activeOpacity={0.7} onPress={() => setWheelOpen(true)}
+                style={{
+                  width: 42, height: 42, borderRadius: 21,
+                  backgroundColor: theme.accent,
+                  alignItems: 'center', justifyContent: 'center',
+                  shadowColor: theme.accent,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3,
+                  shadowRadius: 10,
+                  elevation: 8,
+                }}>
                 <FontAwesome6 name="sliders" size={16} color="#FFF" />
-              </View>
+              </TouchableOpacity>
             ) : (
               /* 展开态 - 辐射菜单 */
               <View style={{
-                width: 220, height: 220,
+                width: 240, height: 240,
                 alignItems: 'center', justifyContent: 'center',
               }}>
                 {/* 转轮背景 */}
                 <View style={{
-                  width: 220, height: 220, borderRadius: 110,
+                  width: 240, height: 240, borderRadius: 120,
                   backgroundColor: nightMode ? "rgba(26,26,46,0.95)" : "rgba(255,255,255,0.95)",
                   borderWidth: 1,
                   borderColor: nightMode ? "rgba(99,102,241,0.3)" : "rgba(0,0,0,0.08)",
@@ -1227,7 +1240,7 @@ export default function EditorScreen() {
                   {/* eslint-disable-next-line react-hooks/refs */}
                   {wheelTools.map((tool, index) => {
                     const angle = (index / wheelTools.length) * 2 * Math.PI - Math.PI / 2;
-                    const radius = 72;
+                    const radius = 82;
                     const x = Math.cos(angle) * radius;
                     const y = Math.sin(angle) * radius;
                     return (
@@ -1235,8 +1248,8 @@ export default function EditorScreen() {
                         onPress={() => { tool.action(); setWheelOpen(false); }}
                         style={{
                           position: 'absolute',
-                          left: 110 + x - 22,
-                          top: 110 + y - 22,
+                          left: 120 + x - 22,
+                          top: 120 + y - 22,
                           width: 44, height: 44, borderRadius: 22,
                           backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6",
                           alignItems: 'center', justifyContent: 'center',
