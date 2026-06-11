@@ -153,20 +153,51 @@ export default function EditorScreen() {
       },
     }), [screenWidth, winHeight]);
 
-  // ===== 圆形转轮悬浮按钮 =====
+  // ===== 圆形转轮悬浮按钮（可拖拽） =====
   const [wheelOpen, setWheelOpen] = useState(false);
   const rotatingRef = useRef(false);
+  const draggingRef = useRef(false);
+  const [wheelPosX] = useState(() => new Animated.Value(0));
+  const [wheelPosY] = useState(() => new Animated.Value(0));
+  const wheelDragStart = useRef({ x: 0, y: 0 });
   const wheelPanResponder = useMemo(() =>
     // eslint-disable-next-line react-hooks/refs
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
-      onPanResponderGrant: () => { rotatingRef.current = false; },
+      onPanResponderGrant: () => {
+        rotatingRef.current = false;
+        draggingRef.current = false;
+        wheelDragStart.current = { x: 0, y: 0 };
+      },
       onPanResponderMove: (_, g) => {
-        if (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8) rotatingRef.current = true;
+        const dist = Math.hypot(g.dx, g.dy);
+        if (dist > 12) {
+          if (wheelOpen) {
+            // 转轮展开时：旋转选择工具
+            rotatingRef.current = true;
+          } else {
+            // 转轮折叠时：拖拽移动位置
+            draggingRef.current = true;
+            wheelPosX.setValue(g.dx);
+            wheelPosY.setValue(g.dy);
+          }
+        }
       },
       onPanResponderRelease: (_, g) => {
-        if (!rotatingRef.current) { setWheelOpen(prev => !prev); return; }
+        if (draggingRef.current) {
+          // 拖拽结束 - 保持当前位置
+          wheelDragStart.current = { x: g.dx, y: g.dy };
+          rotatingRef.current = false;
+          draggingRef.current = false;
+          return;
+        }
+        if (!rotatingRef.current) {
+          // 轻触 - 切换展开/折叠
+          setWheelOpen(prev => !prev);
+          return;
+        }
+        // 旋转选择工具
         const angle = Math.atan2(g.dy, g.dx) * (180 / Math.PI);
         const idx = Math.round(((angle + 180) / 360) * wheelTools.length) % wheelTools.length;
         const tool = wheelTools[idx];
@@ -830,47 +861,7 @@ export default function EditorScreen() {
               </View>
             </View>
 
-            {/* 统计栏 */}
-            <View className="flex-row items-center px-4 pb-2.5 gap-4">
-              <TouchableOpacity onPress={() => setStatsModalVisible(true)} className="flex-row items-center gap-1.5">
-                <FontAwesome6 name="text-height" size={11} color={theme.text2} />
-                <Text style={{ color: theme.text2, fontSize: 12, fontWeight: "500" }}>{wordCount}</Text>
-                <Text style={{ color: theme.text2, fontSize: 11 }}>字</Text>
-              </TouchableOpacity>
-              {chapterList.length > 0 && (
-                <View className="flex-row items-center gap-1.5">
-                  <FontAwesome6 name="book" size={11} color={theme.text2} />
-                  <Text style={{ color: theme.text2, fontSize: 12 }}>{chapterList.findIndex(c => c.id === chapterId) + 1}/{chapterList.length}</Text>
-                </View>
-              )}
-              {showSpeed && (
-                <View className="flex-row items-center gap-1.5">
-                  <FontAwesome6 name="gauge-high" size={11} color="#8B5CF6" />
-                  <Text style={{ color: "#8B5CF6", fontSize: 12, fontWeight: "600" }}>{wpm}</Text>
-                  <Text style={{ color: theme.text2, fontSize: 11 }}>字/分</Text>
-                </View>
-              )}
             </View>
-          </View>
-
-          {/* ===== 精简工具栏 ===== */}
-          <View style={{
-            backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
-          }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-3 py-2">
-              <View className="flex-row items-center gap-2">
-                <ToolbarButton icon="align-left" label="排版" color={theme.accent} bg={theme.accentBg} onPress={handleFormat} textColor={theme.text} nightMode={nightMode} />
-                <ToolbarButton icon="rotate-left" label="撤销" color={theme.text2} bg={theme.surface2} onPress={handleUndo} textColor={theme.text2} nightMode={nightMode} disabled={undoStack.length === 0} />
-                <ToolbarButton icon="rotate-right" label="恢复" color={theme.text2} bg={theme.surface2} onPress={handleRedo} textColor={theme.text2} nightMode={nightMode} disabled={redoStack.length === 0} />
-                <ToolbarButton icon="wand-sparkles" label="AI创作" color={theme.accent} bg={theme.accentBg} onPress={() => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }} textColor={theme.text} nightMode={nightMode} />
-                <ToolbarButton icon="search" label="搜索" color={theme.text2} bg={theme.surface2} onPress={() => setSearchVisible(true)} textColor={theme.text2} nightMode={nightMode} />
-                <ToolbarButton icon="eye" label="预览" color={theme.text2} bg={theme.surface2} onPress={() => { console.log("Preview: opening"); setPreviewVisible(true); setMoreMenuVisible(false); }} textColor={theme.text2} nightMode={nightMode} />
-                <ToolbarButton icon="plus" label="添加" color="#10B981" bg="rgba(16,185,129,0.1)" onPress={() => setAddContentVisible(true)} textColor={theme.text} nightMode={nightMode} />
-                <ToolbarButton icon="font" label="外观" color={theme.accent} bg={theme.accentBg} onPress={() => setAppearanceVisible(true)} textColor={theme.text} nightMode={nightMode} />
-                <ToolbarButton icon="keyboard" label="快捷" color={showQuickBar ? '#8B5CF6' : theme.text2} bg={showQuickBar ? 'rgba(139,92,246,0.15)' : theme.surface2} onPress={() => setShowQuickBar(prev => !prev)} textColor={theme.text2} nightMode={nightMode} />
-              </View>
-            </ScrollView>
-          </View>
 
           {/* ===== 编辑区(全屏沉浸) ===== */}
           <View className="flex-1" style={{ backgroundColor: nightMode ? "#0A0A14" : "#F8F4ED" }}>
@@ -1172,9 +1163,9 @@ export default function EditorScreen() {
             </Animated.View>
           )}
 
-          {/* ===== 圆形转轮悬浮按钮（右侧） ===== */}
-          <View {...wheelPanResponder.panHandlers}
-            style={{
+          {/* ===== 圆形转轮悬浮按钮（右侧，可拖拽） ===== */}
+          <Animated.View {...wheelPanResponder.panHandlers}
+            style={[{
               position: 'absolute',
               right: wheelOpen ? 12 : 8,
               bottom: wheelOpen ? undefined : keyboardHeight + 120,
@@ -1182,7 +1173,12 @@ export default function EditorScreen() {
               zIndex: 190,
               alignItems: 'center',
               justifyContent: 'center',
-            }}>
+            }, {
+              transform: [
+                { translateX: wheelPosX },
+                { translateY: wheelPosY },
+              ],
+            }]}>
             {!wheelOpen ? (
               /* 折叠态 - 小圆点 */
               <View style={{
@@ -1258,7 +1254,7 @@ export default function EditorScreen() {
                 </View>
               </View>
             )}
-          </View>
+          </Animated.View>
         </View>
 
         {/* ===== 更多菜单 Modal ===== */}
