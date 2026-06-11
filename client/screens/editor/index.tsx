@@ -1178,7 +1178,7 @@ export default function EditorScreen() {
               position: 'absolute',
               right: wheelOpen ? 12 : 8,
               bottom: wheelOpen ? undefined : keyboardHeight + 120,
-              top: wheelOpen ? '30%' : undefined,
+              top: wheelOpen ? winHeight * 0.3 : undefined,
               zIndex: 190,
               alignItems: 'center',
               justifyContent: 'center',
