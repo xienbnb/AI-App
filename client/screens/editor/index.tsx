@@ -122,6 +122,7 @@ export default function EditorScreen() {
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [cursorPosition, setCursorPosition] = useState(0);
   const [generationDone, setGenerationDone] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const contentInputRef = useRef<TextInput>(null);
   const selectionStartRef = useRef(0);
   const selectionEndRef = useRef(0);
@@ -167,6 +168,13 @@ export default function EditorScreen() {
   const [showQuickBar, setShowQuickBar] = useState(false);
   const [addContentVisible, setAddContentVisible] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState("");
+
+  // ===== 键盘高度监听 =====
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) => setKeyboardHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   const handleInsertContent = (type: "divider" | "timestamp" | "dialogue" | "quote" | "heading") => {
     const inserts: Record<string, string> = {
@@ -820,7 +828,7 @@ export default function EditorScreen() {
             {showFloatingAI && selectedText && (
               <View style={{
                 position: 'absolute',
-                bottom: 55,
+                bottom: keyboardHeight + 55,
                 left: 8,
                 right: 8,
                 zIndex: 100,
@@ -937,7 +945,7 @@ export default function EditorScreen() {
               </View>
 
               {/* 正文编辑区 - 全屏无边界 */}
-              <View className="flex-1 px-5">
+              <View className="flex-1 px-3">
                 <TextInput
                   ref={contentInputRef}
                   value={content}
@@ -946,11 +954,12 @@ export default function EditorScreen() {
                   multiline
                   className="w-full flex-1 outline-none"
                   style={{
-                    color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
+                    color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * 1.8,
                     fontFamily: appFont === "serif" ? "serif" : appFont === "mono" ? "monospace" : undefined,
                     textAlignVertical: "top",
                     textAlign: pageMargin === "center" ? "center" : "left",
                     paddingHorizontal: pageMargin === "narrow" ? 8 : pageMargin === "wide" ? 4 : 0,
+                    letterSpacing: 0.3,
                   }}
                   placeholder="开始创作你的故事..."
                   placeholderTextColor={nightMode ? "#4A4A6A" : "#C4B8A0"}
@@ -963,7 +972,7 @@ export default function EditorScreen() {
             {/* ===== 快捷输入栏 ===== */}
             {showQuickBar && (
               <View style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0,
+                position: 'absolute', bottom: keyboardHeight, left: 0, right: 0,
                 backgroundColor: nightMode ? "#1A1A2E" : "#F2EDE4",
                 borderTopLeftRadius: 16, borderTopRightRadius: 16,
                 paddingVertical: 8, paddingHorizontal: 10,
@@ -1003,7 +1012,7 @@ export default function EditorScreen() {
           {/* ===== AI生成区(浮动面板) ===== */}
           {isGenerating && (
             <View style={{
-              position: "absolute", bottom: 0, left: 0, right: 0,
+              position: "absolute", bottom: keyboardHeight, left: 0, right: 0,
               backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
               borderTopLeftRadius: 24, borderTopRightRadius: 24,
               paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 34 : 20,
@@ -1014,8 +1023,8 @@ export default function EditorScreen() {
               elevation: 16,
               }}>
               {/* 拖拽手柄 */}
-              <View {...panelPanResponder.panHandlers} className="items-center -mt-2 pb-3">
-                <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: nightMode ? "#3D3D5C" : "#D1D5DB" }} />
+              <View {...panelPanResponder.panHandlers} className="w-full items-center justify-center py-4 active:opacity-70">
+                <View style={{ width: 48, height: 5, borderRadius: 3, backgroundColor: nightMode ? "#3D3D5C" : "#D1D5DB" }} />
               </View>
               <View className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center gap-2.5">
