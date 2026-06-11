@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,8 +15,7 @@ import {
 import { Screen } from "@/components/Screen";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
-
-const EXPO_PUBLIC_BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+import { DataManager } from "@/services/data-manager";
 
 interface ContentItem {
   id: string;
@@ -49,32 +48,20 @@ export default function ContentEditorScreen() {
     setLoading(true);
     try {
       if (type === "大纲" || type === "细纲") {
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/outline-items`,
-          { headers: { "x-session": "" } }
-        );
-        const json = await res.json();
-        if (json.success) {
+        const result = await DataManager.getOutlines(bookId as string);
+        if (result.success) {
           setItems(
-            (json.data || []).filter(
+            (result.data || []).filter(
               (item: ContentItem) => (item.type || "大纲") === type
             )
           );
         }
       } else if (type === "设定") {
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/settings`,
-          { headers: { "x-session": "" } }
-        );
-        const json = await res.json();
-        if (json.success) setItems(json.data || []);
+        const result = await DataManager.getSettingsArray(bookId as string);
+        if (result.success) setItems(result.data || []);
       } else if (type === "灵感") {
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/inspirations`,
-          { headers: { "x-session": "" } }
-        );
-        const json = await res.json();
-        if (json.success) setItems(json.data || []);
+        const result = await DataManager.getInspirationsArray(bookId as string);
+        if (result.success) setItems(result.data || []);
       }
     } catch (err) {
       console.error("加载失败", err);
@@ -91,43 +78,28 @@ export default function ContentEditorScreen() {
     setShowCreateModal(false);
     if (!bookId || !createType) return;
 
-    try {
-      if (createType === "大纲" || createType === "细纲") {
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/outline-items`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", "x-session": "" },
-            body: JSON.stringify({
-              items: [
-                {
-                  id: Date.now().toString(),
-                  bookId,
-                  type: createType,
-                  title: createType,
-                  content: "",
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                },
-              ],
-            }),
-          }
-        );
-        const json = await res.json();
-        if (json.success) {
-          router.push("/outline-create", {
-            bookId,
-            outlineId: json.data?.[0]?.id || Date.now().toString(),
-            type: createType,
-          });
-          return;
-        }
+    if (createType === "大纲" || createType === "细纲") {
+      const newItem: ContentItem = {
+        id: Date.now().toString(),
+        type: createType,
+        title: createType,
+        content: "",
+        createdAt: new Date().toISOString(),
+      };
+      const existing = await DataManager.getOutlines(bookId as string);
+      const updated = existing.success ? [...(existing.data || []), newItem] : [newItem];
+      const result = await DataManager.saveOutlines(bookId as string, updated);
+      if (result.success) {
+        router.push("/outline-create", {
+          bookId,
+          outlineId: newItem.id,
+          type: createType,
+        });
+        return;
       }
-      // Default: open outline-create
-      router.push("/outline-create", { bookId, type: createType });
-    } catch (err) {
-      console.error("创建失败", err);
     }
+    // Default: open outline-create
+    router.push("/outline-create", { bookId, type: createType });
   };
 
   const handleEdit = (item: ContentItem) => {
@@ -138,7 +110,6 @@ export default function ContentEditorScreen() {
         type: item.type || type,
       });
     } else if (type === "设定") {
-      // Edit settings inline
       setEditModal({
         visible: true,
         item,
@@ -146,7 +117,6 @@ export default function ContentEditorScreen() {
         content: item.content || "",
       });
     } else if (type === "灵感") {
-      // Navigate to editor or inline edit
       setEditModal({
         visible: true,
         item,
@@ -165,31 +135,18 @@ export default function ContentEditorScreen() {
         const updatedItems = items.map((i) =>
           i.id === item.id ? { ...i, title, content } : i
         );
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/settings`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", "x-session": "" },
-            body: JSON.stringify({ data: updatedItems }),
-          }
-        );
-        const json = await res.json();
-        if (json.success) {
-          setItems(json.data || updatedItems);
+        const result = await DataManager.saveSettingsArray(bookId as string, updatedItems);
+        if (result.success) {
+          setItems(updatedItems);
           setEditModal({ visible: false, title: "", content: "", item: null });
         }
       } else if (type === "灵感") {
-        const res = await fetch(
-          `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/inspirations/${item.id}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", "x-session": "" },
-            body: JSON.stringify({ title, content }),
-          }
+        const updatedItems = items.map((i) =>
+          i.id === item.id ? { ...i, title, content } : i
         );
-        const json = await res.json();
-        if (json.success) {
-          fetchItems();
+        const result = await DataManager.saveInspirationsArray(bookId as string, updatedItems);
+        if (result.success) {
+          setItems(updatedItems);
           setEditModal({ visible: false, title: "", content: "", item: null });
         }
       }
@@ -207,36 +164,14 @@ export default function ContentEditorScreen() {
         onPress: async () => {
           try {
             if (type === "灵感") {
-              await fetch(
-                `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/inspirations/${item.id}`,
-                { method: "DELETE", headers: { "x-session": "" } }
-              );
+              const updatedItems = items.filter((i) => i.id !== item.id);
+              await DataManager.saveInspirationsArray(bookId as string, updatedItems);
             } else if (type === "大纲" || type === "细纲") {
               const updatedItems = items.filter((i) => i.id !== item.id);
-              await fetch(
-                `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/outline-items`,
-                {
-                  method: "PUT",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "x-session": "",
-                  },
-                  body: JSON.stringify({ items: updatedItems }),
-                }
-              );
+              await DataManager.saveOutlines(bookId as string, updatedItems);
             } else if (type === "设定") {
               const updatedItems = items.filter((i) => i.id !== item.id);
-              await fetch(
-                `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/writing/${bookId}/settings`,
-                {
-                  method: "PUT",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "x-session": "",
-                  },
-                  body: JSON.stringify({ data: updatedItems }),
-                }
-              );
+              await DataManager.saveSettingsArray(bookId as string, updatedItems);
             }
             fetchItems();
           } catch (err) {

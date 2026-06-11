@@ -28,6 +28,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ title: "" }} />
           <Stack.Screen name="detail" options={{ title: "" }} />
           <Stack.Screen name="outline-create" options={{ title: "", animation: 'slide_from_right' }} />
+          <Stack.Screen name="content-editor" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="editor" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="report" options={{ title: "", animation: 'slide_from_right' }} />
           <Stack.Screen name="post-detail" options={{ title: "", animation: 'slide_from_right' }} />

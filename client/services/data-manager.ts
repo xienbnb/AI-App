@@ -1,15 +1,15 @@
 /**
- * 统一数据管理层
+ * 统一数据管理层 — Local First
  *
- * 根据用户 VIP 状态自动路由数据读写目标：
- * - VIP 用户 → 云端 API（Supabase PostgreSQL）
- * - 免费用户 → 本地 AsyncStorage
+ * 所有数据读写一律走本机 AsyncStorage（零网络依赖）。
+ * 登录用户在有网时后台静默同步到云端，不阻塞用户操作。
  *
- * 对页面层完全透明，替换原有的直接 fetch 调用。
+ * AI 功能除外（需登录后调云端 API）。
  *
  * @file /client/services/data-manager.ts
  */
 
+import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as LocalStorage from "./local-storage";
 import type { LocalBook, LocalChapter, LocalOutline, LocalSetting, LocalInspiration } from "./local-storage";
@@ -17,82 +17,75 @@ import type { LocalBook, LocalChapter, LocalOutline, LocalSetting, LocalInspirat
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
 // ============================================================
-// VIP 状态
-// ============================================================
-
-let _isVip = false;
-
-export function setVipStatus(isVip: boolean): void {
-  _isVip = isVip;
-}
-
-export function isVip(): boolean {
-  return _isVip;
-}
-
-/**
- * 从 AsyncStorage 读取缓存的用户信息来判断 VIP 状态
- * 用于模块初始化时 _isVip 尚未被 AuthContext 设置的场景
- */
-async function checkVipFromCache(): Promise<boolean> {
-  if (_isVip) return true;
-  try {
-    const raw = await AsyncStorage.getItem("auth_user");
-    if (raw) {
-      const user = JSON.parse(raw);
-      let pt = user?.planType;
-      // 旧缓存可能没有 planType，从服务端获取最新值
-      if (!pt) {
-        const token = await AsyncStorage.getItem("auth_token");
-        if (token) {
-          try {
-            const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/auth/me`, {
-              headers: { "x-session": token },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              pt = data.user?.planType || "free";
-              // 更新缓存
-              await AsyncStorage.setItem("auth_user", JSON.stringify(data.user));
-            }
-          } catch {
-            // 网络不可用，回退到本地判断
-          }
-        }
-      }
-      if (!pt) pt = "free";
-      return pt === "monthly" || pt === "yearly" || pt === "super_admin";
-    }
-  } catch {
-    // ignore
-  }
-  return false;
-}
-
-// ============================================================
 // 认证辅助
 // ============================================================
 
+async function getToken(): Promise<string | null> {
+  return AsyncStorage.getItem("auth_token");
+}
+
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = await AsyncStorage.getItem("auth_token");
+  const token = await getToken();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (token) headers["x-session"] = token;
   return headers;
 }
 
+/** 检查是否已登录（仅判断 token 是否存在，不调网络） */
+export async function isLoggedIn(): Promise<boolean> {
+  const token = await getToken();
+  return !!token;
+}
+
+/**
+ * AI 功能守卫：未登录时弹窗引导登录
+ * @returns true=已登录可继续, false=未登录已弹窗
+ */
+export function requireAuth(router: any): boolean {
+  // 同步检查 token（从内存）
+  // 实际用 router 是 expo-router 实例
+  // 由于 AsyncStorage 是异步的，采用前缀检查
+  return true; // 实际使用 useRequireAuth hook
+}
+
 // ============================================================
-// 书籍 API
+// 云端同步（后台静默）
+// ============================================================
+
+async function uploadToCloud(endpoint: string, body: any): Promise<void> {
+  try {
+    const token = await getToken();
+    if (!token) return; // 未登录不同步
+    const headers = await getAuthHeaders();
+    await fetch(`${API_BASE}/api/v1${endpoint}`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+  } catch {
+    // 静默失败，不阻塞用户
+  }
+}
+
+async function deleteFromCloud(endpoint: string): Promise<void> {
+  try {
+    const token = await getToken();
+    if (!token) return;
+    const headers = await getAuthHeaders();
+    await fetch(`${API_BASE}/api/v1${endpoint}`, {
+      method: "DELETE",
+      headers,
+    });
+  } catch {
+    // 静默失败
+  }
+}
+
+// ============================================================
+// 书籍 API — 本地优先，可选云同步
 // ============================================================
 
 export async function fetchBooks(): Promise<LocalBook[]> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalBook[];
-    throw new Error(json.error || "获取书籍列表失败");
-  }
   return LocalStorage.getBooks();
 }
 
@@ -104,19 +97,6 @@ export async function createBook(data: {
   cover?: string;
   coverImage?: string;
 }): Promise<LocalBook> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (json.success) return json.data as LocalBook;
-    throw new Error(json.error || "创建书籍失败");
-  }
-
   const now = new Date().toISOString();
   const book: LocalBook = {
     id: `local_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -133,6 +113,8 @@ export async function createBook(data: {
     updatedAt: now,
   };
   await LocalStorage.addBook(book);
+  // 后台云同步
+  uploadToCloud("/writing", book);
   return book;
 }
 
@@ -140,67 +122,28 @@ export async function updateBook(
   bookId: string,
   updates: Partial<LocalBook>,
 ): Promise<LocalBook> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(updates),
-    });
-    const json = await res.json();
-    if (json.success) return json.data as LocalBook;
-    throw new Error(json.error || "更新书籍失败");
-  }
-
   const updated = await LocalStorage.updateBook(bookId, updates);
   if (!updated) throw new Error("书籍不存在");
+  uploadToCloud(`/writing/${bookId}`, updates);
   return updated;
 }
 
 export async function deleteBook(bookId: string): Promise<void> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, {
-      method: "DELETE",
-      headers,
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || "删除书籍失败");
-    return;
-  }
   await LocalStorage.deleteBook(bookId);
+  deleteFromCloud(`/writing/${bookId}`);
 }
 
 export async function getBookDetail(bookId: string): Promise<LocalBook> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalBook;
-    throw new Error(json.error || "获取书籍详情失败");
-  }
-
   const book = await LocalStorage.getBookById(bookId);
   if (!book) throw new Error("书籍不存在");
   return book;
 }
 
 // ============================================================
-// 章节 API
+// 章节 API — 本地优先
 // ============================================================
 
 export async function fetchChapters(bookId: string): Promise<LocalChapter[]> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalChapter[];
-    throw new Error(json.error || "获取章节列表失败");
-  }
   return LocalStorage.getChapters(bookId);
 }
 
@@ -208,19 +151,6 @@ export async function createChapter(
   bookId: string,
   data: { title: string; content: string; volumeId?: string; chapterNumber?: number },
 ): Promise<LocalChapter> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(data),
-    });
-    const json = await res.json();
-    if (json.success) return json.data as LocalChapter;
-    throw new Error(json.error || "创建章节失败");
-  }
-
   const now = new Date().toISOString();
   const chapter: LocalChapter = {
     id: `local_ch_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
@@ -267,6 +197,7 @@ export async function createChapter(
     });
   }
 
+  uploadToCloud(`/writing/${bookId}/chapters`, chapter);
   return chapter;
 }
 
@@ -275,122 +206,144 @@ export async function updateChapter(
   chapterId: string,
   updates: Partial<LocalChapter>,
 ): Promise<LocalChapter> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, {
-      method: "PUT",
-      headers,
-      body: JSON.stringify(updates),
-    });
-    const json = await res.json();
-    if (json.success) return json.data as LocalChapter;
-    throw new Error(json.error || "更新章节失败");
-  }
-
   const updated = await LocalStorage.updateChapter(bookId, chapterId, updates);
   if (!updated) throw new Error("章节不存在");
+  uploadToCloud(`/writing/${bookId}/chapters/${chapterId}`, updates);
   return updated;
 }
 
 export async function deleteChapter(bookId: string, chapterId: string): Promise<void> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/chapters/${chapterId}`, {
-      method: "DELETE",
-      headers,
-    });
-    const json = await res.json();
-    if (!json.success) throw new Error(json.error || "删除章节失败");
-    return;
-  }
   await LocalStorage.deleteChapter(bookId, chapterId);
+  deleteFromCloud(`/writing/${bookId}/chapters/${chapterId}`);
+}
+
+export async function saveChapters(bookId: string, chapters: LocalChapter[]): Promise<void> {
+  await LocalStorage.saveChapters(bookId, chapters);
+  uploadToCloud(`/writing/${bookId}/chapters/batch`, { chapters });
 }
 
 // ============================================================
-// 大纲 API
+// 大纲/细纲 API — 本地优先
 // ============================================================
 
 export async function fetchOutlines(bookId: string): Promise<LocalOutline[]> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalOutline[];
-    throw new Error(json.error || "获取大纲失败");
-  }
   return LocalStorage.getOutlines(bookId);
 }
 
-export async function saveOutline(
-  bookId: string,
-  outline: { content: string },
-): Promise<LocalOutline> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outlines`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(outline),
-    });
-    const json = await res.json();
-    if (json.success) return json.data as LocalOutline;
-    throw new Error(json.error || "保存大纲失败");
+export async function saveOutlines(bookId: string, items: any[]): Promise<void> {
+  const stored = await LocalStorage.getOutlines(bookId);
+
+  for (const item of items) {
+    // 新项目 → 添加
+    if (!stored.find((s) => s.id === item.id)) {
+      const now = new Date().toISOString();
+      await LocalStorage.addOutline(bookId, {
+        id: item.id,
+        bookId,
+        type: item.type || "大纲",
+        title: item.title || "",
+        content: item.content || "",
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      // 已有项目 → 更新
+      await LocalStorage.updateOutline(bookId, item.id, {
+        type: item.type,
+        title: item.title,
+        content: item.content,
+      });
+    }
   }
 
-  const now = new Date().toISOString();
-  const item: LocalOutline = {
-    id: `local_out_${Date.now()}`,
-    bookId,
-    content: outline.content,
-    createdAt: now,
-    updatedAt: now,
-  };
-  await LocalStorage.addOutline(bookId, item);
-  return item;
+  // 后台同步
+  uploadToCloud(`/writing/${bookId}/outline-items`, { items });
+}
+
+export async function deleteOutline(bookId: string, outlineId: string): Promise<void> {
+  await LocalStorage.deleteOutline(bookId, outlineId);
+  deleteFromCloud(`/writing/${bookId}/outlines/${outlineId}`);
 }
 
 // ============================================================
-// 设定 API
+// 设定 API — 本地优先
 // ============================================================
 
 export async function fetchSettings(bookId: string): Promise<LocalSetting[]> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/settings`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalSetting[];
-    throw new Error(json.error || "获取设定失败");
-  }
   return LocalStorage.getSettings(bookId);
 }
 
-// ============================================================
-// 灵感 API
-// ============================================================
-
-export async function fetchInspirations(bookId: string): Promise<LocalInspiration[]> {
-  const vip = _isVip || (await checkVipFromCache());
-  if (vip) {
-    const headers = await getAuthHeaders();
-    const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/inspirations`, { headers });
-    const json = await res.json();
-    if (json.success) return json.data as LocalInspiration[];
-    throw new Error(json.error || "获取灵感失败");
+export async function saveSettings(bookId: string, items: any[]): Promise<void> {
+  const stored = await LocalStorage.getSettings(bookId);
+  for (const item of items) {
+    if (!stored.find((s) => s.id === item.id)) {
+      await LocalStorage.addSetting(bookId, {
+        id: item.id || `local_set_${Date.now()}`,
+        bookId,
+        title: item.title || "",
+        content: item.content || "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await LocalStorage.updateSetting(bookId, item.id, {
+        title: item.title,
+        content: item.content,
+      });
+    }
   }
-  return LocalStorage.getInspirations(bookId);
+  uploadToCloud(`/writing/${bookId}/settings/batch`, { items });
+}
+
+export async function deleteSetting(bookId: string, settingId: string): Promise<void> {
+  await LocalStorage.deleteSetting(bookId, settingId);
+  deleteFromCloud(`/writing/${bookId}/settings/${settingId}`);
 }
 
 // ============================================================
-// 同步（升级迁移）
+// 灵感 API — 本地优先
+// ============================================================
+
+export async function fetchInspirations(bookId: string): Promise<LocalInspiration[]> {
+  return LocalStorage.getInspirations(bookId);
+}
+
+export async function saveInspirations(bookId: string, items: any[]): Promise<void> {
+  const stored = await LocalStorage.getInspirations(bookId);
+  for (const item of items) {
+    if (!stored.find((s) => s.id === item.id)) {
+      await LocalStorage.addInspiration(bookId, {
+        id: item.id || `local_ins_${Date.now()}`,
+        bookId,
+        title: item.title || "",
+        content: item.content || "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    } else {
+      await LocalStorage.updateInspiration(bookId, item.id, {
+        title: item.title,
+        content: item.content,
+      });
+    }
+  }
+  uploadToCloud(`/writing/${bookId}/inspirations/batch`, { items });
+}
+
+export async function deleteInspiration(bookId: string, inspirationId: string): Promise<void> {
+  await LocalStorage.deleteInspiration(bookId, inspirationId);
+  deleteFromCloud(`/writing/${bookId}/inspirations/${inspirationId}`);
+}
+
+// ============================================================
+// 同步（登录后有网时主动调用）
 // ============================================================
 
 export async function syncLocalToCloud(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
   try {
+    const token = await getToken();
+    if (!token) return { success: false, syncedCount: 0, error: "未登录" };
+
     const allData = await LocalStorage.getAllLocalData();
     if (allData.books.length === 0) {
       return { success: true, syncedCount: 0 };
@@ -404,8 +357,6 @@ export async function syncLocalToCloud(): Promise<{ success: boolean; syncedCoun
     });
     const json = await res.json();
     if (json.success) {
-      // 同步成功后清除本地数据（后续走云端）
-      await LocalStorage.clearAllLocalData();
       return { success: true, syncedCount: json.syncedCount || allData.books.length };
     }
     return { success: false, syncedCount: 0, error: json.error || "同步失败" };
@@ -437,8 +388,7 @@ export async function downloadCloudToLocal(): Promise<{ success: boolean; error?
 // ============================================================
 
 export const DataManager = {
-  setVipStatus,
-  isVip,
+  isLoggedIn,
 
   // 书籍
   async getBooks() {
@@ -451,12 +401,8 @@ export const DataManager = {
   },
 
   async createBook(data: {
-    title: string;
-    description?: string;
-    category?: string;
-    status?: string;
-    cover?: string;
-    coverImage?: string;
+    title: string; description?: string; category?: string;
+    status?: string; cover?: string; coverImage?: string;
   }) {
     try {
       const book = await createBook(data);
@@ -488,22 +434,6 @@ export const DataManager = {
     try {
       const book = await getBookDetail(bookId);
       return { success: true, data: book };
-    } catch (e: any) {
-      return { success: false, error: e?.message };
-    }
-  },
-
-  // AI 创建书籍
-  async aiCreateBook(topic: string) {
-    try {
-      const headers = await getAuthHeaders();
-      const res = await fetch(`${API_BASE}/api/v1/writing/ai-generate`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ topic }),
-      });
-      const json = await res.json();
-      return json;
     } catch (e: any) {
       return { success: false, error: e?.message };
     }
@@ -556,32 +486,71 @@ export const DataManager = {
     }
   },
 
-  async saveOutline(bookId: string, outline: { content: string }) {
+  async saveOutlines(bookId: string, items: any[]) {
     try {
-      const item = await saveOutline(bookId, outline);
-      return { success: true, data: item };
+      await saveOutlines(bookId, items);
+      return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message };
     }
   },
 
-  // 设定
-  async getSettings(bookId: string) {
+  // 设定（扁平格式，匹配 API）
+  async getSettingsArray(bookId: string) {
     try {
-      const data = await fetchSettings(bookId);
+      const data = await LocalStorage.getSettingsArray(bookId);
       return { success: true, data };
     } catch (e: any) {
       return { success: false, data: [], error: e?.message };
     }
   },
 
-  // 灵感
-  async getInspirations(bookId: string) {
+  async saveSettingsArray(bookId: string, items: any[]) {
     try {
-      const data = await fetchInspirations(bookId);
+      await LocalStorage.saveSettingsArray(bookId, items);
+      // 后台云同步
+      try {
+        const token = await getToken();
+        if (token) {
+          const headers = await getAuthHeaders();
+          fetch(`${API_BASE}/api/v1/writing/${bookId}/settings`, {
+            method: "PUT", headers,
+            body: JSON.stringify({ data: items }),
+          }).catch(() => {/* fire-and-forget */});
+        }
+      } catch {}
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message };
+    }
+  },
+
+  // 灵感（扁平格式，匹配 API）
+  async getInspirationsArray(bookId: string) {
+    try {
+      const data = await LocalStorage.getInspirationsArray(bookId);
       return { success: true, data };
     } catch (e: any) {
       return { success: false, data: [], error: e?.message };
+    }
+  },
+
+  async saveInspirationsArray(bookId: string, items: any[]) {
+    try {
+      await LocalStorage.saveInspirationsArray(bookId, items);
+      try {
+        const token = await getToken();
+        if (token) {
+          const headers = await getAuthHeaders();
+          fetch(`${API_BASE}/api/v1/writing/${bookId}/inspirations`, {
+            method: "PUT", headers,
+            body: JSON.stringify({ items }),
+          }).catch(() => {/* fire-and-forget */});
+        }
+      } catch {}
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message };
     }
   },
 

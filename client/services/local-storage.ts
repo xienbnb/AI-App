@@ -142,6 +142,83 @@ export async function updateBook(bookId: string, updates: Partial<LocalBook>): P
   return books[idx];
 }
 
+// ============================================================
+// 设定（扁平存储，匹配 API 格式：WorldSetting[]）
+// ============================================================
+
+export interface LocalWorldSetting {
+  id: string;
+  type: string;
+  name: string;
+  description: string;
+}
+
+export async function saveSettingsArray(bookId: string, settings: LocalWorldSetting[]): Promise<void> {
+  await setItem(`settings_flat_${bookId}`, settings);
+}
+
+export async function getSettingsArray(bookId: string): Promise<LocalWorldSetting[]> {
+  return (await getItem<LocalWorldSetting[]>(`settings_flat_${bookId}`)) || [];
+}
+
+export async function addSettingItem(bookId: string, item: { id: string; type: string; name: string; description: string }): Promise<void> {
+  const items = await getSettingsArray(bookId);
+  items.push(item);
+  await saveSettingsArray(bookId, items);
+}
+
+export async function updateSettingItem(bookId: string, settingId: string, updates: Partial<{ type: string; name: string; description: string }>): Promise<void> {
+  const items = await getSettingsArray(bookId);
+  const idx = items.findIndex(s => s.id === settingId);
+  if (idx !== -1) {
+    items[idx] = { ...items[idx], ...updates };
+    await saveSettingsArray(bookId, items);
+  }
+}
+
+export async function deleteSettingItem(bookId: string, settingId: string): Promise<void> {
+  const items = await getSettingsArray(bookId);
+  await saveSettingsArray(bookId, items.filter(s => s.id !== settingId));
+}
+
+// ============================================================
+// 灵感（扁平存储，匹配 API 格式）
+// ============================================================
+
+export interface LocalInspirationItem {
+  id: string;
+  content: string;
+  createdAt: string;
+}
+
+export async function saveInspirationsArray(bookId: string, inspirations: LocalInspirationItem[]): Promise<void> {
+  await setItem(`inspirations_flat_${bookId}`, inspirations);
+}
+
+export async function getInspirationsArray(bookId: string): Promise<LocalInspirationItem[]> {
+  return (await getItem<LocalInspirationItem[]>(`inspirations_flat_${bookId}`)) || [];
+}
+
+export async function addInspirationItem(bookId: string, item: { id: string; content: string; createdAt: string }): Promise<void> {
+  const items = await getInspirationsArray(bookId);
+  items.push(item);
+  await saveInspirationsArray(bookId, items);
+}
+
+export async function updateInspirationItem(bookId: string, inspId: string, updates: Partial<{ content: string }>): Promise<void> {
+  const items = await getInspirationsArray(bookId);
+  const idx = items.findIndex(i => i.id === inspId);
+  if (idx !== -1) {
+    items[idx] = { ...items[idx], ...updates };
+    await saveInspirationsArray(bookId, items);
+  }
+}
+
+export async function deleteInspirationItem(bookId: string, inspId: string): Promise<void> {
+  const items = await getInspirationsArray(bookId);
+  await saveInspirationsArray(bookId, items.filter(i => i.id !== inspId));
+}
+
 export async function deleteBook(bookId: string): Promise<void> {
   const books = await getBooks();
   await saveBooks(books.filter((b) => b.id !== bookId));

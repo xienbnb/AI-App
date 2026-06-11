@@ -1,49 +1,45 @@
 /**
  * 认证守卫组件
  *
- * 在应用加载时检查登录状态，未登录时重定向到登录页
- * 支持首帧导航就绪检测，防止崩溃和死循环
+ * 不再强制登录！所有用户可直接进入使用本地功能。
+ * 仅在使用 AI 功能时通过 requireAuth 弹窗提示登录。
  *
  * @file /client/components/AuthGuard.tsx
  */
-import { useEffect, ReactNode } from "react";
-import { View, ActivityIndicator } from "react-native";
-import { useRouter, useSegments, useRootNavigationState } from "expo-router";
+import { ReactNode } from "react";
+import { Alert } from "react-native";
+import { useRouter, useRootNavigationState } from "expo-router";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface Props {
   children: ReactNode;
 }
 
-export function AuthGuard({ children }: Props) {
+/**
+ * 检查当前是否已登录，未登录则弹窗引导用户前往登录页
+ * @returns true=已登录可继续, false=未登录已弹窗
+ */
+export function useRequireAuth(): () => boolean {
   const router = useRouter();
-  const segments = useSegments();
   const rootState = useRootNavigationState();
   const { isAuthenticated, isLoading } = useAuth();
 
-  useEffect(() => {
-    // 待机检测：导航未挂载或认证正在加载
-    if (!rootState?.key || isLoading) return;
+  return () => {
+    if (!rootState?.key || isLoading) return false;
+    if (isAuthenticated) return true;
 
-    const inLoginRoute = segments[0] === "login";
-
-    if (!isAuthenticated && !inLoginRoute) {
-      // 未登录且不在登录页 → 跳转登录
-      router.replace("/login");
-    } else if (isAuthenticated && inLoginRoute) {
-      // 已登录但在登录页 → 跳转首页
-      router.replace("/");
-    }
-  }, [rootState?.key, isAuthenticated, isLoading, segments]);
-
-  // 加载中或未登录时避免闪烁白屏
-  if (isLoading || (!isAuthenticated && segments[0] !== "login")) {
-    return (
-      <View className="flex-1 bg-amber-50 items-center justify-center">
-        <ActivityIndicator size="large" color="#D97706" />
-      </View>
+    Alert.alert(
+      "需要登录",
+      "该功能需要登录账号后才能使用，是否前往登录？",
+      [
+        { text: "取消", style: "cancel" },
+        { text: "确定", onPress: () => router.push("/login") },
+      ],
     );
-  }
+    return false;
+  };
+}
 
+export function AuthGuard({ children }: Props) {
   return <>{children}</>;
 }

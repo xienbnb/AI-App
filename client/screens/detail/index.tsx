@@ -35,7 +35,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useFocusEffect } from "expo-router";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
-import { cacheBook, getCachedBook, cacheOutlines, getCachedOutlines, cacheSettings, getCachedSettings, cacheInspirations, getCachedInspirations, cacheVolumes, getCachedVolumes } from "@/services/local-cache";
+import { cacheBook, getCachedBook } from "@/services/local-cache";
+import { DataManager } from "@/services/data-manager";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -209,11 +210,9 @@ export default function DetailScreen() {
     if (!id) return;
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}`, { headers: getAuthHeaders() });
-      const json = await res.json();
-      if (json.success) {
-        setBook(json.data);
-        cacheBook(id, json.data).catch(() => {});
+      const result = await DataManager.getBookDetail(id);
+      if (result.success) {
+        setBook(result.data);
       }
     } catch (e) {
       console.error("获取书籍详情失败", e);
@@ -224,74 +223,52 @@ export default function DetailScreen() {
     }
   }, [id]);
 
-  // ===== 大纲 API =====
+  // ===== 大纲 API（本地优先） =====
   const fetchOutlines = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, { headers: getAuthHeaders() });
-      const json = await res.json();
-      if (json.success) {
-        setOutlines(json.data || []);
-        cacheOutlines(id, json.data || []).catch(() => {});
+      const result = await DataManager.getOutlines(id);
+      if (result.success) {
+        setOutlines(result.data || []);
       }
     } catch (e) {
       console.error("获取大纲失败", e);
-      const cached = await getCachedOutlines(id!).catch(() => null);
-      if (cached) setOutlines(cached);
     }
   }, [id]);
 
   const saveOutlines = async (newOutlines: Outline[]) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/outline-items`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ items: newOutlines }),
-      });
-      const json = await res.json();
-      if (json.success) setOutlines(newOutlines);
+      const result = await DataManager.saveOutlines(id, newOutlines);
+      if (result.success) setOutlines(newOutlines);
     } catch (e) { Alert.alert("错误", "保存大纲失败"); }
   };
 
-  // ===== 设定 API =====
+  // ===== 设定 API（本地优先） =====
   const fetchSettings = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, { headers: getAuthHeaders() });
-      const json = await res.json();
-      if (json.success) {
-        setSettings(json.data || []);
-        cacheSettings(id, json.data || []).catch(() => {});
+      const result = await DataManager.getSettingsArray(id);
+      if (result.success) {
+        setSettings(result.data || []);
       }
     } catch (e) {
       console.error("获取设定失败", e);
-      const cached = await getCachedSettings(id!).catch(() => null);
-      if (cached) setSettings(cached);
     }
   }, [id]);
 
   const saveSettings = async (newSettings: WorldSetting[]) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/settings`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ data: newSettings }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setSettings(newSettings);
-        cacheSettings(id!, newSettings).catch(() => {});
-      }
+      const result = await DataManager.saveSettingsArray(id, newSettings);
+      if (result.success) setSettings(newSettings);
     } catch (e) { Alert.alert("错误", "保存设定失败"); }
   };
 
-  // ===== 灵感 API =====
+  // ===== 灵感 API（本地优先） =====
   const fetchInspirations = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, { headers: getAuthHeaders() });
-      const json = await res.json();
-      if (json.success) setInspirations(json.data || []);
+      const result = await DataManager.getInspirationsArray(id);
+      if (result.success) setInspirations(result.data || []);
     } catch (e) {
       console.error("获取灵感失败", e);
     }
@@ -299,13 +276,8 @@ export default function DetailScreen() {
 
   const saveInspirations = async (newInspirations: Inspiration[]) => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/inspirations`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ data: newInspirations }),
-      });
-      const json = await res.json();
-      if (json.success) setInspirations(newInspirations);
+      const result = await DataManager.saveInspirationsArray(id, newInspirations);
+      if (result.success) setInspirations(newInspirations);
     } catch (e) { Alert.alert("错误", "保存灵感失败"); }
   };
   useFocusEffect(useCallback(() => { fetchBook(); fetchOutlines(); fetchSettings(); fetchInspirations(); }, [fetchBook, fetchOutlines, fetchSettings, fetchInspirations]));
@@ -330,20 +302,19 @@ export default function DetailScreen() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${volumeId}/chapters`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ title: chapterTitle.trim() }),
+      const result = await DataManager.createChapter(id, {
+        title: chapterTitle.trim(),
+        content: "",
+        volumeId,
       });
-      const json = await res.json();
-      if (json.success) {
+      if (result.success) {
         setModalVisible(false);
         setChapterTitle("");
         setSelectedVolumeId("");
         await fetchBook();
-        router.push("/editor", { bookId: id, chapterId: json.data.id });
+        router.push("/editor", { bookId: id, chapterId: result.data.id });
       } else {
-        Alert.alert("错误", json.error || "创建章节失败");
+        Alert.alert("错误", result.error || "创建章节失败");
       }
     } catch (e) {
       Alert.alert("错误", "创建章节失败");
@@ -381,10 +352,10 @@ export default function DetailScreen() {
     setDeleteConfirmInfo(null);
     try {
       if (type === "chapter") {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
-        const json = await res.json();
-        if (json.success) await fetchBook();
+        const result = await DataManager.deleteChapter(id, itemId);
+        if (result.success) await fetchBook();
       } else if (type === "volume") {
+        // 卷操作保持在线 API（本地暂未支持）
         const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
         const json = await res.json();
         if (json.success) await fetchBook();
@@ -399,19 +370,14 @@ export default function DetailScreen() {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/chapters/${chapterId}`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ title: newTitle.trim() }),
-      });
-      const json = await res.json();
-      if (json.success) {
+      const result = await DataManager.updateChapter(id, chapterId, { title: newTitle.trim() });
+      if (result.success) {
         setModalVisible(false);
         setEditingChapter(null);
         setEditChapterTitle("");
         await fetchBook();
       } else {
-        Alert.alert("错误", json.error || "修改失败");
+        Alert.alert("错误", result.error || "修改失败");
       }
     } catch (e) {
       Alert.alert("错误", "修改章节失败");

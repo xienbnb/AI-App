@@ -34,6 +34,7 @@ import {
 } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
+import { useRequireAuth } from "@/components/AuthGuard";
 import RichEditor from "@/components/RichEditor";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
@@ -55,6 +56,7 @@ export default function EditorScreen() {
   const { bookId, chapterId } = useSafeSearchParams<{ bookId: string; chapterId: string }>();
   const { width: screenWidth } = useWindowDimensions();
   const { token } = useAuth();
+  const requireAuth = useRequireAuth();
   const getAuthHeaders = useCallback(() => ({ "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) }), [token]);
 
   // ===== 核心数据 =====
@@ -571,6 +573,7 @@ export default function EditorScreen() {
 
   // ===== AI =====
   const handleGenerateNames = async () => {
+    if (!requireAuth()) return;
     setIsGenerating(true); setGeneratedContent("");
     const prompts: Record<string, string> = {
       person: "生成10个小说角色名(含姓氏，男女各5):",
@@ -589,6 +592,7 @@ export default function EditorScreen() {
   };
 
   const handleAIWrite = () => {
+    if (!requireAuth()) return;
     if (!aiPrompt.trim()) { Alert.alert("提示", "请输入写作指令"); return; }
     setIsGenerating(true); setGeneratedContent(""); setAiModalVisible(false);
     const context = content.slice(-2000);
@@ -622,6 +626,7 @@ export default function EditorScreen() {
   };
 
   const handleContinueWriting = () => {
+    if (!requireAuth()) return;
     const currentContent = generatedContent;
     if (!currentContent) return;
     setGenerationDone(false);
@@ -898,6 +903,7 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="paste" label="粘贴" color="#6B7280" onPress={async () => { const t = await Clipboard.getStringAsync(); if (t) replaceSelectedText(t); }} />
                     {/* AI 写作 */}
                     <FloatingAIBtn icon="pen" label="润色" color="#EC4899" onPress={() => {
+                      if (!requireAuth()) return;
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
                       accumulatedRef.current = "";
                       const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
@@ -917,6 +923,7 @@ export default function EditorScreen() {
                       sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
+                      if (!requireAuth()) return;
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false); setGenerationDone(false);
                       accumulatedRef.current = "";
                       const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
@@ -936,6 +943,7 @@ export default function EditorScreen() {
                       sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
+                      if (!requireAuth()) return;
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false); setGenerationDone(false);
                       accumulatedRef.current = "";
                       const context = content.slice(-1500);

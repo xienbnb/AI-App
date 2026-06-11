@@ -15,6 +15,7 @@ import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RichEditor from "@/components/RichEditor";
 import { useAuth } from "@/contexts/AuthContext";
+import { DataManager } from "@/services/data-manager";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
@@ -42,17 +43,16 @@ export default function OutlineCreateScreen() {
   // 始终同步 contentRef
   useEffect(() => { contentRef.current = content; }, [content]);
 
-  // 加载已有大纲列表，如果是编辑模式则填充数据
+  // 加载已有大纲列表（本地优先），如果是编辑模式则填充数据
   useEffect(() => {
     const load = async () => {
       if (!bookId) return;
       try {
-        const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline-items`, { headers: getAuthHeaders() });
-        const json = await res.json();
-        if (json.success && Array.isArray(json.data)) {
-          setAllOutlines(json.data);
+        const result = await DataManager.getOutlines(bookId as string);
+        if (result.success && Array.isArray(result.data)) {
+          setAllOutlines(result.data);
           if (outlineId) {
-            const item = json.data.find((o: OutlineItem) => o.id === outlineId);
+            const item = result.data.find((o: OutlineItem) => o.id === outlineId);
             if (item) {
               setContent(item.content);
             }
@@ -97,18 +97,13 @@ export default function OutlineCreateScreen() {
         updatedItems = [...allOutlines, newItem];
       }
 
-      const res = await fetch(`${API_BASE}/api/v1/writing/${bookId}/outline-items`, {
-        method: "PUT",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ items: updatedItems }),
-      });
-      const json = await res.json();
-      if (json.success) {
+      const result = await DataManager.saveOutlines(bookId as string, updatedItems);
+      if (result.success) {
         Alert.alert("保存成功", `${itemType}已保存`, [
           { text: "返回", onPress: () => router.back() },
         ]);
       } else {
-        Alert.alert("错误", json.message || "保存失败，请重试");
+        Alert.alert("错误", result.error || "保存失败，请重试");
       }
     } catch (e) {
       console.error("保存失败", e);
