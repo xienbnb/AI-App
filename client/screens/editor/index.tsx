@@ -153,17 +153,109 @@ export default function EditorScreen() {
       },
     }), [screenWidth, winHeight]);
 
-  // ===== 圆形转轮悬浮按钮（可拖拽） =====
-  const [wheelOpen, setWheelOpen] = useState(false);
-  const rotatingRef = useRef(false);
-  const draggingRef = useRef(false);
-  const [wheelPosX] = useState(() => new Animated.Value(0));
-  const [wheelPosY] = useState(() => new Animated.Value(0));
-  const wheelDragStart = useRef({ x: 0, y: 0 });
-  const wheelCenterRef = useRef({ x: 0, y: 0 });
-  const startAngleRef = useRef(0);
-  const wheelLayoutRef = useRef({ x: 0, y: 0, width: 0, height: 0 });
-  let wheelPanResponder: any; // 在 wheelTools 之后初始化
+  // ===== 半圆形四层转轮（左侧拖拽手柄） =====
+  const [wheelExpanded, setWheelExpanded] = useState(false);
+  const [spinHighlightIdx, setSpinHighlightIdx] = useState(-1);
+  const [wheelHandleY] = useState(() => new Animated.Value(200));
+  const [wheelSpinAngle] = useState(() => new Animated.Value(0));
+  const wheelDragStartY = useRef(0);
+  const wheelHandleBaseY = useRef(200);
+  const spinStartAngle = useRef(0);
+  const spinAccumAngle = useRef(0);
+  const wheelContainerLayout = useRef({ x: 0, y: 0, w: 0, h: 0 });
+  const touchAngleRef = useRef(0);
+  const spinTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSpinning = useRef(false);
+
+  // [外→内] 四层工具定义
+  const wheelRingDefs = [
+    { tools: ["撤销", "恢复", "加粗", "斜体", "下划线", "排版"], radius: 124,   ringName: "常用工具" },
+    { tools: ["纠错", "AI", "搜索", "新建"],                radius: 96,    ringName: "智能助手" },
+    { tools: ["预览", "复制", "导出"],                       radius: 70,    ringName: "辅助工具" },
+    { tools: ["统计", "夜间"],                               radius: 46,    ringName: "写作设置" },
+  ];
+  const allWheelToolLabels = wheelRingDefs.flatMap(r => r.tools);
+
+  // 工具图标映射（不含 action，用于渲染）
+  const wheelToolIconMap: Record<string, string> = {
+    "撤销": "arrow-rotate-left", "恢复": "arrow-rotate-right",
+    "加粗": "bold", "斜体": "italic", "下划线": "underline", "排版": "align-left",
+    "纠错": "check-double", "AI": "wand-sparkles", "搜索": "magnifying-glass",
+    "新建": "plus", "预览": "eye", "复制": "copy", "导出": "file-export",
+    "统计": "chart-simple", "夜间": "moon",
+  };
+
+  // 用 refs 存储各工具 action（避免 TDZ，在 handler 定义处更新）
+  const wheelActionRefs = useRef<Record<string, () => void>>({});
+
+  // 半圆转轮手势
+  // eslint-disable-next-line react-hooks/refs
+  const wheelSpinPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => wheelExpanded,
+    onMoveShouldSetPanResponder: () => wheelExpanded,
+    onPanResponderGrant: () => {
+      spinStartAngle.current = spinAccumAngle.current;
+      touchAngleRef.current = 0;
+      isSpinning.current = false;
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+    },
+    onPanResponderMove: (_, g) => {
+      // 计算手指相对于转轮中心的角度（半圆范围 -80°~80°）
+      const cx = wheelContainerLayout.current.x + wheelContainerLayout.current.w / 2;
+      const cy = wheelContainerLayout.current.y + wheelContainerLayout.current.h / 2;
+      const dx = g.moveX - cx;
+      const dy = g.moveY - cy;
+      const rawAngle = Math.atan2(-dy, dx) * (180 / Math.PI);
+      let angle = rawAngle;
+      if (angle > 90) angle -= 360;
+      if (angle < -90) angle += 360;
+      // 限制在半圆范围内
+      angle = Math.max(-80, Math.min(80, angle));
+      touchAngleRef.current = angle;
+
+      // 抽奖转盘效果：将角度映射为高亮工具
+      const total = allWheelToolLabels.length;
+      const halfSpan = 80;
+      const norm = ((angle + halfSpan) / (halfSpan * 2)) * total;
+      let idx = Math.round(norm) % total;
+      if (idx < 0) idx += total;
+      setSpinHighlightIdx(idx);
+      isSpinning.current = true;
+    },
+    onPanResponderRelease: () => {
+      // 点击转盘无移动时，触发高亮工具
+      if (!isSpinning.current && spinHighlightIdx >= 0) {
+        const label = allWheelToolLabels[spinHighlightIdx];
+        wheelActionRefs.current[label]?.();
+      }
+      // 延迟关闭
+      if (spinTimerRef.current) clearTimeout(spinTimerRef.current);
+      spinTimerRef.current = setTimeout(() => {
+        setWheelExpanded(false);
+        setSpinHighlightIdx(-1);
+        spinAccumAngle.current = 0;
+      }, 3000);
+    },
+  }), [wheelExpanded, spinHighlightIdx, allWheelToolLabels]);
+
+  // 拖拽手柄手势
+  // eslint-disable-next-line react-hooks/refs
+  const wheelDragPanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => !wheelExpanded,
+    onMoveShouldSetPanResponder: () => !wheelExpanded,
+    onPanResponderGrant: () => {
+      wheelHandleBaseY.current = (wheelHandleY as any).__getValue();
+      wheelDragStartY.current = 0;
+    },
+    onPanResponderMove: (_, g) => {
+      const newY = wheelHandleBaseY.current + g.dy;
+      (wheelHandleY as any).setValue(Math.max(80, Math.min(500, newY)));
+    },
+    onPanResponderRelease: () => {
+      setWheelExpanded(true);
+      setSpinHighlightIdx(0);
+    },
+  }), [wheelExpanded, wheelHandleY]);
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -743,75 +835,25 @@ export default function EditorScreen() {
     }
   }, [nightMode, showSpeed]);
 
-  // ===== 圆形转轮工具列表 =====
-  const wheelTools = useMemo(() => [
-    { icon: "rotate-left", label: "撤销", color: "#6366F1", action: handleUndo },
-    { icon: "rotate-right", label: "恢复", color: "#8B5CF6", action: handleRedo },
-    { icon: "bold", label: "加粗", color: "#EC4899", action: () => {
-      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
-      if (sel) replaceSelectedText(`**${sel}**`);
-    }},
-    { icon: "italic", label: "斜体", color: "#10B981", action: () => {
-      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
-      if (sel) replaceSelectedText(`*${sel}*`);
-    }},
-    { icon: "underline", label: "下划线", color: "#F59E0B", action: () => {
-      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
-      if (sel) replaceSelectedText(`<u>${sel}</u>`);
-    }},
-    { icon: "align-left", label: "排版", color: "#3B82F6", action: handleFormat },
-    { icon: "check-double", label: "纠错", color: "#059669", action: handleCorrect },
-    { icon: "wand-sparkles", label: "AI创作", color: "#6366F1", action: () => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }},
-    { icon: "magnifying-glass", label: "搜索", color: "#F97316", action: () => { setSearchVisible(true); }},
-    { icon: "eye", label: "预览", color: "#14B8A6", action: handlePreview },
-    { icon: "copy", label: "复制", color: "#A855F7", action: handleCopyAll },
-    { icon: "file-plus", label: "新建", color: "#06B6D4", action: handleNewChapter },
-    { icon: "file-export", label: "导出", color: "#E11D48", action: () => { setExportModalVisible(true); }},
-    { icon: "chart-simple", label: "统计", color: "#84CC16", action: () => { setStatsModalVisible(true); }},
-    { icon: "moon", label: "夜间", color: "#1E293B", action: () => { setNightMode(prev => !prev); }},
-  ], [handleUndo, handleRedo, handleFormat, handleCorrect, handlePreview, handleCopyAll, handleNewChapter, selectedText, cursorPosition, setSearchVisible, setExportModalVisible, setStatsModalVisible, setNightMode]);
-
-  // ===== 圆形转轮 PanResponder（需在 wheelTools 定义之后） =====
-  // eslint-disable-next-line react-hooks/exhaustive-deps, prefer-const
-  wheelPanResponder = useMemo(() =>
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => Math.hypot(g.dx, g.dy) > 8,
-      onPanResponderGrant: () => {
-        rotatingRef.current = false;
-        draggingRef.current = false;
-      },
-      onPanResponderMove: (_, g) => {
-        if (!wheelOpen) {
-          draggingRef.current = true;
-          wheelPosX.setValue(wheelDragStart.current.x + g.dx);
-          wheelPosY.setValue(wheelDragStart.current.y + g.dy);
-        } else {
-          rotatingRef.current = true;
-          const cx = wheelLayoutRef.current.x + wheelLayoutRef.current.width / 2;
-          const cy = wheelLayoutRef.current.y + wheelLayoutRef.current.height / 2;
-          const angle = Math.atan2(g.moveY - cy, g.moveX - cx) * (180 / Math.PI);
-          const normAngle = ((angle + 360) % 360 + 360) % 360;
-          startAngleRef.current = normAngle;
-        }
-      },
-      onPanResponderRelease: (_, g) => {
-        if (wheelOpen && rotatingRef.current) {
-          const cx = wheelLayoutRef.current.x + wheelLayoutRef.current.width / 2;
-          const cy = wheelLayoutRef.current.y + wheelLayoutRef.current.height / 2;
-          const angle = Math.atan2(g.moveY - cy, g.moveX - cx) * (180 / Math.PI);
-          const normAngle = ((angle + 360) % 360 + 360) % 360;
-          const idx = Math.round((normAngle / 360) * wheelTools.length) % wheelTools.length;
-          const tool = wheelTools[idx];
-          if (tool) tool.action();
-          setWheelOpen(false);
-        } else if (!wheelOpen && draggingRef.current) {
-          wheelDragStart.current = { x: wheelDragStart.current.x + g.dx, y: wheelDragStart.current.y + g.dy };
-        }
-        rotatingRef.current = false;
-        draggingRef.current = false;
-      },
-    }), [wheelOpen]);
+  // 初始化转轮 action refs（在所有 handler 定义之后执行）
+  // eslint-disable-next-line react-hooks/refs
+  wheelActionRefs.current = {
+    "撤销": handleUndo,
+    "恢复": handleRedo,
+    "加粗": () => handleToolAction("bold"),
+    "斜体": () => handleToolAction("italic"),
+    "下划线": () => handleToolAction("underline"),
+    "排版": () => handleToolAction("format"),
+    "纠错": () => handleToolAction("correct"),
+    "AI": () => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); },
+    "搜索": () => setSearchVisible(true),
+    "新建": () => { setFloatingChapterTitle(""); setFloatingChapterContent(""); setFloatingChapterVisible(true); },
+    "预览": () => setPreviewVisible(true),
+    "复制": () => handleToolAction("copyAll"),
+    "导出": () => setExportModalVisible(true),
+    "统计": () => setStatsModalVisible(true),
+    "夜间": () => setNightMode(prev => !prev),
+  };
 
   // 提取 ref 值用于渲染（避免 lint 报错）
   const hasSelection = selectionStart !== selectionEnd;
@@ -1171,103 +1213,132 @@ export default function EditorScreen() {
             </Animated.View>
           )}
 
-          {/* ===== 圆形转轮悬浮按钮（右侧，可拖拽） ===== */}
-          <Animated.View {...wheelPanResponder.panHandlers}
-            onLayout={(e) => {
-              const { x, y, width, height } = e.nativeEvent.layout;
-              wheelLayoutRef.current = { x, y, width, height };
-            }}
+          {/* ===== 半圆形四层转轮（左侧拖拽手柄） ===== */}
+          
+          {/* 折叠态拖拽手柄 → 左侧边缘 */}
+          {/* eslint-disable-next-line react-hooks/refs */}
+          <Animated.View
+            {...wheelDragPanResponder.panHandlers}
             style={[{
-              position: 'absolute',
-              right: wheelOpen ? 12 : 8,
-              bottom: wheelOpen ? undefined : keyboardHeight + 120,
-              top: wheelOpen ? '30%' : undefined,
-              zIndex: 190,
-              alignItems: 'center',
-              justifyContent: 'center',
+              position: 'absolute', left: 0, zIndex: 200,
+              width: 18, height: 48, borderTopRightRadius: 24,
+              borderBottomRightRadius: 24,
+              backgroundColor: nightMode ? "rgba(99,102,241,0.5)" : theme.accent,
+              alignItems: 'center', justifyContent: 'center',
+              shadowColor: theme.accent,
+              shadowOffset: { width: 2, height: 0 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 6,
             }, {
-              transform: [
-                { translateX: wheelPosX },
-                { translateY: wheelPosY },
-              ],
-            }]}>
-            {!wheelOpen ? (
-              /* 折叠态 - 可拖拽小圆点 */
-              <TouchableOpacity activeOpacity={0.7} onPress={() => setWheelOpen(true)}
-                style={{
-                  width: 42, height: 42, borderRadius: 21,
-                  backgroundColor: theme.accent,
-                  alignItems: 'center', justifyContent: 'center',
-                  shadowColor: theme.accent,
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.3,
-                  shadowRadius: 10,
-                  elevation: 8,
-                }}>
-                <FontAwesome6 name="sliders" size={16} color="#FFF" />
-              </TouchableOpacity>
-            ) : (
-              /* 展开态 - 辐射菜单 */
-              <View style={{
-                width: 240, height: 240,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
-                {/* 转轮背景 */}
-                <View style={{
-                  width: 240, height: 240, borderRadius: 120,
-                  backgroundColor: nightMode ? "rgba(26,26,46,0.95)" : "rgba(255,255,255,0.95)",
-                  borderWidth: 1,
-                  borderColor: nightMode ? "rgba(99,102,241,0.3)" : "rgba(0,0,0,0.08)",
-                  shadowColor: "#6366F1",
-                  shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: 0.2,
-                  shadowRadius: 30,
-                  elevation: 16,
-                  alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {/* 中心关闭按钮 */}
-                  <TouchableOpacity onPress={() => setWheelOpen(false)}
-                    style={{
-                      width: 36, height: 36, borderRadius: 18,
-                      backgroundColor: theme.accent,
-                      alignItems: 'center', justifyContent: 'center',
-                      zIndex: 10,
-                    }}>
-                    <FontAwesome6 name="xmark" size={14} color="#FFF" />
-                  </TouchableOpacity>
+              transform: [{ translateY: wheelHandleY }],
+            }]}
+          >
+            <FontAwesome6 name="grip-lines-vertical" size={12} color="#FFF" />
+          </Animated.View>
 
-                  {/* 径向排列的工具 */}
-                  {/* eslint-disable-next-line react-hooks/refs */}
-                  {wheelTools.map((tool, index) => {
-                    const angle = (index / wheelTools.length) * 2 * Math.PI - Math.PI / 2;
-                    const radius = 82;
-                    const x = Math.cos(angle) * radius;
-                    const y = Math.sin(angle) * radius;
+          {/* 展开态半圆转轮 */}
+          {wheelExpanded && (
+            <Animated.View
+              // eslint-disable-next-line react-hooks/refs
+              {...wheelSpinPanResponder.panHandlers}
+              onLayout={(e) => {
+                const { x, y, width, height } = e.nativeEvent.layout;
+                wheelContainerLayout.current = { x, y, w: width, h: height };
+              }}
+              style={[{
+                position: 'absolute', left: 0, zIndex: 199,
+                width: 280, height: 280,
+              }, {
+                transform: [{ translateY: Animated.subtract(wheelHandleY, new Animated.Value(140)) }],
+              }]}
+            >
+              {/* 半圆背景 + 四层同心环 */}
+              <View style={{
+                width: 280, height: 280,
+                alignItems: 'center', justifyContent: 'center',
+                position: 'relative',
+              }}>
+                {/* 四层环形轨道 */}
+                {wheelRingDefs.map((ring, ri) => (
+                  <View key={ri} style={{
+                    position: 'absolute',
+                    width: ring.radius * 2, height: ring.radius * 2,
+                    borderRadius: ring.radius,
+                    borderWidth: 1,
+                    borderColor: nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.06)",
+                    backgroundColor: nightMode
+                      ? `rgba(26,26,46,${0.92 - ri * 0.08})`
+                      : `rgba(255,255,255,${0.95 - ri * 0.03})`,
+                  }} />
+                ))}
+
+                {/* 各层工具 */}
+                {wheelRingDefs.map((ring, ri) => {
+                  const n = ring.tools.length;
+                  const spanAngle = 150; // 半圆张角
+                  const startDeg = -90 - (spanAngle / 2);
+                  return ring.tools.map((label, ti) => {
+                    const deg = startDeg + ((ti + 0.5) / n) * spanAngle;
+                    const rad = (deg * Math.PI) / 180;
+                    const x = Math.cos(rad) * ring.radius + 140;
+                    const y = Math.sin(rad) * ring.radius + 140;
+                    const icon = wheelToolIconMap[label] || "circle";
+                    const isHighlighted = spinHighlightIdx === allWheelToolLabels.indexOf(label);
                     return (
-                      <TouchableOpacity key={tool.label}
-                        onPress={() => { tool.action(); setWheelOpen(false); }}
+                      <TouchableOpacity key={`${ri}-${ti}`}
+                        // eslint-disable-next-line react-hooks/refs
+                        onPress={() => { const fn = wheelActionRefs.current[label]; if (fn) fn(); setWheelExpanded(false); setSpinHighlightIdx(-1); }}
+                        activeOpacity={0.7}
                         style={{
                           position: 'absolute',
-                          left: 120 + x - 22,
-                          top: 120 + y - 22,
+                          left: x - 22, top: y - 22,
                           width: 44, height: 44, borderRadius: 22,
-                          backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6",
+                          backgroundColor: isHighlighted
+                            ? (nightMode ? "rgba(99,102,241,0.5)" : "#EEF2FF")
+                            : (nightMode ? "#2D2D4A" : "#F3F4F6"),
                           alignItems: 'center', justifyContent: 'center',
-                          borderWidth: 1,
-                          borderColor: `${tool.color}30`,
+                          borderWidth: isHighlighted ? 2 : 1,
+                          borderColor: isHighlighted ? theme.accent : (nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.08)"),
+                          shadowColor: isHighlighted ? theme.accent : "transparent",
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: isHighlighted ? 0.3 : 0,
+                          shadowRadius: 8,
+                          elevation: isHighlighted ? 6 : 2,
                         }}>
-                        <FontAwesome6 name={tool.icon as any} size={16} color={tool.color} />
-                        <Text style={{
-                          position: 'absolute', top: -16,
-                          fontSize: 9, fontWeight: '600', color: tool.color,
-                        }}>{tool.label}</Text>
+                        <FontAwesome6 name={icon as any} size={ri === 3 ? 16 : 14}
+                          color={isHighlighted ? theme.accent : (nightMode ? "#94A3B8" : "#374151")} />
+                        {/* 层级标签 */}
+                        {ri === 0 && (
+                          <Text style={{
+                            position: 'absolute', bottom: -14,
+                            fontSize: 8, color: nightMode ? "#94A3B8" : "#6B7280",
+                            fontWeight: '500',
+                          }}>{label}</Text>
+                        )}
                       </TouchableOpacity>
                     );
-                  })}
-                </View>
+                  });
+                })}
+
+                {/* 闭合按钮（中心） */}
+                <TouchableOpacity onPress={() => { setWheelExpanded(false); setSpinHighlightIdx(-1); }}
+                  style={{
+                    width: 32, height: 32, borderRadius: 16,
+                    backgroundColor: theme.accent,
+                    alignItems: 'center', justifyContent: 'center',
+                    zIndex: 10,
+                    shadowColor: theme.accent,
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.3,
+                    shadowRadius: 6,
+                    elevation: 4,
+                  }}>
+                  <FontAwesome6 name="xmark" size={12} color="#FFF" />
+                </TouchableOpacity>
               </View>
-            )}
-          </Animated.View>
+            </Animated.View>
+          )}
         </View>
 
         {/* ===== 更多菜单 Modal ===== */}
