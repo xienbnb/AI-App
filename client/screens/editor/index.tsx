@@ -133,47 +133,34 @@ export default function EditorScreen() {
   
   // ===== AI悬浮框(画中画拖拽) =====
   const { height: winHeight } = useWindowDimensions();
-  const floatingAIX = useMemo(() => new Animated.Value(20), []);
-  const floatingAIY = useMemo(() => new Animated.Value(winHeight * 0.25), [winHeight]);
-  const floatingDragStart = useRef({ x: 0, y: 0 });
+  const [floatingPos, setFloatingPos] = useState({ x: 20, y: winHeight * 0.25 });
+  const floatingPosRef = useRef(floatingPos);
+  const floatingRef = useRef<View>(null);
+  const floatingDragStartRef = useRef({ x: 0, y: 0 });
   const floatingPanResponder = useMemo(() =>
     // eslint-disable-next-line react-hooks/refs
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        floatingDragStart.current = {
-          x: (floatingAIX as any).__getValue(),
-          y: (floatingAIY as any).__getValue(),
-        };
+        floatingDragStartRef.current = { ...floatingPosRef.current };
       },
       onPanResponderMove: (_, g) => {
-        floatingAIX.setValue(Math.max(0, Math.min(screenWidth - 340, floatingDragStart.current.x + g.dx)));
-        floatingAIY.setValue(Math.max(40, Math.min(winHeight - 300, floatingDragStart.current.y + g.dy)));
+        const newX = Math.max(0, Math.min(screenWidth - 340, floatingDragStartRef.current.x + g.dx));
+        const newY = Math.max(40, Math.min(winHeight - 300, floatingDragStartRef.current.y + g.dy));
+        floatingPosRef.current = { x: newX, y: newY };
+        if (floatingRef.current) {
+          floatingRef.current.setNativeProps({ style: { left: newX, top: newY } });
+        }
+      },
+      onPanResponderRelease: () => {
+        setFloatingPos({ ...floatingPosRef.current });
       },
     }), [screenWidth, winHeight]);
 
   // ===== 圆形转轮悬浮按钮 =====
   const [wheelOpen, setWheelOpen] = useState(false);
-  const rotatingRef = useRef(false);
-  const wheelPanResponder = useMemo(() =>
-    // eslint-disable-next-line react-hooks/refs
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
-      onPanResponderGrant: () => { rotatingRef.current = false; },
-      onPanResponderMove: (_, g) => {
-        if (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8) rotatingRef.current = true;
-      },
-      onPanResponderRelease: (_, g) => {
-        if (!rotatingRef.current) { setWheelOpen(prev => !prev); return; }
-        const angle = Math.atan2(g.dy, g.dx) * (180 / Math.PI);
-        const idx = Math.round(((angle + 180) / 360) * wheelTools.length) % wheelTools.length;
-        const tool = wheelTools[idx];
-        if (tool) { tool.action(); setWheelOpen(false); }
-        rotatingRef.current = false;
-      },
-    }), []);
+  const wheelTouchTimerRef = useRef<number | null>(null);
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -1076,24 +1063,21 @@ export default function EditorScreen() {
 
           {/* ===== AI生成区(可拖拽悬浮框 - 画中画风格) ===== */}
           {(isGenerating || generatedContent) && (
-            <Animated.View
+            <View
+              ref={floatingRef}
               {...floatingPanResponder.panHandlers}
               style={{
                 position: 'absolute',
+                left: floatingPos.x,
+                top: floatingPos.y,
                 width: 320,
                 maxHeight: 360,
-                left: floatingAIX,
-                top: floatingAIY,
                 zIndex: 200,
                 backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
                 borderRadius: 20,
                 paddingHorizontal: 16,
                 paddingTop: 12,
                 paddingBottom: 14,
-                shadowColor: nightMode ? "#6366F1" : "#000",
-                shadowOffset: { width: 0, height: 6 },
-                shadowOpacity: nightMode ? 0.3 : 0.12,
-                shadowRadius: 20,
                 elevation: 20,
                 borderWidth: 1,
                 borderColor: nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.06)",
@@ -1169,40 +1153,29 @@ export default function EditorScreen() {
                   </TouchableOpacity>
                 </View>
               )}
-            </Animated.View>
+            </View>
           )}
 
           {/* ===== 圆形转轮悬浮按钮（右侧） ===== */}
-          <View {...wheelPanResponder.panHandlers}
-            style={{
-              position: 'absolute',
-              right: wheelOpen ? 12 : 8,
-              bottom: wheelOpen ? undefined : keyboardHeight + 120,
-              top: wheelOpen ? winHeight * 0.3 : undefined,
-              zIndex: 190,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
+          <View style={{
+            position: 'absolute', right: wheelOpen ? 12 : 8,
+            bottom: wheelOpen ? undefined : keyboardHeight + 120,
+            top: wheelOpen ? winHeight * 0.3 : undefined,
+            zIndex: 190, alignItems: 'center', justifyContent: 'center',
+          }}>
             {!wheelOpen ? (
-              /* 折叠态 - 小圆点 */
-              <View style={{
-                width: 42, height: 42, borderRadius: 21,
-                backgroundColor: theme.accent,
-                alignItems: 'center', justifyContent: 'center',
-                shadowColor: theme.accent,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.3,
-                shadowRadius: 10,
-                elevation: 8,
-              }}>
+              <TouchableOpacity onPress={() => setWheelOpen(true)} activeOpacity={0.7}
+                style={{
+                  width: 42, height: 42, borderRadius: 21,
+                  backgroundColor: theme.accent,
+                  alignItems: 'center', justifyContent: 'center',
+                  shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.3, shadowRadius: 10, elevation: 8,
+                }}>
                 <FontAwesome6 name="sliders" size={16} color="#FFF" />
-              </View>
+              </TouchableOpacity>
             ) : (
-              /* 展开态 - 辐射菜单 */
-              <View style={{
-                width: 220, height: 220,
-                alignItems: 'center', justifyContent: 'center',
-              }}>
+              <View style={{ width: 220, height: 220, alignItems: 'center', justifyContent: 'center' }}>
                 {/* 转轮背景 */}
                 <View style={{
                   width: 220, height: 220, borderRadius: 110,
