@@ -120,6 +120,10 @@ export default function EditorScreen() {
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [cursorPosition, setCursorPosition] = useState(0);
   const contentInputRef = useRef<TextInput>(null);
+  const selectionStartRef = useRef(0);
+  const selectionEndRef = useRef(0);
+  const accumulatedRef = useRef("");
+  const currentModelRef = useRef("");
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -474,18 +478,36 @@ export default function EditorScreen() {
     setMoreMenuVisible(false);
   };
 
+  // ===== 加载用户AI模型设置 =====
+  useEffect(() => {
+    const fetchModel = async () => {
+      try {
+        const t = await AsyncStorage.getItem("auth_token");
+        if (!t) return;
+        const res = await fetch(`${API_BASE}/api/v1/writing/ai-settings`, {
+          headers: { "x-session": t },
+        });
+        const json = await res.json();
+        if (json.settings?.aiModel) {
+          currentModelRef.current = json.settings.aiModel;
+        }
+      } catch {}
+    };
+    fetchModel();
+  }, []);
+
   // ===== 选中文字 =====
   const handleSelectionChange = (event: any) => {
     const { selection } = event.nativeEvent;
     if (!selection) return;
     const start = selection.start, end = selection.end;
     setSelectionStart(start); setSelectionEnd(end);
+    selectionStartRef.current = start;
+    selectionEndRef.current = end;
     if (start !== end) {
       const text = content.substring(start, end);
       if (text.trim()) { setSelectedText(text); setShowFloatingAI(true); }
     }
-    // 不在此处隐藏浮动栏，手指松开时 selection 会变回光标位置导致浮动栏消失
-    // 浮动栏通过点击关闭按钮或执行操作后隐藏
   };
 
   const replaceSelectedText = (newText: string) => {
@@ -779,44 +801,90 @@ export default function EditorScreen() {
                     {/* AI 写作 */}
                     <FloatingAIBtn icon="pen" label="润色" color="#EC4899" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      accumulatedRef.current = "";
                       const prompt = `请润色以下文字，优化句式结构和用词，使表达更优美流畅、自然生动。保留原文风格和核心信息，不要改变原意：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800, model: currentModelRef.current || undefined }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
+                        if (e.data === "[DONE]") {
+                          sse.close();
+                          setIsGenerating(false);
+                          // 自动替换选中文本
+                          const result = accumulatedRef.current;
+                          if (result) {
+                            pushUndo(content);
+                            setContent(prev => {
+                              const start = selectionStartRef.current;
+                              const end = selectionEndRef.current;
+                              if (start !== end) return prev.slice(0, start) + result + prev.slice(end);
+                              return prev + "\n\n" + result;
+                            });
+                          }
+                          setGeneratedContent("");
+                          return;
+                        }
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") { setGeneratedContent(prev => prev + p.content); accumulatedRef.current += p.content; } } catch {}
                       });
                       sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="expand" label="扩写" color="#10B981" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      accumulatedRef.current = "";
                       const prompt = `请扩写以下文字，增加细节描写，包括环境、心理活动、感官体验（视觉/听觉/触觉/嗅觉），丰富人物情感和场景氛围，使内容更丰满生动。不改变原意和叙事主线：\n${selectedText}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800, model: currentModelRef.current || undefined }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
+                        if (e.data === "[DONE]") {
+                          sse.close();
+                          setIsGenerating(false);
+                          // 自动替换选中文本
+                          const result = accumulatedRef.current;
+                          if (result) {
+                            pushUndo(content);
+                            setContent(prev => {
+                              const start = selectionStartRef.current;
+                              const end = selectionEndRef.current;
+                              if (start !== end) return prev.slice(0, start) + result + prev.slice(end);
+                              return prev + "\n\n" + result;
+                            });
+                          }
+                          setGeneratedContent("");
+                          return;
+                        }
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") { setGeneratedContent(prev => prev + p.content); accumulatedRef.current += p.content; } } catch {}
                       });
                       sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
                     <FloatingAIBtn icon="magic" label="续写" color="#8B5CF6" onPress={() => {
                       setIsGenerating(true); setGeneratedContent(""); setShowFloatingAI(false);
+                      accumulatedRef.current = "";
                       const context = content.slice(-1500);
                       const prompt = `请根据以上上下文风格，自然地续写接下来的内容。保持叙事节奏、人物性格和文风一致，不要重复已有内容：\n---上下文---\n${context}`;
                       const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
                         method: "POST", headers: getAuthHeaders(),
-                        body: JSON.stringify({ prompt, style: "default", wordCount: 800 }),
+                        body: JSON.stringify({ prompt, style: "default", wordCount: 800, model: currentModelRef.current || undefined }),
                       });
                       sseRef.current = sse;
                       sse.addEventListener("message", (e: any) => {
-                        if (e.data === "[DONE]") { sse.close(); setIsGenerating(false); return; }
-                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
+                        if (e.data === "[DONE]") {
+                          sse.close();
+                          setIsGenerating(false);
+                          // 续写：追加到末尾
+                          const result = accumulatedRef.current;
+                          if (result) {
+                            pushUndo(content);
+                            setContent(prev => prev + "\n\n" + result);
+                          }
+                          setGeneratedContent("");
+                          return;
+                        }
+                        try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") { setGeneratedContent(prev => prev + p.content); accumulatedRef.current += p.content; } } catch {}
                       });
                       sse.addEventListener("error", () => setIsGenerating(false));
                     }} />
@@ -830,7 +898,7 @@ export default function EditorScreen() {
             )}
 
             {/* ===== 全屏沉浸编辑区 ===== */}
-            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="handled" bounces={false} contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
+            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="always" bounces={false} contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2}} resizeMode="cover" />
               ) : null}
@@ -854,7 +922,6 @@ export default function EditorScreen() {
                   onChangeText={(t) => { pushUndo(t); setContent(t); }}
                   onSelectionChange={handleSelectionChange}
                   multiline
-                  contextMenuHidden={true}
                   className="w-full flex-1 outline-none"
                   style={{
                     color: theme.text, fontSize: fontSizeIndex + 15, lineHeight: (fontSizeIndex + 15) * lineSpacing,
