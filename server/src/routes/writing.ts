@@ -795,9 +795,9 @@ router.delete("/inspirations/:id", async (req: Request, res: Response) => {
 router.get("/models/available", async (_req: Request, res: Response) => {
   try {
     const models = [
-      { id: "glm-4-9b", name: "GLM-4.9B", provider: "coze" },
-      { id: "deepseek-chat", name: "DeepSeek V3", provider: "coze" },
-      { id: "gpt-4o", name: "GPT-4o", provider: "coze" },
+      { id: "doubao-seed-2-0-pro-260215", name: "豆包 Seed 2.0 Pro", provider: "coze" },
+      { id: "doubao-seed-1-8-251228", name: "豆包 Seed 1.8", provider: "coze" },
+      { id: "doubao-seed-2-0-lite-260215", name: "豆包 Seed 2.0 Lite", provider: "coze" },
     ];
     res.json({ success: true, data: models });
   } catch (err: any) {
@@ -828,7 +828,7 @@ router.post("/:id/generate", async (req: Request, res: Response) => {
         { role: "system" as const, content: systemPrompt },
         { role: "user" as const, content: prompt },
       ],
-      { model: model || "glm-4-9b" }
+      { model: model || provider.defaultModel }
     );
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
