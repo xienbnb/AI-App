@@ -25,6 +25,7 @@ import { FontAwesome6 } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
+  const AI_SETTINGS_URL = `${API_BASE}/api/v1/writing/ai-settings`;
 
 interface CustomModel {
   id: string;
@@ -139,8 +140,8 @@ export default function MyAISettingsPage() {
         setLoading(false);
         return;
       }
-      const res = await fetch(`${API_BASE}/api/v1/users/ai-settings`, {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(AI_SETTINGS_URL, {
+        headers: { "x-session": token },
       });
       const json = await res.json();
       if (json.settings) {
@@ -179,11 +180,11 @@ export default function MyAISettingsPage() {
         skills,
         ...updates,
       };
-      const res = await fetch(`${API_BASE}/api/v1/users/ai-settings`, {
+      const res = await fetch(AI_SETTINGS_URL, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          "x-session": token,
         },
         body: JSON.stringify({ settings: currentSettings }),
       });

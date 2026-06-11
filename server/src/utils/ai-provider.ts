@@ -162,9 +162,14 @@ export async function createProvider(userId?: string, requestModel?: string): Pr
     if (custom) {
       return new OpenAICompatibleProvider(custom.apiKey, custom.apiBase, custom.model);
     }
+
+    // 3. 用户有偏好的 Coze 模型 → 传给 Coze SDK
+    if (preferredModel) {
+      return new CozeSdkProvider(preferredModel);
+    }
   }
 
-  // 3. 默认：Coze SDK
+  // 4. 默认：Coze SDK
   return new CozeSdkProvider();
 }
 
@@ -174,7 +179,12 @@ export async function createProvider(userId?: string, requestModel?: string): Pr
 
 class CozeSdkProvider implements AIProvider {
   readonly defaultModel = "doubao-seed-2-0-pro-260215";
+  private preferredModel: string | undefined;
   private client: any = null;
+
+  constructor(preferredModel?: string) {
+    this.preferredModel = preferredModel;
+  }
 
   private async getClient(): Promise<any> {
     if (!this.client) {
@@ -194,7 +204,7 @@ class CozeSdkProvider implements AIProvider {
   ): AsyncGenerator<LLMChunk, void, undefined> {
     const client = await this.getClient();
     const stream = client.stream(messages, {
-      model: options?.model || this.defaultModel,
+      model: options?.model || this.preferredModel || this.defaultModel,
       temperature: options?.temperature ?? 0.8,
       ...(options?.maxTokens ? { maxTokens: options.maxTokens } : {}),
     });

@@ -282,19 +282,53 @@ router.post("/generate", async (req: Request, res: Response) => {
   }
 });
 
-// GET /:id - 获取单个作品详情
-router.get("/:id", async (req: Request, res: Response) => {
+// ============================================================
+// AI 模型设置（必须在 /:id 之前，防止路由冲突）
+// ============================================================
+
+// GET /ai-settings - 获取用户 AI 设置
+router.get("/ai-settings", async (req: Request, res: Response) => {
   try {
     const userId = getUserId(req);
     const [row] = await db
-      .select()
-      .from(books)
-      .where(and(eq(books.id, req.params.id as string), eq(books.userId, userId)))
+      .select({ aiSettings: users.aiSettings, customApiKey: users.customApiKey })
+      .from(users)
+      .where(eq(users.id, userId))
       .limit(1);
-    if (!row) return res.status(404).json({ success: false, error: "未找到书籍" });
-    res.json({ success: true, data: toCamelCase(row) });
+    if (!row) return res.json({ success: true, settings: {} });
+    const settings = (row.aiSettings || {}) as any;
+    res.json({ success: true, settings });
   } catch (err: any) {
-    console.error("获取作品详情错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
+// PUT /ai-settings - 更新用户 AI 设置（支持现有前端格式）
+router.put("/ai-settings", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const { settings, customApiKey } = req.body as { settings: string; customApiKey: string };
+
+    if (customApiKey !== undefined) {
+      await db.update(users).set({ customApiKey: customApiKey || "" }).where(eq(users.id, userId));
+    }
+    if (settings) {
+      const parsed = typeof settings === 'string' ? (() => { try { return JSON.parse(settings); } catch { return {}; } })() : settings;
+      await db.update(users).set({ aiSettings: parsed }).where(eq(users.id, userId));
+      // 从 settings 中提取 customApiKey（如果选了自定义模型）
+      const parsedSettings = parsed as Record<string, any>;
+      const customModels = parsedSettings.customModels || [];
+      const aiModel = parsedSettings.aiModel || '';
+      const selectedCustom = customModels.find((m: any) => m.id === aiModel);
+      if (selectedCustom && selectedCustom.apiKey) {
+        await db.update(users).set({ customApiKey: `${selectedCustom.apiKey}||${selectedCustom.baseUrl || ''}||${selectedCustom.modelId || ''}` }).where(eq(users.id, userId));
+      } else if (customApiKey === undefined) {
+        // 没选自定义模型且没传 customApiKey → 清空
+        await db.update(users).set({ customApiKey: '' }).where(eq(users.id, userId));
+      }
+    }
+    res.json({ success: true });
+  } catch (err: any) {
     res.status(500).json({ success: false, error: err.message || "服务器错误" });
   }
 });
@@ -725,6 +759,23 @@ router.get("/inspirations", async (req: Request, res: Response) => {
   }
 });
 
+// GET /:id - 获取单个作品详情
+router.get("/:id", async (req: Request, res: Response) => {
+  try {
+    const userId = getUserId(req);
+    const [row] = await db
+      .select()
+      .from(books)
+      .where(and(eq(books.id, req.params.id as string), eq(books.userId, userId)))
+      .limit(1);
+    if (!row) return res.status(404).json({ success: false, error: "未找到书籍" });
+    res.json({ success: true, data: toCamelCase(row) });
+  } catch (err: any) {
+    console.error("获取作品详情错误:", err);
+    res.status(500).json({ success: false, error: err.message || "服务器错误" });
+  }
+});
+
 // POST /inspirations - 创建灵感
 router.post("/inspirations", async (req: Request, res: Response) => {
   try {
@@ -791,13 +842,19 @@ router.delete("/inspirations/:id", async (req: Request, res: Response) => {
 // AI Writing Features
 // ============================================================
 
-// GET /models/available - 获取可用模型
+// GET /models/available - 获取可用模型（含 Coze 和 SiliconFlow）
 router.get("/models/available", async (_req: Request, res: Response) => {
   try {
     const models = [
+      // Coze / 豆包
       { id: "doubao-seed-2-0-pro-260215", name: "豆包 Seed 2.0 Pro", provider: "coze" },
       { id: "doubao-seed-1-8-251228", name: "豆包 Seed 1.8", provider: "coze" },
       { id: "doubao-seed-2-0-lite-260215", name: "豆包 Seed 2.0 Lite", provider: "coze" },
+      // SiliconFlow 公益AI
+      { id: "Pro/zai-org/GLM-4.7", name: "GLM-4.7 公益模型", provider: "siliconflow" },
+      { id: "deepseek-ai/DeepSeek-OCR", name: "DeepSeek OCR", provider: "siliconflow" },
+      { id: "tencent/Hunyuan-MT-7B", name: "腾讯混元 MT-7B", provider: "siliconflow" },
+      { id: "nex-agi/Nex-N2-Pro", name: "Nex N2 Pro", provider: "siliconflow" },
     ];
     res.json({ success: true, data: models });
   } catch (err: any) {
@@ -828,7 +885,7 @@ router.post("/:id/generate", async (req: Request, res: Response) => {
         { role: "system" as const, content: systemPrompt },
         { role: "user" as const, content: prompt },
       ],
-      { model: model || provider.defaultModel }
+      model ? { model } : {}
     );
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
