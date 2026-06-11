@@ -29,6 +29,8 @@ import {
   Keyboard,
   useWindowDimensions,
   Image,
+  PanResponder,
+  Animated,
 } from "react-native";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
@@ -127,6 +129,25 @@ export default function EditorScreen() {
   const selectedRangeEndRef = useRef(0);
   const accumulatedRef = useRef("");
   const currentModelRef = useRef("");
+  
+  // ===== AI面板可拖拽 =====
+  const [panelHeight, setPanelHeight] = useState(200);
+  const dragStartHeight = useRef(200);
+  const panelHeightAnim = useRef(new Animated.Value(200)).current;
+  const panelPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) < Math.abs(g.dy) && Math.abs(g.dy) > 10,
+      onPanResponderGrant: () => {
+        dragStartHeight.current = panelHeight;
+      },
+      onPanResponderMove: (_, gesture) => {
+        const newHeight = Math.max(120, Math.min(500, dragStartHeight.current - gesture.dy));
+        panelHeightAnim.setValue(newHeight);
+        setPanelHeight(newHeight);
+      },
+    })
+  ).current;
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -580,6 +601,23 @@ export default function EditorScreen() {
     // 不再自动追加，由用户手动"采用"决定
   };
 
+  const handleContinueWriting = () => {
+    const currentContent = generatedContent;
+    if (!currentContent) return;
+    setGenerationDone(false);
+    setIsGenerating(true);
+    const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
+      method: "POST", headers: getAuthHeaders(),
+      body: JSON.stringify({ prompt: `请接续以下文字继续写作，保持风格一致：\n${currentContent}`, wordCount: 600, model: currentModelRef.current || undefined }),
+    });
+    sseRef.current = sse;
+    sse.addEventListener("message", (e: any) => {
+      if (e.data === "[DONE]") { sse.close(); setGenerationDone(true); return; }
+      try { const p = JSON.parse(e.data); if (p.content && p.type !== "done") setGeneratedContent(prev => prev + p.content); } catch {}
+    });
+    sse.addEventListener("error", () => setGenerationDone(true));
+  };
+
   const applyGeneratedContent = () => {
     if (generatedContent) { pushUndo(content); setContent(prev => prev + "\n\n" + generatedContent); setGeneratedContent(""); setIsGenerating(false); setGenerationDone(false); }
   };
@@ -975,6 +1013,10 @@ export default function EditorScreen() {
               shadowRadius: 20,
               elevation: 16,
               }}>
+              {/* 拖拽手柄 */}
+              <View {...panelPanResponder.panHandlers} className="items-center -mt-2 pb-3">
+                <View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: nightMode ? "#3D3D5C" : "#D1D5DB" }} />
+              </View>
               <View className="flex-row items-center justify-between mb-3">
                 <View className="flex-row items-center gap-2.5">
                   <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
@@ -993,7 +1035,7 @@ export default function EditorScreen() {
                   <Text className="text-xs font-medium" style={{ color: theme.text2 }}>关闭</Text>
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 160 }} className="mb-3">
+              <ScrollView style={{ maxHeight: Math.max(60, panelHeight - 170) }} className="mb-3">
                 <Text className="text-[15px] leading-relaxed" style={{ color: theme.text }}>
                   {generatedContent || (
                     <View className="flex-row items-center gap-2">
@@ -1004,7 +1046,7 @@ export default function EditorScreen() {
                 </Text>
               </ScrollView>
               {generatedContent && (
-                <View className="flex-row gap-2">
+                <View className="flex-row gap-2 flex-wrap">
                   <TouchableOpacity onPress={applyGeneratedContent}
                     className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
                     style={{ backgroundColor: theme.accent }}>
@@ -1019,6 +1061,13 @@ export default function EditorScreen() {
                       <Text className="text-sm font-bold" style={{ color: theme.accent }}>替换选中</Text>
                     </TouchableOpacity>
                   )}
+                  {/* 续写按钮 */}
+                  <TouchableOpacity onPress={handleContinueWriting}
+                    className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
+                    style={{ backgroundColor: nightMode ? "#2D2D4A" : "#FEF3C7" }}>
+                    <FontAwesome6 name="pen" size={13} color="#D97706" />
+                    <Text className="text-sm font-bold" style={{ color: "#D97706" }}>续写</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); setGeneratedContent(""); setGenerationDone(false); }}
                     className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
                     style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
