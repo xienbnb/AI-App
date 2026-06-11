@@ -122,6 +122,8 @@ export default function EditorScreen() {
   const contentInputRef = useRef<TextInput>(null);
   const selectionStartRef = useRef(0);
   const selectionEndRef = useRef(0);
+  const selectedRangeStartRef = useRef(0);
+  const selectedRangeEndRef = useRef(0);
   const accumulatedRef = useRef("");
   const currentModelRef = useRef("");
 
@@ -507,12 +509,21 @@ export default function EditorScreen() {
     if (start !== end) {
       const text = content.substring(start, end);
       if (text.trim()) { setSelectedText(text); setShowFloatingAI(true); }
+      // 记住选中范围（手指松开后 onSelectionChange 会以光标位置再触发一次）
+      selectedRangeStartRef.current = start;
+      selectedRangeEndRef.current = end;
     }
   };
 
   const replaceSelectedText = (newText: string) => {
     pushUndo(content);
-    setContent(content.substring(0, selectionStart) + newText + content.substring(selectionEnd));
+    const start = selectedRangeStartRef.current;
+    const end = selectedRangeEndRef.current;
+    if (start !== end) {
+      setContent(content.substring(0, start) + newText + content.substring(end));
+    } else {
+      setContent(content + "\n\n" + newText);
+    }
     setShowFloatingAI(false);
   };
 
@@ -525,7 +536,7 @@ export default function EditorScreen() {
     };
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
       method: "POST", headers: getAuthHeaders(),
-      body: JSON.stringify({ prompt: prompts[nameType], style: "default", wordCount: 200 }),
+      body: JSON.stringify({ prompt, style: "default", wordCount: 200, model: currentModelRef.current || undefined }),
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
@@ -552,7 +563,7 @@ export default function EditorScreen() {
     }
     const sse = new RNSSE(`${API_BASE}/api/v1/writing/${bookId}/generate`, {
       method: "POST", headers: getAuthHeaders(),
-      body: JSON.stringify({ prompt: systemPrompt, style: "default", wordCount: 1000 }),
+      body: JSON.stringify({ prompt: systemPrompt, style: "default", wordCount: 1000, model: currentModelRef.current || undefined }),
     });
     sseRef.current = sse;
     sse.addEventListener("message", (e: any) => {
@@ -574,12 +585,14 @@ export default function EditorScreen() {
 
   const replaceSelectedWithAI = () => {
     // 替换选中文本（润色/扩写/改写用）
-    if (generatedContent && selectionStart !== selectionEnd) {
+    const start = selectedRangeStartRef.current;
+    const end = selectedRangeEndRef.current;
+    if (generatedContent && start !== end) {
       pushUndo(content);
-      const newText = content.slice(0, selectionStart) + generatedContent + content.slice(selectionEnd);
+      const newText = content.slice(0, start) + generatedContent + content.slice(end);
       setContent(newText);
       setGeneratedContent("");
-      setSelectionEnd(selectionStart + generatedContent.length);
+      setSelectionEnd(start + generatedContent.length);
       setIsGenerating(false);
     } else {
       applyGeneratedContent();
@@ -817,8 +830,8 @@ export default function EditorScreen() {
                           if (result) {
                             pushUndo(content);
                             setContent(prev => {
-                              const start = selectionStartRef.current;
-                              const end = selectionEndRef.current;
+                              const start = selectedRangeStartRef.current;
+                              const end = selectedRangeEndRef.current;
                               if (start !== end) return prev.slice(0, start) + result + prev.slice(end);
                               return prev + "\n\n" + result;
                             });
@@ -848,8 +861,8 @@ export default function EditorScreen() {
                           if (result) {
                             pushUndo(content);
                             setContent(prev => {
-                              const start = selectionStartRef.current;
-                              const end = selectionEndRef.current;
+                              const start = selectedRangeStartRef.current;
+                              const end = selectedRangeEndRef.current;
                               if (start !== end) return prev.slice(0, start) + result + prev.slice(end);
                               return prev + "\n\n" + result;
                             });
@@ -890,7 +903,7 @@ export default function EditorScreen() {
                     }} />
                     <View className="w-px h-5 mx-1.5" style={{ backgroundColor: nightMode ? "#333" : "#E5E7EB" }} />
                     {/* 标记工具 */}
-                    <FloatingAIBtn icon="highlighter" label="高亮" color="#F59E0B" onPress={() => { setHighlights(prev => [...prev, { start: selectionStart, end: selectionEnd, color: "#FDE68A" }]); setShowFloatingAI(false); Alert.alert("已高亮"); }} />
+                    <FloatingAIBtn icon="highlighter" label="高亮" color="#F59E0B" onPress={() => { setHighlights(prev => [...prev, { start: selectedRangeStartRef.current, end: selectedRangeEndRef.current, color: "#FDE68A" }]); setShowFloatingAI(false); Alert.alert("已高亮"); }} />
                     <FloatingAIBtn icon="flag" label="批注" color="#3B82F6" onPress={() => { replaceSelectedText(selectedText + "〔批注〕"); Alert.alert("已添加批注"); }} />
                   </View>
                 </ScrollView>
@@ -898,7 +911,7 @@ export default function EditorScreen() {
             )}
 
             {/* ===== 全屏沉浸编辑区 ===== */}
-            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="always" bounces={false} contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
+            <ScrollView className="flex-1 px-0" style={{backgroundColor: 'transparent'}} keyboardShouldPersistTaps="always" nestedScrollEnabled={true} bounces={false} contentContainerStyle={{flexGrow: 1, paddingBottom: 60}}>
               {backgroundImage ? (
                 <Image source={{ uri: backgroundImage }} style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.2}} resizeMode="cover" />
               ) : null}
