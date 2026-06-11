@@ -572,3 +572,14 @@ export const DataManager = {
     return downloadCloudToLocal();
   },
 };
+
+let _isVip = false;
+
+/** 设置 VIP 状态（供 AuthContext 同步） */
+export function setVipStatus(isVip: boolean) {
+  _isVip = isVip;
+}
+
+export function isVip(): boolean {
+  return _isVip;
+}
