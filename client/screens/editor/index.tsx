@@ -131,24 +131,49 @@ export default function EditorScreen() {
   const accumulatedRef = useRef("");
   const currentModelRef = useRef("");
   
-  // ===== AI面板可拖拽 =====
-  const [panelHeight, setPanelHeight] = useState(200);
-  const dragStartHeight = useRef(200);
-  const panelHeightAnim = useRef(new Animated.Value(200)).current;
-  const panelPanResponder = useRef(
+  // ===== AI悬浮框(画中画拖拽) =====
+  const { height: winHeight } = useWindowDimensions();
+  const floatingAIX = useMemo(() => new Animated.Value(20), []);
+  const floatingAIY = useMemo(() => new Animated.Value(winHeight * 0.25), [winHeight]);
+  const floatingDragStart = useRef({ x: 0, y: 0 });
+  const floatingPanResponder = useMemo(() =>
+    // eslint-disable-next-line react-hooks/refs
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) < Math.abs(g.dy) && Math.abs(g.dy) > 10,
+      onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
-        dragStartHeight.current = panelHeight;
+        floatingDragStart.current = {
+          x: (floatingAIX as any).__getValue(),
+          y: (floatingAIY as any).__getValue(),
+        };
       },
-      onPanResponderMove: (_, gesture) => {
-        const newHeight = Math.max(120, Math.min(500, dragStartHeight.current - gesture.dy));
-        panelHeightAnim.setValue(newHeight);
-        setPanelHeight(newHeight);
+      onPanResponderMove: (_, g) => {
+        floatingAIX.setValue(Math.max(0, Math.min(screenWidth - 340, floatingDragStart.current.x + g.dx)));
+        floatingAIY.setValue(Math.max(40, Math.min(winHeight - 300, floatingDragStart.current.y + g.dy)));
       },
-    })
-  ).current;
+    }), [screenWidth, winHeight]);
+
+  // ===== 圆形转轮悬浮按钮 =====
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const rotatingRef = useRef(false);
+  const wheelPanResponder = useMemo(() =>
+    // eslint-disable-next-line react-hooks/refs
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 5 || Math.abs(g.dy) > 5,
+      onPanResponderGrant: () => { rotatingRef.current = false; },
+      onPanResponderMove: (_, g) => {
+        if (Math.abs(g.dx) > 8 || Math.abs(g.dy) > 8) rotatingRef.current = true;
+      },
+      onPanResponderRelease: (_, g) => {
+        if (!rotatingRef.current) { setWheelOpen(prev => !prev); return; }
+        const angle = Math.atan2(g.dy, g.dx) * (180 / Math.PI);
+        const idx = Math.round(((angle + 180) / 360) * wheelTools.length) % wheelTools.length;
+        const tool = wheelTools[idx];
+        if (tool) { tool.action(); setWheelOpen(false); }
+        rotatingRef.current = false;
+      },
+    }), []);
 
   // ===== 夜间模式 =====
   const [nightMode, setNightMode] = useState(false);
@@ -728,6 +753,30 @@ export default function EditorScreen() {
     }
   }, [nightMode, showSpeed]);
 
+  // ===== 圆形转轮工具列表 =====
+  const wheelTools = useMemo(() => [
+    { icon: "rotate-left", label: "撤销", color: "#6366F1", action: handleUndo },
+    { icon: "rotate-right", label: "恢复", color: "#8B5CF6", action: handleRedo },
+    { icon: "bold", label: "加粗", color: "#EC4899", action: () => {
+      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
+      if (sel) replaceSelectedText(`**${sel}**`);
+    }},
+    { icon: "italic", label: "斜体", color: "#10B981", action: () => {
+      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
+      if (sel) replaceSelectedText(`*${sel}*`);
+    }},
+    { icon: "underline", label: "下划线", color: "#F59E0B", action: () => {
+      const sel = selectedText || content.slice(cursorPosition - 10, cursorPosition + 10);
+      if (sel) replaceSelectedText(`<u>${sel}</u>`);
+    }},
+    { icon: "align-left", label: "排版", color: "#3B82F6", action: handleFormat },
+    { icon: "check-double", label: "纠错", color: "#059669", action: handleCorrect },
+    { icon: "wand-sparkles", label: "AI", color: "#6366F1", action: () => { setAiMode("generate"); setAiPrompt(""); setAiModalVisible(true); }},
+  ], [handleUndo, handleRedo, handleFormat, handleCorrect, selectedText, cursorPosition]);
+
+  // 提取 ref 值用于渲染（避免 lint 报错）
+  const hasSelection = selectionStart !== selectionEnd;
+
   // ===== 渲染 =====
   return (
     <Screen>
@@ -737,36 +786,37 @@ export default function EditorScreen() {
           {/* ===== 顶部导航条 ===== */}
           <View style={{
             backgroundColor: theme.surface,
+            borderBottomWidth: 1,
+            borderBottomColor: nightMode ? "#2D2D4A" : "#EDE4D4",
           }}>
-            <View className="flex-row items-center justify-between px-4 py-3">
-              <TouchableOpacity onPress={() => router.back()} className="flex-row items-center gap-2.5 flex-1">
+            <View className="flex-row items-center px-4 py-3">
+              {/* 左侧 - 返回 */}
+              <TouchableOpacity onPress={() => router.back()} className="flex-row items-center gap-2">
                 <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
                   <FontAwesome6 name="chevron-left" size={14} color={theme.accent} />
                 </View>
-                <View className="flex-1">
-                  <Text className="text-[13px] font-medium leading-tight" style={{ color: theme.text2 }} numberOfLines={1}>{bookTitle}</Text>
-                  <Text className="text-[15px] font-bold leading-tight" style={{ color: theme.text }} numberOfLines={1}>{chapterTitle || "新章节"}</Text>
-                </View>
               </TouchableOpacity>
 
-              <View className="flex-row items-center gap-3">
-                {/* 保存状态 */}
-                {isAutoSaving ? (
-                  <View className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ backgroundColor: theme.accentBg }}>
-                    <View className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                    <Text className="text-[11px] font-medium text-indigo-600">保存中</Text>
-                  </View>
-                ) : content !== lastSavedContent ? (
-                  <View className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ backgroundColor: "#FEF3C7" }}>
-                    <View className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    <Text className="text-[11px] font-medium text-amber-700">未保存</Text>
-                  </View>
-                ) : (
-                  <View className="flex-row items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ backgroundColor: "#ECFDF5" }}>
-                    <FontAwesome6 name="check" size={9} color="#10B981" />
-                    <Text className="text-[11px] font-medium text-emerald-600">已保存</Text>
-                  </View>
-                )}
+              {/* 中间 - 大纲标题 */}
+              <View className="flex-1 items-center">
+                <Text className="text-[17px] font-bold" style={{ color: theme.text }} numberOfLines={1}>
+                  {chapterTitle || "新章节"}
+                </Text>
+              </View>
+
+              {/* 右侧 - 保存 + 更多 */}
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity onPress={() => handleSave(false)}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10,
+                    backgroundColor: content !== lastSavedContent ? theme.accent : (nightMode ? "#2D2D4A" : "#F3F4F6"),
+                  }}>
+                  <Text className="text-[12px] font-bold" style={{
+                    color: content !== lastSavedContent ? "#FFF" : theme.text2,
+                  }}>
+                    {isAutoSaving ? "保存中" : content !== lastSavedContent ? "保存" : "已保存"}
+                  </Text>
+                </TouchableOpacity>
 
                 {/* 更多菜单按钮 */}
                 <TouchableOpacity onPress={() => setMoreMenuVisible(true)}
@@ -853,7 +903,7 @@ export default function EditorScreen() {
                     <FontAwesome6 name="xmark" size={14} color={nightMode ? "#8888AA" : "#9CA3AF"} />
                   </TouchableOpacity>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
+                  <View><ScrollView horizontal showsHorizontalScrollIndicator={false} className="py-2 px-2">
                   <View className="flex-row items-center gap-0.5">
                     {/* 编辑操作 */}
                     <FloatingAIBtn icon="scissors" label="剪切" color="#6B7280" onPress={() => replaceSelectedText("")} />
@@ -924,6 +974,7 @@ export default function EditorScreen() {
                     <FloatingAIBtn icon="flag" label="批注" color="#3B82F6" onPress={() => { replaceSelectedText(selectedText + "〔批注〕"); Alert.alert("已添加批注"); }} />
                   </View>
                 </ScrollView>
+                </View>
               </View>
             )}
 
@@ -969,8 +1020,8 @@ export default function EditorScreen() {
               </View>
             </ScrollView>
 
-            {/* ===== 快捷输入栏 ===== */}
-            {showQuickBar && (
+            {/* ===== 快捷输入栏（仅键盘弹出时显示） ===== */}
+            {showQuickBar && keyboardHeight > 0 && (
               <View style={{
                 position: 'absolute', bottom: keyboardHeight, left: 0, right: 0,
                 backgroundColor: nightMode ? "#1A1A2E" : "#F2EDE4",
@@ -978,6 +1029,20 @@ export default function EditorScreen() {
                 paddingVertical: 8, paddingHorizontal: 10,
               }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4 }}>
+                  {/* 撤销/恢复按钮 */}
+                  <TouchableOpacity onPress={handleUndo}
+                    className="items-center justify-center px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: undoStack.length === 0 ? (nightMode ? "#1E1E30" : "#E5E0D8") : (nightMode ? "#2D2D4A" : "#EEF2FF") }}>
+                    <FontAwesome6 name="rotate-left" size={13} color={undoStack.length === 0 ? (nightMode ? "#4A4A6A" : "#C4B8A0") : theme.accent} />
+                    <Text className="text-[9px] mt-0.5" style={{ color: undoStack.length === 0 ? (nightMode ? "#4A4A6A" : "#C4B8A0") : theme.accent }}>撤销</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleRedo}
+                    className="items-center justify-center px-3 py-2 rounded-lg"
+                    style={{ backgroundColor: redoStack.length === 0 ? (nightMode ? "#1E1E30" : "#E5E0D8") : (nightMode ? "#2D2D4A" : "#EEF2FF") }}>
+                    <FontAwesome6 name="rotate-right" size={13} color={redoStack.length === 0 ? (nightMode ? "#4A4A6A" : "#C4B8A0") : theme.accent} />
+                    <Text className="text-[9px] mt-0.5" style={{ color: redoStack.length === 0 ? (nightMode ? "#4A4A6A" : "#C4B8A0") : theme.accent }}>恢复</Text>
+                  </TouchableOpacity>
+                  <View className="w-px h-8 mx-1" style={{ backgroundColor: nightMode ? "#333" : "#D1CCC0" }} />
                   {[
                     ["，", "逗号"], ["。", "句号"], ["“”", "引号"], ["：", "冒号"],
                     ["；", "分号"], ["？", "问号"], ["！", "叹号"], ["——", "破折"],
@@ -1009,43 +1074,61 @@ export default function EditorScreen() {
             )}
           </View>
 
-          {/* ===== AI生成区(浮动面板) ===== */}
-          {isGenerating && (
-            <View style={{
-              position: "absolute", bottom: keyboardHeight, left: 0, right: 0,
-              backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
-              borderTopLeftRadius: 24, borderTopRightRadius: 24,
-              paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 34 : 20,
-              shadowColor: "#6366F1",
-              shadowOffset: { width: 0, height: -4 },
-              shadowOpacity: 0.15,
-              shadowRadius: 20,
-              elevation: 16,
+          {/* ===== AI生成区(可拖拽悬浮框 - 画中画风格) ===== */}
+          {(isGenerating || generatedContent) && (
+            <Animated.View
+              {...floatingPanResponder.panHandlers}
+              style={{
+                position: 'absolute',
+                width: 320,
+                maxHeight: 360,
+                left: floatingAIX,
+                top: floatingAIY,
+                zIndex: 200,
+                backgroundColor: nightMode ? "#1A1A2E" : "#FFFFFF",
+                borderRadius: 20,
+                paddingHorizontal: 16,
+                paddingTop: 12,
+                paddingBottom: 14,
+                shadowColor: nightMode ? "#6366F1" : "#000",
+                shadowOffset: { width: 0, height: 6 },
+                shadowOpacity: nightMode ? 0.3 : 0.12,
+                shadowRadius: 20,
+                elevation: 20,
+                borderWidth: 1,
+                borderColor: nightMode ? "rgba(99,102,241,0.2)" : "rgba(0,0,0,0.06)",
               }}>
-              {/* 拖拽手柄 */}
-              <View {...panelPanResponder.panHandlers} className="w-full items-center justify-center py-4 active:opacity-70">
-                <View style={{ width: 48, height: 5, borderRadius: 3, backgroundColor: nightMode ? "#3D3D5C" : "#D1D5DB" }} />
-              </View>
-              <View className="flex-row items-center justify-between mb-3">
-                <View className="flex-row items-center gap-2.5">
-                  <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
-                    <FontAwesome6 name="wand-sparkles" size={14} color={theme.accent} />
-                  </View>
-                  <Text style={{ fontSize: 15, fontWeight: "600", color: theme.accent }}>AI</Text>
-                  {generationDone ? (
-                    <Text style={{ fontSize: 12, color: "#10B981" }}>✓ 生成完成</Text>
-                  ) : generatedContent ? (
-                    <Text style={{ fontSize: 12, color: theme.text2 }}>(约{generatedContent.length}字)</Text>
-                  ) : null}
+              {/* 关闭按钮 - 右上角 */}
+              <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); setGeneratedContent(""); setGenerationDone(false); }}
+                style={{
+                  position: 'absolute', top: 8, right: 8, zIndex: 10,
+                  width: 28, height: 28, borderRadius: 14,
+                  backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6",
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                <FontAwesome6 name="xmark" size={12} color={theme.text2} />
+              </TouchableOpacity>
+
+              {/* 头部 */}
+              <View className="flex-row items-center gap-2 mb-2">
+                <View className="w-7 h-7 rounded-xl items-center justify-center" style={{ backgroundColor: theme.accentBg }}>
+                  <FontAwesome6 name="wand-sparkles" size={12} color={theme.accent} />
                 </View>
-                <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); setGenerationDone(false); }}
-                  className="px-3 py-1.5 rounded-lg"
-                  style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
-                  <Text className="text-xs font-medium" style={{ color: theme.text2 }}>关闭</Text>
-                </TouchableOpacity>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.accent }}>AI</Text>
+                {generationDone ? (
+                  <Text style={{ fontSize: 11, color: "#10B981" }}>✓ 生成完成</Text>
+                ) : generatedContent ? (
+                  <Text style={{ fontSize: 11, color: theme.text2 }}>({generatedContent.length}字)</Text>
+                ) : null}
+                {/* 拖拽指示 */}
+                <View className="ml-auto flex-row items-center gap-1">
+                  <FontAwesome6 name="grip-lines" size={10} color={theme.muted} />
+                </View>
               </View>
-              <ScrollView style={{ maxHeight: Math.max(60, panelHeight - 170) }} className="mb-3">
-                <Text className="text-[15px] leading-relaxed" style={{ color: theme.text }}>
+
+              {/* AI内容 */}
+              <ScrollView style={{ maxHeight: 180 }} className="mb-2">
+                <Text className="text-[14px] leading-relaxed" style={{ color: theme.text }}>
                   {generatedContent || (
                     <View className="flex-row items-center gap-2">
                       <Text style={{ color: theme.text2, fontStyle: "italic" }}>思考中</Text>
@@ -1054,39 +1137,128 @@ export default function EditorScreen() {
                   )}
                 </Text>
               </ScrollView>
+
+              {/* 操作按钮 */}
               {generatedContent && (
-                <View className="flex-row gap-2 flex-wrap">
+                <View className="flex-row gap-1.5 flex-wrap">
                   <TouchableOpacity onPress={applyGeneratedContent}
-                    className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
+                    className="flex-1 py-2 rounded-xl items-center flex-row justify-center gap-1.5"
                     style={{ backgroundColor: theme.accent }}>
-                    <FontAwesome6 name="check" size={13} color="#FFFFFF" />
-                    <Text className="text-white text-sm font-bold">追加</Text>
+                    <FontAwesome6 name="check" size={11} color="#FFFFFF" />
+                    <Text className="text-white text-[11px] font-bold">追加</Text>
                   </TouchableOpacity>
-                  {selectedRangeStartRef.current !== selectedRangeEndRef.current && (
+                  {hasSelection && (
                     <TouchableOpacity onPress={replaceSelectedWithAI}
-                      className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
+                      className="py-2 px-3 rounded-xl items-center flex-row justify-center gap-1.5"
                       style={{ backgroundColor: nightMode ? "#2D2D4A" : "#EEF2FF" }}>
-                      <FontAwesome6 name="arrows-rotate" size={13} color={theme.accent} />
-                      <Text className="text-sm font-bold" style={{ color: theme.accent }}>替换选中</Text>
+                      <FontAwesome6 name="arrows-rotate" size={11} color={theme.accent} />
+                      <Text className="text-[11px] font-bold" style={{ color: theme.accent }}>替换</Text>
                     </TouchableOpacity>
                   )}
-                  {/* 续写按钮 */}
                   <TouchableOpacity onPress={handleContinueWriting}
-                    className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
+                    className="py-2 px-3 rounded-xl items-center flex-row justify-center gap-1.5"
                     style={{ backgroundColor: nightMode ? "#2D2D4A" : "#FEF3C7" }}>
-                    <FontAwesome6 name="pen" size={13} color="#D97706" />
-                    <Text className="text-sm font-bold" style={{ color: "#D97706" }}>续写</Text>
+                    <FontAwesome6 name="pen" size={11} color="#D97706" />
+                    <Text className="text-[11px] font-bold" style={{ color: "#D97706" }}>续写</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => { if (sseRef.current) { sseRef.current.close(); sseRef.current = null; } setIsGenerating(false); setGeneratedContent(""); setGenerationDone(false); }}
-                    className="py-3 px-4 rounded-2xl items-center flex-row justify-center gap-2"
+                    className="py-2 px-3 rounded-xl items-center flex-row justify-center gap-1.5"
                     style={{ backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6" }}>
-                    <FontAwesome6 name="ban" size={13} color={theme.text2} />
-                    <Text className="text-sm font-medium" style={{ color: theme.text }}>取消</Text>
+                    <FontAwesome6 name="ban" size={11} color={theme.text2} />
+                    <Text className="text-[11px] font-medium" style={{ color: theme.text }}>取消</Text>
                   </TouchableOpacity>
                 </View>
               )}
-            </View>
+            </Animated.View>
           )}
+
+          {/* ===== 圆形转轮悬浮按钮（右侧） ===== */}
+          <View {...wheelPanResponder.panHandlers}
+            style={{
+              position: 'absolute',
+              right: wheelOpen ? 12 : 8,
+              bottom: wheelOpen ? undefined : keyboardHeight + 120,
+              top: wheelOpen ? '30%' : undefined,
+              zIndex: 190,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+            {!wheelOpen ? (
+              /* 折叠态 - 小圆点 */
+              <View style={{
+                width: 42, height: 42, borderRadius: 21,
+                backgroundColor: theme.accent,
+                alignItems: 'center', justifyContent: 'center',
+                shadowColor: theme.accent,
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.3,
+                shadowRadius: 10,
+                elevation: 8,
+              }}>
+                <FontAwesome6 name="sliders" size={16} color="#FFF" />
+              </View>
+            ) : (
+              /* 展开态 - 辐射菜单 */
+              <View style={{
+                width: 220, height: 220,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                {/* 转轮背景 */}
+                <View style={{
+                  width: 220, height: 220, borderRadius: 110,
+                  backgroundColor: nightMode ? "rgba(26,26,46,0.95)" : "rgba(255,255,255,0.95)",
+                  borderWidth: 1,
+                  borderColor: nightMode ? "rgba(99,102,241,0.3)" : "rgba(0,0,0,0.08)",
+                  shadowColor: "#6366F1",
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 30,
+                  elevation: 16,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {/* 中心关闭按钮 */}
+                  <TouchableOpacity onPress={() => setWheelOpen(false)}
+                    style={{
+                      width: 36, height: 36, borderRadius: 18,
+                      backgroundColor: theme.accent,
+                      alignItems: 'center', justifyContent: 'center',
+                      zIndex: 10,
+                    }}>
+                    <FontAwesome6 name="xmark" size={14} color="#FFF" />
+                  </TouchableOpacity>
+
+                  {/* 径向排列的工具 */}
+                  {/* eslint-disable-next-line react-hooks/refs */}
+                  {wheelTools.map((tool, index) => {
+                    const angle = (index / wheelTools.length) * 2 * Math.PI - Math.PI / 2;
+                    const radius = 72;
+                    const x = Math.cos(angle) * radius;
+                    const y = Math.sin(angle) * radius;
+                    return (
+                      <TouchableOpacity key={tool.label}
+                        onPress={() => { tool.action(); setWheelOpen(false); }}
+                        style={{
+                          position: 'absolute',
+                          left: 110 + x - 22,
+                          top: 110 + y - 22,
+                          width: 44, height: 44, borderRadius: 22,
+                          backgroundColor: nightMode ? "#2D2D4A" : "#F3F4F6",
+                          alignItems: 'center', justifyContent: 'center',
+                          borderWidth: 1,
+                          borderColor: `${tool.color}30`,
+                        }}>
+                        <FontAwesome6 name={tool.icon as any} size={16} color={tool.color} />
+                        <Text style={{
+                          position: 'absolute', top: -16,
+                          fontSize: 9, fontWeight: '600', color: tool.color,
+                        }}>{tool.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* ===== 更多菜单 Modal ===== */}
