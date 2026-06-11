@@ -73,6 +73,8 @@ export const books = pgTable("books", {
 export const outlines = pgTable("outlines", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	bookId: uuid("book_id").notNull().references(() => books.id, { onDelete: "cascade" }),
+	type: text().notNull().default('大纲'),
+	title: text().notNull().default(''),
 	content: text().notNull().default(''),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),

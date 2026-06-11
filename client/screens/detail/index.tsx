@@ -977,9 +977,11 @@ export default function DetailScreen() {
                 {book.volumes.map((volume, vi) => {
                   const isCollapsed = collapsedVolumes[volume.id] || false;
                   const volChapters = volume.chapters || [];
-                  const sortedVolChapters = [...volChapters].sort((a, b) =>
-                    chapterSort === "asc" ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)
-                  );
+                  const sortedVolChapters = [...volChapters].sort((a, b) => {
+                    const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                    const db_ = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                    return chapterSort === "asc" ? da - db_ : db_ - da;
+                  });
                   return (
                     <View key={volume.id} className="bg-white rounded-2xl overflow-hidden"
                       style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 1 }}

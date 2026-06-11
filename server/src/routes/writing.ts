@@ -11,6 +11,19 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 const router = Router();
 
+// --- 阿拉伯数字转中文数字 ---
+function toChineseNumber(n: number): string {
+  const chars = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十",
+    "十一", "十二", "十三", "十四", "十五", "十六", "十七", "十八", "十九", "二十"];
+  if (n <= 20) return chars[n] || String(n);
+  if (n <= 99) {
+    const tens = Math.floor(n / 10);
+    const ones = n % 10;
+    return (tens === 2 ? "二十" : tens === 1 ? "十" : chars[tens] + "十") + (ones > 0 ? chars[ones] : "");
+  }
+  return String(n);
+}
+
 // --- Auth Helper ---
 function getUserId(req: Request): string {
   if (!req.user) throw new Error("未登录");
@@ -510,11 +523,13 @@ router.post("/:id/volumes/:volumeId/chapters", async (req: Request, res: Respons
     if (!volume) return res.status(404).json({ success: false, error: "未找到卷" });
 
     const { title, content } = req.body;
+    const chapterNumber = (volume.chapters?.length || 0) + 1;
     const newChapter = {
       id: crypto.randomUUID(),
-      title: title || `第${(volume.chapters?.length || 0) + 1}章`,
+      title: title || `第${toChineseNumber(chapterNumber)}章`,
+      chapterNumber,
       wordCount: content ? countWords(content) : 0,
-      createdAt: new Date().toISOString().split("T")[0],
+      createdAt: new Date(Date.now()).toISOString(),
       content: content || "",
       volumeId: volume.id,
     };
@@ -1044,7 +1059,7 @@ router.get("/:id/outline-items", async (req: Request, res: Response) => {
       .from(outlines)
       .where(eq(outlines.bookId, req.params.id as string))
       .orderBy(asc(outlines.createdAt));
-    const data = rows.map(toCamelCase).map((r: any) => ({ id: r.id, content: r.content }));
+    const data = rows.map(toCamelCase).map((r: any) => ({ id: r.id, type: r.type, title: r.title, content: r.content }));
     res.json({ success: true, data });
   } catch (err: any) {
     console.error("获取大纲条目错误:", err);
@@ -1070,6 +1085,8 @@ router.put("/:id/outline-items", async (req: Request, res: Response) => {
       const vals = items.map((item: any, i: number) => ({
         id: item.id || crypto.randomUUID(),
         bookId,
+        type: item.type || "大纲",
+        title: item.title || "",
         content: item.content || "",
         userId,
         createdAt: new Date(Date.now() + i).toISOString(),
