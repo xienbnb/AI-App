@@ -727,7 +727,7 @@ export default function DetailScreen() {
       {/* 手动大纲管理 */}
       <View className="flex-row gap-2 mb-4">
         <TouchableOpacity
-          onPress={() => router.push("/outline-create", { bookId: id })}
+          onPress={() => router.push("/outline-create", { bookId: id, type: "大纲" })}
           className="flex-1 py-3 rounded-2xl items-center flex-row justify-center gap-2"
           style={{ backgroundColor: "#6366F1" }}
         >
@@ -735,7 +735,7 @@ export default function DetailScreen() {
           <Text className="text-sm font-bold text-white">新建大纲</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => { setNewOutline({ type: "细纲", title: "", content: "" }); setOutlineModal(true); }}
+          onPress={() => router.push("/outline-create", { bookId: id, type: "细纲" })}
           className="py-3 px-5 rounded-2xl items-center flex-row gap-2 bg-white"
           style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 }}
         >
@@ -773,18 +773,11 @@ export default function DetailScreen() {
                   style={{ shadowColor: "#6366F1", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 6, elevation: 1 }}
                 >
                   <View className="flex-row items-center justify-between">
-                    <Text className="text-sm font-bold text-gray-800 flex-1 mr-2">{item.title}</Text>
+                    <Text className="text-sm font-bold text-gray-800 flex-1 mr-2">{item.title || item.type}</Text>
                     <View className="flex-row gap-2.5">
-                      <TouchableOpacity onPress={() => {
-                        if (item.type === "大纲") {
-                          router.push("/outline-create", { bookId: id, outlineId: item.id });
-                        } else {
-                          setEditingOutline(item);
-                          setEditOutlineType(item.type);
-                          setEditOutlineTitle(item.title);
-                          setEditOutlineContent(item.content);
-                        }
-                      }}>
+                      <TouchableOpacity onPress={() =>
+                        router.push("/outline-create", { bookId: id, outlineId: item.id, type: item.type })
+                      }>
                         <FontAwesome6 name="pen-to-square" size={13} color="#6366F1" />
                       </TouchableOpacity>
                       <TouchableOpacity onPress={() => handleDeleteOutline(item.id)}>
