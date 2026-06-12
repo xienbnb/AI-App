@@ -325,18 +325,30 @@ export default function DetailScreen() {
     const name = volumeName.trim();
     if (!name) { Alert.alert("提示", "请输入卷名"); return; }
     try {
-      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ title: name }),
-      });
-      const json = await res.json();
-      if (json.success) {
+      if (token) {
+        // 已登录 → 调后端 API
+        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ title: name }),
+        });
+        const json = await res.json();
+        if (json.success) {
+          setVolumeCreateVisible(false);
+          setVolumeName("");
+          await fetchBook();
+        } else {
+          Alert.alert("错误", json.error || "创建卷失败");
+        }
+      } else {
+        // 未登录 → 本地创建
+        const now = new Date().toISOString();
+        const newVolume = { id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, title: name, chapters: [], createdAt: now, updatedAt: now };
+        const updatedVolumes = [...(book?.volumes || []), newVolume];
+        await DataManager.updateBook(id, { volumes: updatedVolumes });
         setVolumeCreateVisible(false);
         setVolumeName("");
         await fetchBook();
-      } else {
-        Alert.alert("错误", json.error || "创建卷失败");
       }
     } catch (e) {
       Alert.alert("错误", "创建卷失败");
@@ -355,10 +367,17 @@ export default function DetailScreen() {
         const result = await DataManager.deleteChapter(id, itemId);
         if (result.success) await fetchBook();
       } else if (type === "volume") {
-        // 卷操作保持在线 API（本地暂未支持）
-        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
-        const json = await res.json();
-        if (json.success) await fetchBook();
+        if (token) {
+          // 已登录 → 调后端 API
+          const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
+          const json = await res.json();
+          if (json.success) await fetchBook();
+        } else {
+          // 未登录 → 本地删除
+          const updatedVolumes = (book?.volumes || []).filter((v) => v.id !== itemId);
+          await DataManager.updateBook(id, { volumes: updatedVolumes });
+          await fetchBook();
+        }
       }
     } catch (e) { Alert.alert("错误", `删除${type === "chapter" ? "章节" : "卷"}失败`); }
   };
@@ -1114,13 +1133,23 @@ export default function DetailScreen() {
                   onPress={async () => {
                     if (!editVolumeTitle.trim() || !editingVolume) return;
                     try {
-                      const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${editingVolume.id}`, {
-                        method: "PUT",
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({ title: editVolumeTitle.trim() }),
-                      });
-                      const json = await res.json();
-                      if (json.success) await fetchBook();
+                      if (token) {
+                        // 已登录 → 调后端 API
+                        const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${editingVolume.id}`, {
+                          method: "PUT",
+                          headers: getAuthHeaders(),
+                          body: JSON.stringify({ title: editVolumeTitle.trim() }),
+                        });
+                        const json = await res.json();
+                        if (json.success) await fetchBook();
+                      } else {
+                        // 未登录 → 本地重命名
+                        const updatedVolumes = (book?.volumes || []).map((v) =>
+                          v.id === editingVolume.id ? { ...v, title: editVolumeTitle.trim(), updatedAt: new Date().toISOString() } : v,
+                        );
+                        await DataManager.updateBook(id, { volumes: updatedVolumes });
+                        await fetchBook();
+                      }
                     } catch (e) { Alert.alert("错误", "修改卷名失败"); }
                     setEditingVolume(null);
                     setEditVolumeTitle("");
