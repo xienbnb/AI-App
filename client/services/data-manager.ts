@@ -52,10 +52,16 @@ export function requireAuth(router: any): boolean {
 // 云端同步（后台静默）
 // ============================================================
 
+/** 检查是否为本地书籍 ID（未同步到云端的本地 ID） */
+function isLocalBookEndpoint(endpoint: string): boolean {
+  return endpoint.includes("/local_");
+}
+
 async function uploadToCloud(endpoint: string, body: any): Promise<void> {
   try {
     const token = await getToken();
     if (!token) return; // 未登录不同步
+    if (isLocalBookEndpoint(endpoint)) return; // 本地书籍不同步云端
     const headers = await getAuthHeaders();
     await fetch(`${API_BASE}/api/v1${endpoint}`, {
       method: "POST",
@@ -71,6 +77,7 @@ async function deleteFromCloud(endpoint: string): Promise<void> {
   try {
     const token = await getToken();
     if (!token) return;
+    if (isLocalBookEndpoint(endpoint)) return; // 本地书籍不同步云端
     const headers = await getAuthHeaders();
     await fetch(`${API_BASE}/api/v1${endpoint}`, {
       method: "DELETE",
@@ -86,6 +93,53 @@ async function deleteFromCloud(endpoint: string): Promise<void> {
 // ============================================================
 
 export async function fetchBooks(): Promise<LocalBook[]> {
+  // 如果已登录，从云端获取该用户的书籍（云端数据是权威来源）
+  const token = await getToken();
+  if (token) {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/writing/`, {
+        headers: await getAuthHeaders(),
+      });
+      if (res.ok) {
+        const cloudData = await res.json();
+        const cloudBooks: LocalBook[] = (cloudData.data || cloudData).map((b: any) => ({
+          ...b,
+          id: b.id,
+          title: b.title || b.name || "",
+          description: b.description || "",
+          category: b.category || "",
+          genres: b.genres || [],
+          author: b.author || "",
+          tags: b.tags || [],
+          coverStyle: b.coverStyle || "",
+          cover: b.cover || "",
+          volumeCount: b.volumeCount || 0,
+          chapterCount: b.chapterCount || 0,
+          wordCount: b.wordCount || 0,
+          status: b.status || "draft",
+          createdAt: b.createdAt || b.created_at || new Date().toISOString(),
+          updatedAt: b.updatedAt || b.updated_at || new Date().toISOString(),
+        }));
+
+        // 更新本地缓存
+        await LocalStorage.saveBooks(cloudBooks);
+
+        // 清理不在云端本地的其他用户的本地书籍
+        const localAll = await LocalStorage.getBooks();
+        const cloudIds = new Set(cloudBooks.map((b) => b.id));
+        const staleLocal = localAll.filter((b) => !cloudIds.has(b.id));
+        if (staleLocal.length > 0) {
+          await LocalStorage.saveBooks(cloudBooks);
+        }
+
+        return cloudBooks;
+      }
+    } catch (_e) {
+      // 网络失败时，回退到本地数据（包含可能的多用户数据，但仅限离线状态）
+    }
+  }
+
+  // 未登录或网络失败时返回本地数据
   return LocalStorage.getBooks();
 }
 

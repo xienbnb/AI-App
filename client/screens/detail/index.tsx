@@ -325,7 +325,8 @@ export default function DetailScreen() {
     const name = volumeName.trim();
     if (!name) { Alert.alert("提示", "请输入卷名"); return; }
     try {
-      if (token) {
+      const isCloudBook = token && !id.startsWith('local_');
+      if (isCloudBook) {
         // 已登录 → 调后端 API
         const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes`, {
           method: "POST",
@@ -367,7 +368,7 @@ export default function DetailScreen() {
         const result = await DataManager.deleteChapter(id, itemId);
         if (result.success) await fetchBook();
       } else if (type === "volume") {
-        if (token) {
+        if (token && !id.startsWith('local_')) {
           // 已登录 → 调后端 API
           const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${itemId}`, { method: "DELETE", headers: getAuthHeaders() });
           const json = await res.json();
@@ -1133,7 +1134,7 @@ export default function DetailScreen() {
                   onPress={async () => {
                     if (!editVolumeTitle.trim() || !editingVolume) return;
                     try {
-                      if (token) {
+                      if (token && !id.startsWith('local_')) {
                         // 已登录 → 调后端 API
                         const res = await fetch(`${API_BASE}/api/v1/writing/${id}/volumes/${editingVolume.id}`, {
                           method: "PUT",
