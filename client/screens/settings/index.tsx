@@ -365,35 +365,61 @@ export default function SettingsScreen() {
         contentContainerStyle={{ paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 用户信息摘要 */}
-        <View className="mx-4 mt-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-          <View className="flex-row items-center">
-            <View className="w-14 h-14 rounded-full bg-indigo-100 items-center justify-center">
-              <Text className="text-xl font-bold text-indigo-600">
-                {user?.nickname?.charAt(0) || "用"}
-              </Text>
+        {/* 用户信息摘要 - 未登录状态 */}
+        {!user ? (
+          <View className="mx-4 mt-4 bg-white rounded-2xl p-6 shadow-sm border border-gray-100 items-center">
+            <View className="w-16 h-16 rounded-full bg-gray-200 items-center justify-center mb-3">
+              <FontAwesome6 name="user" size={28} color="#9CA3AF" />
             </View>
-            <View className="ml-4 flex-1">
-              <Text className="text-lg font-bold text-gray-900">
-                {user?.nickname || "用户"}
-              </Text>
-              <Text className="text-sm text-gray-400 mt-1">
-                {user?.email || "未绑定"}
-              </Text>
-            </View>
+            <Text className="text-lg font-bold text-gray-400 mb-1">未登录</Text>
+            <Text className="text-sm text-gray-400 text-center mb-4 leading-5">
+              登录后可同步数据到云端，{'\n'}避免设备更换导致数据丢失
+            </Text>
             <TouchableOpacity
-              onPress={() => router.push("/user-profile")}
-              className="px-4 py-2 rounded-full bg-indigo-50"
+              onPress={() => router.push("/login")}
+              className="px-8 py-3 rounded-full bg-indigo-500"
             >
-              <Text className="text-sm font-medium text-indigo-600">编辑</Text>
+              <Text className="text-base font-semibold text-white">登录 / 注册</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        ) : (
+          <View className="mx-4 mt-4 bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <View className="flex-row items-center">
+              <View className="w-14 h-14 rounded-full bg-indigo-100 items-center justify-center">
+                <Text className="text-xl font-bold text-indigo-600">
+                  {user?.nickname?.charAt(0) || "用"}
+                </Text>
+              </View>
+              <View className="ml-4 flex-1">
+                <Text className="text-lg font-bold text-gray-900">
+                  {user?.nickname || "用户"}
+                </Text>
+                <Text className="text-sm text-gray-400 mt-1">
+                  {user?.email || "未绑定"}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => router.push("/user-profile")}
+                className="px-4 py-2 rounded-full bg-indigo-50"
+              >
+                <Text className="text-sm font-medium text-indigo-600">编辑</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
-        {/* 字数额度 */}
-        <QuotaCard />
+        {/* 字数额度 - 未登录时提示 */}
+        {!user ? (
+          <View className="mx-4 mt-3 bg-white rounded-2xl p-5 shadow-sm border border-gray-100 items-center">
+            <FontAwesome6 name="lock" size={20} color="#D1D5DB" />
+            <Text className="text-sm text-gray-400 mt-2">登录后可查看字数额度</Text>
+          </View>
+        ) : (
+          <QuotaCard />
+        )}
 
-        {/* AI配置：自定义Key */}
+        {/* AI配置：自定义Key - 仅登录可见 */}
+        {user && (
         <View className="mx-4 mt-6">
           <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">
             AI 配置
@@ -407,8 +433,10 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        )}
 
-        {/* 账号与安全 */}
+        {/* 账号与安全 - 仅登录可见 */}
+        {user && (
         <View className="mx-4 mt-6">
           <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">
             账号与安全
@@ -431,6 +459,7 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        )}
 
         {/* 通用设置 */}
         <View className="mx-4 mt-6">
@@ -459,7 +488,8 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {/* 其他 */}
+        {/* 其他 - 仅登录可见 */}
+        {user && (
         <View className="mx-4 mt-6">
           <Text className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-2 px-1">
             其他
@@ -481,6 +511,7 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+        )}
 
         {/* 版本信息 */}
         <Text className="text-center text-xs text-gray-300 mt-8">

@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView } from "react-native";
 import { useState, useRef, useEffect } from "react";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
+import { useRequireAuth } from "@/components/AuthGuard";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RNSSE from "react-native-sse";
@@ -46,6 +47,7 @@ export function createToolPage(config: {
 }) {
   return function ToolPage() {
     const router = useSafeRouter();
+    const requireAuth = useRequireAuth();
     const [form, setForm] = useState<Record<string, string>>({});
     const [result, setResult] = useState("");
     const [isStreaming, setIsStreaming] = useState(false);
@@ -53,6 +55,7 @@ export function createToolPage(config: {
     const { start, stop } = useSSE();
 
     const handleGenerate = () => {
+      if (!requireAuth()) return;
       const body: Record<string, any> = {};
       config.fields.forEach((f) => { if (form[f.key]) body[f.key] = form[f.key]; });
       setResult(""); setError(""); setIsStreaming(true);

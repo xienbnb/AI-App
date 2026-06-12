@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, Image, Alert } from "react-native";
 import { useState } from "react";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
+import { useRequireAuth } from "@/components/AuthGuard";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 
@@ -10,6 +11,7 @@ const STYLES = ["写实", "二次元", "水墨风", "油画", "水彩", "赛博�
 
 export default function ImageGenPage() {
   const router = useSafeRouter();
+  const requireAuth = useRequireAuth();
   const [prompt, setPrompt] = useState("");
   const [style, setStyle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -17,6 +19,7 @@ export default function ImageGenPage() {
   const [error, setError] = useState("");
 
   const handleGenerate = async () => {
+    if (!requireAuth()) return;
     if (!prompt) { setError("请输入画面描述"); return; }
     setLoading(true); setError(""); setImageUrl("");
     try {

@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, Image } from "react-native";
 import { useState } from "react";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
+import { useRequireAuth } from "@/components/AuthGuard";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 
@@ -8,6 +9,7 @@ const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
 
 export default function CoverGenPage() {
   const router = useSafeRouter();
+  const requireAuth = useRequireAuth();
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("");
   const [description, setDescription] = useState("");
@@ -16,6 +18,7 @@ export default function CoverGenPage() {
   const [error, setError] = useState("");
 
   const handleGenerate = async () => {
+    if (!requireAuth()) return;
     if (!title && !genre) { setError("请至少输入书名或类型"); return; }
     setLoading(true); setError(""); setImageUrl("");
     try {

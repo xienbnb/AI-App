@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Platform, KeyboardAvoidingView, Image } from "react-native";
 import { useState } from "react";
 import { useSafeRouter } from "@/hooks/useSafeRouter";
+import { useRequireAuth } from "@/components/AuthGuard";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 
@@ -8,6 +9,7 @@ const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
 
 export default function MapGenPage() {
   const router = useSafeRouter();
+  const requireAuth = useRequireAuth();
   const [worldName, setWorldName] = useState("");
   const [genre, setGenre] = useState("");
   const [features, setFeatures] = useState("");
@@ -16,6 +18,7 @@ export default function MapGenPage() {
   const [error, setError] = useState("");
 
   const handleGenerate = async () => {
+    if (!requireAuth()) return;
     setLoading(true); setError(""); setImageUrl("");
     try {
       const res = await fetch(`${API_BASE}/api/v1/ai/map`, {
