@@ -198,7 +198,13 @@ export default function ProfileScreen() {
         <TouchableOpacity
           className="mx-4 rounded-3xl p-6 mt-4 mb-4"
           activeOpacity={0.8}
-          onPress={() => router.push("/user-profile")}
+          onPress={() => {
+            if (!user) {
+              router.push("/login");
+            } else {
+              router.push("/user-profile");
+            }
+          }}
           style={{
             backgroundColor: "#4F46E5",
             shadowColor: "#4F46E5",
@@ -218,7 +224,7 @@ export default function ProfileScreen() {
             </View>
             <View className="flex-1">
               <View className="flex-row items-center gap-2">
-                <Text className="text-xl font-bold text-white">{user?.nickname || "码字达人"}</Text>
+                <Text className="text-xl font-bold text-white">{user ? user.nickname || "码字达人" : "未登录"}</Text>
                 {vipLevel > 0 && isVip && (
                   <FontAwesome6 name="crown" size={14} color="#FBBF24" solid />
                 )}
