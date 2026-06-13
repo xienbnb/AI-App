@@ -74,3 +74,24 @@ export const convertToLocalTimeStr = (utcDateStr: string): string => {
   }
   return d.local().format('YYYY-MM-DD HH:mm:ss');
 }
+
+/**
+ * 去除 HTML 标签，保留纯文本
+ * @param html 可能包含 HTML 标签的字符串
+ * @returns 纯文本内容
+ */
+export const stripHtml = (html?: string | null): string => {
+  if (!html) return '';
+  // 去除 HTML 标签
+  let text = html.replace(/<[^>]*>/g, '');
+  // 解码常见 HTML 实体
+  text = text.replace(/&nbsp;/g, ' ');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&quot;/g, '"');
+  text = text.replace(/&#39;/g, "'");
+  text = text.replace(/<br\s*\/?>/gi, '\n');
+  // 合并多个空格为单空格，去除首尾
+  return text.replace(/\s+/g, ' ').trim();
+};

@@ -268,6 +268,31 @@ export async function updateChapter(
 
 export async function deleteChapter(bookId: string, chapterId: string): Promise<void> {
   await LocalStorage.deleteChapter(bookId, chapterId);
+
+  // 同步从书籍的 volumes 中移除该章节
+  const book = await LocalStorage.getBookById(bookId);
+  if (book) {
+    const volumes = book.volumes || [];
+    let removedWordCount = 0;
+    let chapterRemoved = false;
+    for (const volume of volumes) {
+      const idx = volume.chapters.findIndex((c) => c.id === chapterId);
+      if (idx !== -1) {
+        removedWordCount = volume.chapters[idx].wordCount || 0;
+        volume.chapters.splice(idx, 1);
+        chapterRemoved = true;
+        break;
+      }
+    }
+    if (chapterRemoved) {
+      await LocalStorage.updateBook(bookId, {
+        volumes,
+        chapterCount: Math.max((book.chapterCount || 0) - 1, 0),
+        wordCount: Math.max((book.wordCount || 0) - removedWordCount, 0),
+      });
+    }
+  }
+
   deleteFromCloud(`/writing/${bookId}/chapters/${chapterId}`);
 }
 

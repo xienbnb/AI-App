@@ -4,7 +4,8 @@
  *
  * - 新建：跳转时传 bookId + type（"大纲"|"细纲"），无 outlineId
  * - 编辑：跳转时传 bookId + outlineId，自动回填内容
- * - 保存时写入 /api/v1/writing/:id/outline-items 接口
+ * - 保存时写入本地存储（自动同步云端）
+ * - 支持内容变化自动保存（防抖 3 秒）+ 手动保存按钮
  * - 保存后自动返回上一页
  */
 
@@ -14,10 +15,7 @@ import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { Screen } from "@/components/Screen";
 import { FontAwesome6 } from "@expo/vector-icons";
 import RichEditor from "@/components/RichEditor";
-import { useAuth } from "@/contexts/AuthContext";
 import { DataManager } from "@/services/data-manager";
-
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL || "http://localhost:9091";
 
 interface OutlineItem {
   id: string;
@@ -26,11 +24,11 @@ interface OutlineItem {
   content: string;
 }
 
+const AUTOSAVE_DELAY = 3000; // 3 秒防抖自动保存
+
 export default function OutlineCreateScreen() {
   const router = useSafeRouter();
   const { bookId, outlineId, type } = useSafeSearchParams<{ bookId: string; outlineId?: string; type?: string }>();
-  const { token } = useAuth();
-  const getAuthHeaders = useCallback(() => ({ "Content-Type": "application/json", ...(token ? { "x-session": token } : {}) }), [token]);
 
   const itemType = (type === "细纲" ? "细纲" : "大纲") as "大纲" | "细纲";
   const [content, setContent] = useState("");
@@ -39,6 +37,8 @@ export default function OutlineCreateScreen() {
   const [loaded, setLoaded] = useState(false);
   const isEditing = !!outlineId;
   const contentRef = useRef(content);
+  const hasChangesRef = useRef(false);
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 始终同步 contentRef
   useEffect(() => { contentRef.current = content; }, [content]);
@@ -64,13 +64,82 @@ export default function OutlineCreateScreen() {
     load();
   }, [bookId, outlineId]);
 
+  const getCurrentContent = (): string => {
+    try {
+      if (typeof document !== "undefined") {
+        const editorEl = document.querySelector(".ql-editor");
+        if (editorEl) return (editorEl as HTMLElement).innerHTML;
+      }
+    } catch {}
+    return contentRef.current;
+  };
+
+  const performAutoSave = async () => {
+    const currentContent = getCurrentContent();
+    if (!currentContent.trim() || currentContent === "<p><br></p>") return;
+
+    try {
+      let updatedItems: OutlineItem[];
+      if (isEditing && outlineId) {
+        updatedItems = allOutlines.map((o) =>
+          o.id === outlineId ? { ...o, content: currentContent } : o
+        );
+      } else {
+        // 查找是否已在列表中
+        const existingIndex = allOutlines.findIndex((o) => o.id === outlineId);
+        if (existingIndex >= 0) {
+          updatedItems = allOutlines.map((o, i) =>
+            i === existingIndex ? { ...o, content: currentContent } : o
+          );
+        } else {
+          return; // 尚未保存过，不自动保存（等待手动保存）
+        }
+      }
+      await DataManager.saveOutlines(bookId as string, updatedItems);
+    } catch (e) {
+      // 静默处理自动保存错误
+    }
+  };
+
+  // 自动保存：内容变化时设置防抖定时器
+  useEffect(() => {
+    // 加载完成前不触发自动保存
+    if (!loaded) return;
+    // 初始加载时不触发（第一次 setContent 来自加载，不计为「已修改」）
+    if (!hasChangesRef.current && !outlineId && content === "") return;
+
+    hasChangesRef.current = true;
+
+    // 清除上一次的定时器
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // 设置新的防抖定时器
+    autoSaveTimerRef.current = setTimeout(() => {
+      performAutoSave();
+    }, AUTOSAVE_DELAY);
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [content, loaded]);
+
   const handleSave = useCallback(async () => {
+    // 清除自动保存定时器
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
     // 直接从 DOM 读取 Quill 内容（绕过 React state 可能的延迟）
     let currentContent = contentRef.current;
     try {
       if (typeof document !== "undefined") {
         const editorEl = document.querySelector(".ql-editor");
-        if (editorEl) currentContent = editorEl.innerHTML;
+        if (editorEl) currentContent = (editorEl as HTMLElement).innerHTML;
       }
     } catch {}
 
@@ -81,7 +150,7 @@ export default function OutlineCreateScreen() {
     setSaving(true);
     try {
       let updatedItems: OutlineItem[];
-      if (isEditing) {
+      if (isEditing && outlineId) {
         updatedItems = allOutlines.map((o) =>
           o.id === outlineId
             ? { ...o, content: currentContent }
@@ -99,6 +168,7 @@ export default function OutlineCreateScreen() {
 
       const result = await DataManager.saveOutlines(bookId as string, updatedItems);
       if (result.success) {
+        hasChangesRef.current = false;
         Alert.alert("保存成功", `${itemType}已保存`, [
           { text: "返回", onPress: () => router.back() },
         ]);
@@ -110,7 +180,7 @@ export default function OutlineCreateScreen() {
       Alert.alert("错误", "保存失败，请重试");
     }
     setSaving(false);
-  }, [bookId, outlineId, allOutlines, isEditing, itemType, router, getAuthHeaders]);
+  }, [bookId, outlineId, allOutlines, isEditing, itemType, router]);
 
   const nightMode = false;
 

@@ -16,6 +16,7 @@ import { Screen } from "@/components/Screen";
 import { useSafeRouter, useSafeSearchParams } from "@/hooks/useSafeRouter";
 import { FontAwesome6 } from "@expo/vector-icons";
 import { DataManager } from "@/services/data-manager";
+import { stripHtml } from "@/utils";
 
 interface ContentItem {
   id: string;
@@ -36,6 +37,10 @@ export default function ContentEditorScreen() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    visible: boolean;
+    item?: ContentItem | null;
+  }>({ visible: false });
   const [editModal, setEditModal] = useState<{
     visible: boolean;
     item?: ContentItem | null;
@@ -79,22 +84,30 @@ export default function ContentEditorScreen() {
     if (!bookId || !createType) return;
 
     if (createType === "大纲" || createType === "细纲") {
-      const newItem: ContentItem = {
-        id: Date.now().toString(),
-        type: createType,
-        title: createType,
-        content: "",
-        createdAt: new Date().toISOString(),
-      };
-      const existing = await DataManager.getOutlines(bookId as string);
-      const updated = existing.success ? [...(existing.data || []), newItem] : [newItem];
-      const result = await DataManager.saveOutlines(bookId as string, updated);
-      if (result.success) {
-        router.push("/outline-create", {
-          bookId,
-          outlineId: newItem.id,
+      try {
+        const newItem: ContentItem = {
+          id: Date.now().toString(),
           type: createType,
-        });
+          title: createType,
+          content: "",
+          createdAt: new Date().toISOString(),
+        };
+        const existing = await DataManager.getOutlines(bookId as string);
+        const updated = existing.success ? [...(existing.data || []), newItem] : [newItem];
+        const result = await DataManager.saveOutlines(bookId as string, updated);
+        if (result.success) {
+          router.push("/outline-create", {
+            bookId,
+            outlineId: newItem.id,
+            type: createType,
+          });
+          return;
+        } else {
+          Alert.alert("错误", result.error || "创建失败");
+          return;
+        }
+      } catch (e) {
+        Alert.alert("错误", "创建失败，请重试");
         return;
       }
     }
@@ -109,14 +122,7 @@ export default function ContentEditorScreen() {
         outlineId: item.id,
         type: item.type || type,
       });
-    } else if (type === "设定") {
-      setEditModal({
-        visible: true,
-        item,
-        title: item.title || "",
-        content: item.content || "",
-      });
-    } else if (type === "灵感") {
+    } else if (type === "设定" || type === "灵感") {
       setEditModal({
         visible: true,
         item,
@@ -156,7 +162,8 @@ export default function ContentEditorScreen() {
   };
 
   const handleDelete = (item: ContentItem) => {
-    Alert.alert("确认删除", "确定要删除这个项目吗？", [
+    setContextMenu({ visible: false });
+    Alert.alert("确认删除", `确定要删除"${item.title || item.type || type}"吗？`, [
       { text: "取消", style: "cancel" },
       {
         text: "删除",
@@ -193,6 +200,12 @@ export default function ContentEditorScreen() {
     return [
       { key: type, label: `新建${type}`, icon: "plus", color: "#4F46E5" },
     ];
+  };
+
+  // 获取不含 HTML 标签的纯文本预览
+  const getPreviewText = (item: ContentItem): string => {
+    const text = stripHtml(item.content);
+    return text || "暂无内容，点击编辑";
   };
 
   return (
@@ -234,6 +247,7 @@ export default function ContentEditorScreen() {
             <TouchableOpacity
               key={item.id}
               onPress={() => handleEdit(item)}
+              onLongPress={() => setContextMenu({ visible: true, item })}
               className="bg-white dark:bg-gray-800 rounded-2xl p-4 mb-3 shadow-sm border border-gray-50 dark:border-gray-700"
               style={{
                 shadowColor: "#000",
@@ -246,21 +260,9 @@ export default function ContentEditorScreen() {
               <Text className="text-base font-semibold text-gray-800 dark:text-white mb-1">
                 {item.title || item.type || type}
               </Text>
-              {item.content ? (
-                <Text className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2" numberOfLines={2}>
-                  {item.content}
-                </Text>
-              ) : (
-                <Text className="text-sm text-gray-300 italic">暂无内容，点击编辑</Text>
-              )}
-              <View className="flex-row justify-end mt-2">
-                <TouchableOpacity
-                  onPress={() => handleDelete(item)}
-                  className="p-2"
-                >
-                  <FontAwesome6 name="trash-can" size={14} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
+              <Text className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2" numberOfLines={2}>
+                {getPreviewText(item)}
+              </Text>
             </TouchableOpacity>
           ))}
           <View style={{ height: 100 }} />
@@ -315,6 +317,54 @@ export default function ContentEditorScreen() {
                 ))}
                 <TouchableOpacity
                   onPress={() => setShowCreateModal(false)}
+                  className="mt-2 py-3 items-center"
+                >
+                  <Text className="text-gray-400 text-sm">取消</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Long press context menu */}
+      <Modal visible={contextMenu.visible} transparent animationType="fade">
+        <TouchableWithoutFeedback onPress={() => setContextMenu({ visible: false })}>
+          <View className="flex-1 bg-black/30 justify-center items-center">
+            <TouchableWithoutFeedback>
+              <View className="bg-white dark:bg-gray-800 rounded-3xl p-6 mx-8 w-72">
+                <Text className="text-lg font-bold text-gray-800 dark:text-white mb-4 text-center">
+                  {contextMenu.item?.title || contextMenu.item?.type || type}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const item = contextMenu.item;
+                    setContextMenu({ visible: false });
+                    if (item) handleEdit(item);
+                  }}
+                  className="flex-row items-center px-4 py-4 rounded-xl mb-2"
+                  style={{ backgroundColor: "#EEF2FF" }}
+                >
+                  <FontAwesome6 name="pen-to-square" size={18} color="#4F46E5" style={{ width: 28 }} />
+                  <Text className="text-base font-medium ml-2" style={{ color: "#4F46E5" }}>
+                    编辑
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    const item = contextMenu.item;
+                    if (item) handleDelete(item);
+                  }}
+                  className="flex-row items-center px-4 py-4 rounded-xl mb-2"
+                  style={{ backgroundColor: "#FEF2F2" }}
+                >
+                  <FontAwesome6 name="trash-can" size={18} color="#EF4444" style={{ width: 28 }} />
+                  <Text className="text-base font-medium ml-2" style={{ color: "#EF4444" }}>
+                    删除
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setContextMenu({ visible: false })}
                   className="mt-2 py-3 items-center"
                 >
                   <Text className="text-gray-400 text-sm">取消</Text>
